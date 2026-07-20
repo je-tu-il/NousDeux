@@ -3,10 +3,10 @@
   "buildCommand": "npx expo export -p web",
   "outputDirectory": "dist",
   "framework": null,
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
