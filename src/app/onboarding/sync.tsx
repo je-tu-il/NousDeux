@@ -189,7 +189,11 @@ export default function SyncScreen() {
           <Animated.View entering={FadeInUp.delay(1500).duration(800)} style={{ marginTop: 40, width: '100%' }}>
             <Pressable 
               style={({ pressed }) => [styles.linkButton, { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 }]}
-              onPress={() => router.replace('/onboarding/date')}
+              onPress={() => {
+                // Les 2 utilisateurs repassent par la sélection de date
+                // La page date.tsx se chargera du reset complet
+                router.replace('/onboarding/date');
+              }}
             >
               <Text style={styles.linkButtonText}>Continuer</Text>
             </Pressable>

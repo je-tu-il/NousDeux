@@ -20,7 +20,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// const analytics = getAnalytics(app); // Désactivé pour éviter les écrans blancs avec les bloqueurs de pub
 
 // Export Auth and Firestore
 export const auth = getAuth(app);

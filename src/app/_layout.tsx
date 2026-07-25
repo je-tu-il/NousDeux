@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useOnboardingStore } from '@/store/onboardingStore';
 
@@ -37,6 +37,17 @@ export default function RootLayout() {
   }, [segments, uid, pseudo, age]);
 
   return (
-    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        // Sur web, on utilise une animation fade pour éviter les glitches
+        // Sur mobile, slide natif
+        animation: Platform.OS === 'web' ? 'fade' : 'slide_from_right',
+        // Durée de l'animation web (en ms)
+        animationDuration: Platform.OS === 'web' ? 200 : undefined,
+        // Important sur web : empêche le flash blanc entre les pages
+        contentStyle: { backgroundColor: 'transparent' },
+      }}
+    />
   );
 }

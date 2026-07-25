@@ -14,6 +14,9 @@ export default function DashboardScreen() {
   const [partner, setPartner] = useState<{pseudo: string, avatarUrl?: string, coupleDate?: string} | null>(null);
   const [partnerLeft, setPartnerLeft] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  // isLoading = true bloque tous les redirects jusqu'à ce que Firebase réponde
+  // Cela empêche le flash Dashboard → Date → Dashboard
+  const [isLoading, setIsLoading] = useState(true);
   const pulseAnim = useSharedValue(1);
 
   useEffect(() => {
@@ -23,17 +26,24 @@ export default function DashboardScreen() {
       true
     );
 
-    if (!store.uid) return;
+    if (!store.uid) {
+      setIsLoading(false);
+      router.replace('/onboarding/login');
+      return;
+    }
+
     const unsub = onSnapshot(doc(db, "users", store.uid), async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        
-        // Route guards
+
+        // Route guards — seulement après que Firebase a répondu (isLoading = true encore)
         if (!data.linkedTo) {
+          setIsLoading(false);
           router.replace('/onboarding/sync');
           return;
         }
         if (!data.coupleDate) {
+          setIsLoading(false);
           router.replace('/onboarding/date');
           return;
         }
@@ -42,9 +52,8 @@ export default function DashboardScreen() {
         if (partnerDoc.exists()) {
           const pData = partnerDoc.data();
           if (pData.linkedTo === store.uid) {
-            
-            setPartner({ 
-              pseudo: pData.pseudo, 
+            setPartner({
+              pseudo: pData.pseudo,
               avatarUrl: pData.avatarUrl,
               coupleDate: data.coupleDate
             });
@@ -60,7 +69,10 @@ export default function DashboardScreen() {
       } else {
         setPartner(null);
       }
+      // Firebase a répondu → on peut afficher le dashboard
+      setIsLoading(false);
     });
+
     return () => unsub();
   }, [store.uid]);
 
@@ -72,6 +84,17 @@ export default function DashboardScreen() {
   const formattedDate = partner?.coupleDate ? new Date(partner.coupleDate).toLocaleDateString('fr-FR', {
     day: 'numeric', month: 'long', year: 'numeric'
   }) : "Date non définie";
+
+  // Écran de chargement silencieux — aucune redirection prématurée
+  if (isLoading) {
+    return (
+      <ImageBackground source={require('../../assets/images/romantic_calendar_bg.png')} style={styles.container} resizeMode="cover">
+        <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
+          {/* Loader discret pour éviter l'écran blanc */}
+        </View>
+      </ImageBackground>
+    );
+  }
 
   return (
     <ImageBackground source={require('../../assets/images/romantic_calendar_bg.png')} style={styles.container} resizeMode="cover">
@@ -212,7 +235,8 @@ const styles = StyleSheet.create({
   smallCard: { padding: 20, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 12, height: 140 },
   smallCardTitle: { fontSize: 16, fontWeight: '600' },
   lockText: { fontSize: 12, fontStyle: 'italic', opacity: 0.8 },
-  
+  settingsButton: { padding: 10 },
+
   // Modal Profil
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', maxWidth: 400, backgroundColor: '#FFF5F2', padding: 30, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10, position: 'relative' },
