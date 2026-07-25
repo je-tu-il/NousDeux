@@ -1,38 +1,48 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, Platform, ImageBackground, Alert, Image, ScrollView, Modal } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { StyleSheet, View, Text, TextInput, Pressable, Platform, ImageBackground, Alert, Image, ScrollView, Modal, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/constants/Colors';
-import { ArrowLeft, Save, HeartCrack, Camera, Trash2, Copy, CheckCircle2 } from 'lucide-react-native';
+import { ArrowLeft, HeartCrack, Camera, Trash2, Copy, CheckCircle2, Check } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeIn, FadeOut } from 'react-native-reanimated';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, arrayUnion, setDoc, deleteField } from 'firebase/firestore';
 
+// Durée du debounce pour pseudo/age (ms)
+const DEBOUNCE_DELAY = 1000;
+
 export default function SettingsScreen() {
   const theme = Colors.light;
   const store = useOnboardingStore((state) => state);
-  
+
   const [pseudo, setPseudo] = useState(store.pseudo);
   const [age, setAge] = useState(store.age);
   const [avatar, setAvatar] = useState(store.avatar);
   const [loading, setLoading] = useState(false);
-  
+
+  // Indicateur de sauvegarde visible dans l'UI
+  const [savedIndicator, setSavedIndicator] = useState<'idle' | 'saving' | 'saved'>('idle');
+
   const [showDesyncModal, setShowDesyncModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isAlone, setIsAlone] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  React.useEffect(() => {
+  // Ref pour le debounce pseudo/age
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Vérifier si l'utilisateur est seul ──────────────────────────────────
+  useEffect(() => {
     const checkAlone = async () => {
       if (!store.uid) return;
-      const myDoc = await getDoc(doc(db, "users", store.uid));
+      const myDoc = await getDoc(doc(db, 'users', store.uid));
       if (myDoc.exists()) {
         const linkedTo = myDoc.data().linkedTo;
         if (!linkedTo) {
           setIsAlone(true);
         } else {
-          const partnerDoc = await getDoc(doc(db, "users", linkedTo));
+          const partnerDoc = await getDoc(doc(db, 'users', linkedTo));
           if (!partnerDoc.exists() || partnerDoc.data().linkedTo !== store.uid) {
             setIsAlone(true);
           }
@@ -42,6 +52,44 @@ export default function SettingsScreen() {
     checkAlone();
   }, [store.uid]);
 
+  // ── Sauvegarder dans Firebase (réutilisable) ─────────────────────────────
+  const saveToFirebase = useCallback(async (fields: { pseudo?: string; age?: string; avatarUrl?: string | null }) => {
+    if (!store.uid) return;
+    setSavedIndicator('saving');
+    try {
+      await updateDoc(doc(db, 'users', store.uid), fields);
+      if (fields.pseudo !== undefined) store.setPseudo(fields.pseudo);
+      if (fields.age !== undefined) store.setAge(fields.age);
+      if (fields.avatarUrl !== undefined) store.setAvatar(fields.avatarUrl ?? null);
+      setSavedIndicator('saved');
+      setTimeout(() => setSavedIndicator('idle'), 2000);
+    } catch (err: any) {
+      setSavedIndicator('idle');
+      Alert.alert('Erreur', err.message);
+    }
+  }, [store]);
+
+  // ── Autosave pseudo avec debounce ────────────────────────────────────────
+  const handlePseudoChange = (value: string) => {
+    setPseudo(value);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (!value.trim()) return;
+    debounceTimer.current = setTimeout(() => {
+      saveToFirebase({ pseudo: value.trim() });
+    }, DEBOUNCE_DELAY);
+  };
+
+  // ── Autosave age avec debounce ───────────────────────────────────────────
+  const handleAgeChange = (value: string) => {
+    setAge(value);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (!value.trim()) return;
+    debounceTimer.current = setTimeout(() => {
+      saveToFirebase({ age: value.trim() });
+    }, DEBOUNCE_DELAY);
+  };
+
+  // ── Changer la photo — sauvegarde immédiate ──────────────────────────────
   const pickImage = async () => {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -50,7 +98,7 @@ export default function SettingsScreen() {
         return;
       }
     }
-    let result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
@@ -59,100 +107,62 @@ export default function SettingsScreen() {
     });
 
     if (!result.canceled && result.assets && result.assets[0].base64) {
-      setAvatar(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      const newAvatar = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setAvatar(newAvatar);
+      // Sauvegarde immédiate de la photo sans debounce
+      await saveToFirebase({ avatarUrl: newAvatar });
     }
   };
 
-  const handleSave = async () => {
-    if (!pseudo.trim() || !age.trim()) return;
-    setLoading(true);
-    try {
-      if (store.uid) {
-        await updateDoc(doc(db, "users", store.uid), {
-          pseudo: pseudo.trim(),
-          age: age.trim(),
-          avatarUrl: avatar
-        });
-      }
-      store.setPseudo(pseudo.trim());
-      store.setAge(age.trim());
-      store.setAvatar(avatar);
-      Alert.alert("Succès", "Ton profil a bien été mis à jour.");
-    } catch (error: any) {
-      Alert.alert("Erreur", error.message);
-    }
-    setLoading(false);
-  };
-
+  // ── Désynchronisation ────────────────────────────────────────────────────
   const processDesync = async () => {
     setLoading(true);
     try {
       if (!store.uid) return;
-
-      const myDoc = await getDoc(doc(db, "users", store.uid));
+      const myDoc = await getDoc(doc(db, 'users', store.uid));
       if (myDoc.exists()) {
         const data = myDoc.data();
         const partnerUid = data.linkedTo;
-
-        // 1. Enlever le lien chez moi et archiver
         if (partnerUid) {
-          await updateDoc(doc(db, "users", store.uid), { 
+          await updateDoc(doc(db, 'users', store.uid), {
             linkedTo: deleteField(),
             coupleDate: deleteField(),
             proposedDate: deleteField(),
-            archivedPartners: arrayUnion(partnerUid)
+            archivedPartners: arrayUnion(partnerUid),
           });
         } else {
-          // Sécurité au cas où il n'y a pas de partenaire
-          await updateDoc(doc(db, "users", store.uid), { 
-            linkedTo: null,
-            coupleDate: null,
-            proposedDate: null
+          await updateDoc(doc(db, 'users', store.uid), {
+            linkedTo: null, coupleDate: null, proposedDate: null,
           });
         }
-
-        // 3. Mettre à jour l'état local
         store.setSynced(false);
-        store.setPartnerCode("");
+        store.setPartnerCode('');
         setShowDesyncModal(false);
         router.replace('/onboarding/sync');
       }
     } catch (error: any) {
-      Alert.alert("Erreur", error.message);
+      Alert.alert('Erreur', error.message);
       setLoading(false);
     }
   };
 
+  // ── Suppression du compte ────────────────────────────────────────────────
   const processDeleteAccount = async () => {
     setLoading(true);
     try {
       if (!store.uid) return;
-
-      const myDoc = await getDoc(doc(db, "users", store.uid));
-      if (myDoc.exists()) {
-        const data = myDoc.data();
-        const partnerUid = data.linkedTo;
-
-        // On ne supprime plus le lien chez l'autre automatiquement, 
-        // pour qu'il puisse voir qu'il est seul et quitter lui-même.
-
-        // On supprime le doc utilisateur
-        await deleteDoc(doc(db, "users", store.uid));
-
-        // On reset le store
-        store.setUid(null);
-        store.setPseudo("");
-        store.setAge("");
-        store.setAvatar(null);
-        store.setSynced(false);
-        store.setMyCode("");
-        store.setPartnerCode("");
-        
-        setShowDeleteModal(false);
-        router.replace('/onboarding/login');
-      }
+      await deleteDoc(doc(db, 'users', store.uid));
+      store.setUid(null);
+      store.setPseudo('');
+      store.setAge('');
+      store.setAvatar(null);
+      store.setSynced(false);
+      store.setMyCode('');
+      store.setPartnerCode('');
+      setShowDeleteModal(false);
+      router.replace('/onboarding/login');
     } catch (error: any) {
-      Alert.alert("Erreur", error.message);
+      Alert.alert('Erreur', error.message);
       setLoading(false);
     }
   };
@@ -162,38 +172,54 @@ export default function SettingsScreen() {
     setLoading(true);
     try {
       const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      await setDoc(doc(db, "pairing_codes", newCode), {
+      await setDoc(doc(db, 'pairing_codes', newCode), {
         creatorUid: store.uid,
-        createdAt: new Date()
+        createdAt: new Date(),
       });
       store.setMyCode(newCode);
-      Alert.alert("Nouveau code généré", `Ton nouveau code de partage est : ${newCode}`);
+      Alert.alert('Nouveau code généré', `Ton nouveau code de partage est : ${newCode}`);
     } catch (err: any) {
-      console.error(err);
-      Alert.alert("Erreur", err.message);
+      Alert.alert('Erreur', err.message);
     }
     setLoading(false);
   };
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <ImageBackground source={require('../../assets/images/settings_bg.png')} style={styles.container} resizeMode="cover">
       <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 60 }}>
-        
+
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft color={theme.text} size={28} />
           </Pressable>
           <Text style={[styles.title, { color: theme.text }]}>Paramètres</Text>
-          <View style={{ width: 40 }} />
+
+          {/* Indicateur de sauvegarde */}
+          <View style={styles.saveIndicator}>
+            {savedIndicator === 'saving' && (
+              <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.saveChip}>
+                <ActivityIndicator size="small" color={theme.tint} />
+                <Text style={[styles.saveChipText, { color: theme.tint }]}>Sauvegarde...</Text>
+              </Animated.View>
+            )}
+            {savedIndicator === 'saved' && (
+              <Animated.View entering={FadeIn} exiting={FadeOut} style={[styles.saveChip, { backgroundColor: 'rgba(34,197,94,0.12)' }]}>
+                <Check color="#22c55e" size={16} />
+                <Text style={[styles.saveChipText, { color: '#22c55e' }]}>Sauvegardé</Text>
+              </Animated.View>
+            )}
+          </View>
         </View>
 
         {/* Formulaire Profil */}
         <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Mon Profil</Text>
-          
+
           <View style={[styles.card, { backgroundColor: 'rgba(255,255,255,0.7)', borderColor: theme.cardBorder, alignItems: 'center' }]}>
-            
+
+            {/* Photo de profil — sauvegarde immédiate au changement */}
             <Pressable style={[styles.avatarWrapper, { borderColor: theme.tint }]} onPress={pickImage}>
               {avatar ? (
                 <Image source={{ uri: avatar }} style={styles.avatarImage} />
@@ -202,42 +228,46 @@ export default function SettingsScreen() {
                   <Camera color={theme.tint} size={30} />
                 </View>
               )}
+              {/* Badge "modifier" */}
+              <View style={[styles.cameraOverlay, { backgroundColor: theme.tint }]}>
+                <Camera color="white" size={14} />
+              </View>
             </Pressable>
-            <Text style={styles.changePhotoText}>Changer de photo</Text>
+            <Text style={styles.changePhotoText}>Appuie pour changer</Text>
 
             <View style={{ width: '100%', marginTop: 20 }}>
+
+              {/* Pseudo — autosave après 1s sans frappe */}
               <Text style={[styles.label, { color: theme.text }]}>Pseudo</Text>
               <TextInput
                 style={[styles.input, { color: theme.text, backgroundColor: 'rgba(255,255,255,0.5)' }]}
                 value={pseudo}
-                onChangeText={setPseudo}
+                onChangeText={handlePseudoChange}
                 placeholder="Ton pseudo"
+                placeholderTextColor="#A99693"
               />
 
+              {/* Âge — autosave après 1s sans frappe */}
               <Text style={[styles.label, { color: theme.text }]}>Âge</Text>
               <TextInput
                 style={[styles.input, { color: theme.text, backgroundColor: 'rgba(255,255,255,0.5)' }]}
                 value={age}
-                onChangeText={setAge}
+                onChangeText={handleAgeChange}
                 keyboardType="numeric"
                 placeholder="Ton âge"
+                placeholderTextColor="#A99693"
               />
 
-              <Pressable 
-                style={({ pressed }) => [styles.saveButton, { backgroundColor: theme.tint, opacity: pressed || loading ? 0.8 : 1 }]} 
-                onPress={handleSave}
-                disabled={loading}
-              >
-                <Save color="white" size={20} />
-                <Text style={styles.saveButtonText}>Enregistrer</Text>
-              </Pressable>
+              {/* Plus de bouton "Enregistrer" — tout est autosavé */}
 
               {isAlone && (
                 <Animated.View entering={FadeInUp} style={{ marginTop: 25, width: '100%', alignItems: 'center' }}>
                   {store.myCode ? (
                     <View style={styles.codeBox}>
-                      <Text style={[styles.label, { color: theme.text, textAlign: 'center', marginBottom: 15 }]}>Ton nouveau code de partage</Text>
-                      <Pressable 
+                      <Text style={[styles.label, { color: theme.text, textAlign: 'center', marginBottom: 15 }]}>
+                        Ton code de partage
+                      </Text>
+                      <Pressable
                         style={[styles.codeDisplay, { borderColor: theme.tint, backgroundColor: 'rgba(255,255,255,0.6)' }]}
                         onPress={async () => {
                           const Clipboard = await import('expo-clipboard');
@@ -251,12 +281,12 @@ export default function SettingsScreen() {
                       </Pressable>
                     </View>
                   ) : (
-                    <Pressable 
-                      style={({ pressed }) => [styles.saveButton, { backgroundColor: '#4A3B39', opacity: pressed || loading ? 0.8 : 1, width: '100%' }]} 
+                    <Pressable
+                      style={({ pressed }) => [styles.actionButton, { backgroundColor: '#4A3B39', opacity: pressed || loading ? 0.8 : 1 }]}
                       onPress={generateNewCode}
                       disabled={loading}
                     >
-                      <Text style={[styles.saveButtonText, { color: 'white' }]}>Regénérer mon code de partage</Text>
+                      <Text style={styles.actionButtonText}>Regénérer mon code de partage</Text>
                     </Pressable>
                   )}
                 </Animated.View>
@@ -268,16 +298,15 @@ export default function SettingsScreen() {
         {/* Zone Danger */}
         <Animated.View entering={FadeInUp.duration(600).delay(200)} style={styles.section}>
           <Text style={[styles.sectionTitle, { color: 'red' }]}>Zone Danger</Text>
-          
+
           <View style={[styles.card, { backgroundColor: 'rgba(255,200,200,0.7)', borderColor: 'red' }]}>
-            
-            {/* Quitter le couple */}
+
             <View style={styles.dangerItem}>
               <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
                 En quittant le couple, vous serez désynchronisés. Ton partenaire sera archivé pour conserver vos succès.
               </Text>
-              <Pressable 
-                style={({ pressed }) => [styles.dangerButton, { opacity: pressed || loading ? 0.8 : 1 }]} 
+              <Pressable
+                style={({ pressed }) => [styles.dangerButton, { opacity: pressed || loading ? 0.8 : 1 }]}
                 onPress={() => setShowDesyncModal(true)}
                 disabled={loading}
               >
@@ -288,14 +317,13 @@ export default function SettingsScreen() {
 
             <View style={styles.divider} />
 
-            {/* Réinitialiser les stats */}
             <View style={styles.dangerItem}>
               <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
                 Remettre toutes vos statistiques et défis à zéro. (À venir)
               </Text>
-              <Pressable 
-                style={({ pressed }) => [styles.dangerButton, { backgroundColor: '#FFA500', opacity: pressed || loading ? 0.8 : 1 }]} 
-                onPress={() => Alert.alert("Info", "La réinitialisation des statistiques arrivera bientôt !")}
+              <Pressable
+                style={({ pressed }) => [styles.dangerButton, { backgroundColor: '#FFA500', opacity: pressed || loading ? 0.8 : 1 }]}
+                onPress={() => Alert.alert('Info', "La réinitialisation des statistiques arrivera bientôt !")}
                 disabled={loading}
               >
                 <Trash2 color="white" size={20} />
@@ -305,13 +333,12 @@ export default function SettingsScreen() {
 
             <View style={styles.divider} />
 
-            {/* Supprimer le compte */}
             <View style={styles.dangerItem}>
               <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
                 Cette action supprimera définitivement toutes tes données personnelles.
               </Text>
-              <Pressable 
-                style={({ pressed }) => [styles.dangerButton, { backgroundColor: '#8B0000', opacity: pressed || loading ? 0.8 : 1 }]} 
+              <Pressable
+                style={({ pressed }) => [styles.dangerButton, { backgroundColor: '#8B0000', opacity: pressed || loading ? 0.8 : 1 }]}
                 onPress={() => setShowDeleteModal(true)}
                 disabled={loading}
               >
@@ -319,7 +346,6 @@ export default function SettingsScreen() {
                 <Text style={styles.dangerButtonText}>Supprimer le compte</Text>
               </Pressable>
             </View>
-
           </View>
         </Animated.View>
       </ScrollView>
@@ -365,7 +391,6 @@ export default function SettingsScreen() {
           </Animated.View>
         </View>
       </Modal>
-
     </ImageBackground>
   );
 }
@@ -376,23 +401,25 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 40 },
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 24, fontWeight: '800' },
+  saveIndicator: { width: 110, alignItems: 'flex-end' },
+  saveChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,154,139,0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  saveChipText: { fontSize: 12, fontWeight: '600' },
   section: { marginBottom: 30 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 10 },
   card: { padding: 20, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
   label: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginLeft: 5 },
   input: { height: 50, borderRadius: 15, paddingHorizontal: 15, fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: 'transparent' },
-  avatarWrapper: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, overflow: 'hidden', marginBottom: 10 },
-  avatarImage: { width: '100%', height: '100%' },
-  avatarPlaceholder: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.5)' },
-  changePhotoText: { color: '#888', fontSize: 14, textDecorationLine: 'underline', marginBottom: 10 },
-  saveButton: { flexDirection: 'row', height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 10, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10 },
-  saveButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  avatarWrapper: { width: 110, height: 110, borderRadius: 55, borderWidth: 3, overflow: 'visible', marginBottom: 6, position: 'relative' },
+  avatarImage: { width: 110, height: 110, borderRadius: 55 },
+  avatarPlaceholder: { width: 110, height: 110, borderRadius: 55, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.5)' },
+  cameraOverlay: { position: 'absolute', bottom: 4, right: 4, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white' },
+  changePhotoText: { color: '#888', fontSize: 13, marginBottom: 6 },
+  actionButton: { flexDirection: 'row', height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 10, paddingHorizontal: 20, width: '100%' },
+  actionButtonText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
   dangerItem: { paddingVertical: 10 },
   divider: { height: 1, backgroundColor: 'rgba(255,0,0,0.1)', marginVertical: 15 },
   dangerButton: { flexDirection: 'row', height: 50, borderRadius: 25, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10, width: '100%', maxWidth: 300, alignSelf: 'center' },
   dangerButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  
-  // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', maxWidth: 400, backgroundColor: '#FFF5F2', padding: 30, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
   modalTitle: { fontSize: 24, fontWeight: '900', color: '#4A3B39', textAlign: 'center', marginBottom: 15 },
@@ -404,5 +431,5 @@ const styles = StyleSheet.create({
   modalConfirmText: { fontSize: 16, fontWeight: 'bold', color: 'white' },
   codeBox: { width: '100%', alignItems: 'center' },
   codeDisplay: { flexDirection: 'row', alignItems: 'center', gap: 16, borderWidth: 2, borderStyle: 'dashed', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 20 },
-  codeText: { fontSize: 32, fontWeight: '900', letterSpacing: 8 }
+  codeText: { fontSize: 32, fontWeight: '900', letterSpacing: 8 },
 });

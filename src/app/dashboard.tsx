@@ -8,14 +8,16 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
+type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string };
+
 export default function DashboardScreen() {
   const theme = Colors.light;
   const store = useOnboardingStore((state) => state);
-  const [partner, setPartner] = useState<{pseudo: string, avatarUrl?: string, coupleDate?: string} | null>(null);
+  const [partner, setPartner] = useState<PartnerData | null>(null);
   const [partnerLeft, setPartnerLeft] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  // isLoading = true bloque tous les redirects jusqu'à ce que Firebase réponde
-  // Cela empêche le flash Dashboard → Date → Dashboard
+  const [showMyProfile, setShowMyProfile] = useState(false);
+  const [showPartnerProfile, setShowPartnerProfile] = useState(false);
+  // isLoading bloque les redirects jusqu'à la réponse Firebase (évite le flash)
   const [isLoading, setIsLoading] = useState(true);
   const pulseAnim = useSharedValue(1);
 
@@ -32,11 +34,10 @@ export default function DashboardScreen() {
       return;
     }
 
-    const unsub = onSnapshot(doc(db, "users", store.uid), async (docSnap) => {
+    const unsub = onSnapshot(doc(db, 'users', store.uid), async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
 
-        // Route guards — seulement après que Firebase a répondu (isLoading = true encore)
         if (!data.linkedTo) {
           setIsLoading(false);
           router.replace('/onboarding/sync');
@@ -48,14 +49,15 @@ export default function DashboardScreen() {
           return;
         }
 
-        const partnerDoc = await getDoc(doc(db, "users", data.linkedTo));
+        const partnerDoc = await getDoc(doc(db, 'users', data.linkedTo));
         if (partnerDoc.exists()) {
           const pData = partnerDoc.data();
           if (pData.linkedTo === store.uid) {
             setPartner({
               pseudo: pData.pseudo,
               avatarUrl: pData.avatarUrl,
-              coupleDate: data.coupleDate
+              coupleDate: data.coupleDate,
+              age: pData.age,
             });
             setPartnerLeft(false);
           } else {
@@ -69,7 +71,6 @@ export default function DashboardScreen() {
       } else {
         setPartner(null);
       }
-      // Firebase a répondu → on peut afficher le dashboard
       setIsLoading(false);
     });
 
@@ -77,21 +78,17 @@ export default function DashboardScreen() {
   }, [store.uid]);
 
   const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseAnim.value }]
+    transform: [{ scale: pulseAnim.value }],
   }));
 
-  // Format date
-  const formattedDate = partner?.coupleDate ? new Date(partner.coupleDate).toLocaleDateString('fr-FR', {
-    day: 'numeric', month: 'long', year: 'numeric'
-  }) : "Date non définie";
+  const formattedDate = partner?.coupleDate
+    ? new Date(partner.coupleDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'Date non définie';
 
-  // Écran de chargement silencieux — aucune redirection prématurée
   if (isLoading) {
     return (
       <ImageBackground source={require('../../assets/images/romantic_calendar_bg.png')} style={styles.container} resizeMode="cover">
-        <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
-          {/* Loader discret pour éviter l'écran blanc */}
-        </View>
+        <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]} />
       </ImageBackground>
     );
   }
@@ -99,31 +96,41 @@ export default function DashboardScreen() {
   return (
     <ImageBackground source={require('../../assets/images/romantic_calendar_bg.png')} style={styles.container} resizeMode="cover">
       <View style={styles.safeArea}>
-        
-        {/* Header - Clickable for Profile */}
+
+        {/* Header */}
         <Animated.View entering={FadeInUp.duration(600)}>
-          <Pressable style={styles.header} onPress={() => setShowProfile(true)}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <View style={styles.header}>
+
+            {/* Mon avatar + nom → ouvre mon profil */}
+            <Pressable style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => setShowMyProfile(true)}>
               {store.avatar ? (
                 <Image source={{ uri: store.avatar }} style={styles.userAvatar} />
               ) : (
                 <View style={[styles.userAvatar, { backgroundColor: theme.tint, justifyContent: 'center', alignItems: 'center' }]}>
-                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 24 }}>{store.pseudo?.charAt(0) || "M"}</Text>
+                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 24 }}>{store.pseudo?.charAt(0) || 'M'}</Text>
                 </View>
               )}
               <View style={{ marginLeft: 15, flex: 1 }}>
                 <Text style={[styles.welcome, { color: theme.text }]} numberOfLines={1}>Bonjour {store.pseudo} !</Text>
+
                 {partner ? (
-                  <View style={styles.partnerBadge}>
+                  // Badge partenaire cliquable → ouvre son profil
+                  <Pressable
+                    style={styles.partnerBadge}
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      setShowPartnerProfile(true);
+                    }}
+                  >
                     {partner.avatarUrl ? (
                       <Image source={{ uri: partner.avatarUrl }} style={styles.partnerAvatar} />
                     ) : (
                       <View style={[styles.partnerAvatar, { backgroundColor: theme.gradientEnd, justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>{partner.pseudo?.charAt(0) || "P"}</Text>
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>{partner.pseudo?.charAt(0) || 'P'}</Text>
                       </View>
                     )}
-                    <Text style={styles.partnerText} numberOfLines={1}>En couple avec {partner.pseudo}</Text>
-                  </View>
+                    <Text style={styles.partnerText} numberOfLines={1}>En couple avec {partner.pseudo} 💕</Text>
+                  </Pressable>
                 ) : partnerLeft ? (
                   <View style={styles.partnerBadge}>
                     <Text style={[styles.partnerText, { color: '#FF3B30', fontStyle: 'italic' }]} numberOfLines={1}>Ton partenaire t'a quitté 💔</Text>
@@ -132,19 +139,18 @@ export default function DashboardScreen() {
                   <Text style={[styles.streak, { color: theme.gradientEnd }]}>Prêt à jouer ?</Text>
                 )}
               </View>
-            </View>
-            
+            </Pressable>
+
             <Link href="/settings" asChild>
               <Pressable style={styles.settingsButton}>
                 <Settings color={theme.icon} size={28} />
               </Pressable>
             </Link>
-          </Pressable>
+          </View>
         </Animated.View>
 
         {/* Main Grid */}
         <View style={styles.grid}>
-          {/* Daylink Button */}
           <Animated.View entering={FadeInUp.delay(200).duration(600)}>
             <Link href="/daylink" style={[styles.mainCard, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
               <Animated.View style={[styles.iconWrapper, { backgroundColor: theme.tint }, pulseStyle]}>
@@ -156,7 +162,6 @@ export default function DashboardScreen() {
           </Animated.View>
 
           <View style={styles.row}>
-             {/* Games (Locked) */}
             <Animated.View entering={FadeInUp.delay(300).duration(600)} style={styles.halfCardWrapper}>
               <View style={[styles.smallCard, { backgroundColor: 'rgba(255,255,255,0.4)', borderColor: theme.cardBorder }]}>
                 <MessageCircleHeart color={theme.tabIconDefault} size={28} />
@@ -165,7 +170,6 @@ export default function DashboardScreen() {
               </View>
             </Animated.View>
 
-             {/* Défis (Locked) */}
             <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.halfCardWrapper}>
               <View style={[styles.smallCard, { backgroundColor: 'rgba(255,255,255,0.4)', borderColor: theme.cardBorder }]}>
                 <Trophy color={theme.tabIconDefault} size={28} />
@@ -177,12 +181,11 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {/* Modal Profil */}
-      <Modal visible={showProfile} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
+      {/* ── Modal Mon Profil ───────────────────────────────────────────────── */}
+      <Modal visible={showMyProfile} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowMyProfile(false)}>
           <Animated.View entering={FadeInDown.duration(300)} style={styles.modalContent}>
-            
-            <Pressable style={styles.closeBtn} onPress={() => setShowProfile(false)}>
+            <Pressable style={styles.closeBtn} onPress={() => setShowMyProfile(false)}>
               <X color="#A99693" size={24} />
             </Pressable>
 
@@ -191,7 +194,7 @@ export default function DashboardScreen() {
                 <Image source={{ uri: store.avatar }} style={styles.modalAvatar} />
               ) : (
                 <View style={[styles.modalAvatar, { backgroundColor: theme.tint, justifyContent: 'center', alignItems: 'center' }]}>
-                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 36 }}>{store.pseudo?.charAt(0) || "M"}</Text>
+                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 36 }}>{store.pseudo?.charAt(0) || 'M'}</Text>
                 </View>
               )}
             </View>
@@ -206,11 +209,45 @@ export default function DashboardScreen() {
                 <Text style={styles.modalDateText}>Depuis le {formattedDate}</Text>
               </View>
             )}
-            
           </Animated.View>
-        </View>
+        </Pressable>
       </Modal>
 
+      {/* ── Modal Profil Partenaire ────────────────────────────────────────── */}
+      <Modal visible={showPartnerProfile} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPartnerProfile(false)}>
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.modalContent}>
+            <Pressable style={styles.closeBtn} onPress={() => setShowPartnerProfile(false)}>
+              <X color="#A99693" size={24} />
+            </Pressable>
+
+            {partner && (
+              <>
+                <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                  {partner.avatarUrl ? (
+                    <Image source={{ uri: partner.avatarUrl }} style={styles.modalAvatar} />
+                  ) : (
+                    <View style={[styles.modalAvatar, { backgroundColor: theme.gradientEnd, justifyContent: 'center', alignItems: 'center' }]}>
+                      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 36 }}>{partner.pseudo?.charAt(0) || 'P'}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.modalPseudo}>{partner.pseudo}</Text>
+                {partner.age && <Text style={styles.modalAge}>{partner.age} ans</Text>}
+
+                <View style={styles.modalPartnerBox}>
+                  <HeartHandshake color={theme.tint} size={30} style={{ alignSelf: 'center', marginBottom: 10 }} />
+                  <Text style={styles.modalPartnerText}>Ensemble depuis le</Text>
+                  <Text style={[styles.modalDateText, { fontSize: 16, fontWeight: '700', color: theme.tint, marginTop: 4 }]}>
+                    {formattedDate} ❤️
+                  </Text>
+                </View>
+              </>
+            )}
+          </Animated.View>
+        </Pressable>
+      </Modal>
     </ImageBackground>
   );
 }
@@ -236,15 +273,14 @@ const styles = StyleSheet.create({
   smallCardTitle: { fontSize: 16, fontWeight: '600' },
   lockText: { fontSize: 12, fontStyle: 'italic', opacity: 0.8 },
   settingsButton: { padding: 10 },
-
-  // Modal Profil
+  // Modaux
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', maxWidth: 400, backgroundColor: '#FFF5F2', padding: 30, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10, position: 'relative' },
   closeBtn: { position: 'absolute', top: 10, right: 10, padding: 15, zIndex: 10 },
-  modalAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: 'white', overflow: 'hidden' },
+  modalAvatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: 'white', overflow: 'hidden' },
   modalPseudo: { fontSize: 28, fontWeight: '900', color: '#4A3B39', textAlign: 'center', marginBottom: 5 },
   modalAge: { fontSize: 16, color: '#A99693', textAlign: 'center', marginBottom: 30, fontWeight: 'bold' },
   modalPartnerBox: { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 20, padding: 20, alignItems: 'center' },
   modalPartnerText: { fontSize: 18, color: '#4A3B39', textAlign: 'center', marginBottom: 5 },
-  modalDateText: { fontSize: 14, color: '#A99693', textAlign: 'center', fontStyle: 'italic' }
+  modalDateText: { fontSize: 14, color: '#A99693', textAlign: 'center', fontStyle: 'italic' },
 });
