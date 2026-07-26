@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, Alert, TextInput } from 'react-native';
+import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import Animated, { FadeInDown, FadeInUp, withRepeat, withTiming, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { ArrowRight, CalendarDays, Loader2 } from 'lucide-react-native';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, onSnapshot, deleteField } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
 
 export default function DateScreen() {
-  // Champs toujours vides au démarrage — jamais pré-remplis
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
@@ -23,12 +22,9 @@ export default function DateScreen() {
   const myUid = store.uid;
   const spinAnim = useSharedValue(0);
 
-  // Ref pour lire la valeur courante de waitingForPartner
-  // SANS recréer le listener Firebase à chaque changement
+  // useRef pour lire waitingForPartner dans le listener sans recréer l'abonnement
   const waitingRef = useRef(false);
-  useEffect(() => {
-    waitingRef.current = waitingForPartner;
-  }, [waitingForPartner]);
+  useEffect(() => { waitingRef.current = waitingForPartner; }, [waitingForPartner]);
 
   useEffect(() => {
     if (waitingForPartner) {
@@ -40,7 +36,7 @@ export default function DateScreen() {
     transform: [{ rotate: `${spinAnim.value}deg` }],
   }));
 
-  // ── Listener Firebase — créé UNE SEULE fois (dépend uniquement de myUid) ──
+  // Listener Firebase — créé UNE SEULE fois (dépend uniquement de myUid)
   useEffect(() => {
     if (!myUid) {
       router.replace('/onboarding/login');
@@ -56,34 +52,18 @@ export default function DateScreen() {
       const partnerUid = data.linkedTo;
 
       if (!partnerUid) {
-        Alert.alert('Erreur', "Tu n'es lié à personne.");
         router.replace('/onboarding/sync');
         return;
       }
 
-      // Nettoyage initial : supprimer coupleDate résiduelle des DEUX côtés
-      // Uniquement au premier chargement — pas lors d'une mise à jour de waitingForPartner
-      const cleanupPromises: Promise<any>[] = [];
+      // ✅ Si coupleDate est déjà présente sur MON compte → on va directement au dashboard.
+      // Pas de suppression ici : sync.tsx s'en est déjà chargé lors du re-pairing.
       if (data.coupleDate) {
-        cleanupPromises.push(
-          updateDoc(doc(db, 'users', myUid), {
-            coupleDate: deleteField(),
-            proposedDate: deleteField(),
-          })
-        );
+        router.replace('/dashboard');
+        return;
       }
-      const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
-      if (partnerDoc.exists() && partnerDoc.data().coupleDate) {
-        cleanupPromises.push(
-          updateDoc(doc(db, 'users', partnerUid), {
-            coupleDate: deleteField(),
-            proposedDate: deleteField(),
-          })
-        );
-      }
-      await Promise.all(cleanupPromises);
 
-      // Listener sur le doc du partenaire
+      // Listener sur le doc du partenaire — UNE SEULE fois
       unsubPartner = onSnapshot(
         doc(db, 'users', partnerUid),
         { includeMetadataChanges: true },
@@ -92,48 +72,43 @@ export default function DateScreen() {
 
           const pData = partnerSnap.data();
 
-          // Si la date officielle est déjà fixée côté partenaire → on la récupère
+          // Cas 1 : le partenaire a déjà une coupleDate → on la copie et on part
           if (pData.coupleDate) {
-            await updateDoc(doc(db, 'users', myUid), { coupleDate: pData.coupleDate });
-            Alert.alert(
-              'Date récupérée',
-              'Ton partenaire avait déjà validé une date, nous l\'avons récupérée automatiquement !',
-              [{ text: 'OK', onPress: () => router.replace('/dashboard') }]
-            );
+            // Mise à jour silencieuse, sans Alert
+            await updateDoc(doc(db, 'users', myUid), { coupleDate: pData.coupleDate, proposedDate: deleteField() });
+            router.replace('/dashboard');
             return;
           }
 
-          // Si les deux ont proposé une date → vérifier la correspondance
-          // On lit waitingRef.current pour avoir la valeur fraîche SANS recréer le listener
+          // Cas 2 : les deux ont proposé une date → vérifier la correspondance
           if (waitingRef.current && pData.proposedDate) {
             const myLatestDoc = await getDoc(doc(db, 'users', myUid));
             if (!myLatestDoc.exists() || !myLatestDoc.data().proposedDate) return;
-
             const myProposed = myLatestDoc.data().proposedDate;
 
             if (myProposed === pData.proposedDate) {
-              // ✅ Dates identiques — on valide !
+              // ✅ Match ! Écriture atomique des deux côtés en même temps
               setSuccess(true);
-              setTimeout(async () => {
-                await updateDoc(doc(db, 'users', myUid), {
-                  coupleDate: myProposed,
-                  proposedDate: deleteField(),
-                });
-                router.replace('/dashboard');
-              }, 2000);
+              const batch = writeBatch(db);
+              batch.update(doc(db, 'users', myUid), { coupleDate: myProposed, proposedDate: deleteField() });
+              batch.update(doc(db, 'users', partnerUid), { coupleDate: myProposed, proposedDate: deleteField() });
+              await batch.commit();
+              // Petit délai pour que l'animation "✅" soit visible
+              setTimeout(() => router.replace('/dashboard'), 2000);
             } else {
-              // ❌ Dates différentes — reset propre des propositions
-              await updateDoc(doc(db, 'users', myUid), { proposedDate: deleteField() });
-              await updateDoc(doc(db, 'users', partnerUid), { proposedDate: deleteField() });
+              // ❌ Dates différentes — reset propre des deux propositions
+              const batch = writeBatch(db);
+              batch.update(doc(db, 'users', myUid), { proposedDate: deleteField() });
+              batch.update(doc(db, 'users', partnerUid), { proposedDate: deleteField() });
+              await batch.commit();
               setWaitingForPartner(false);
               waitingRef.current = false;
-              setErrorMessage(
-                "Ton partenaire n'a pas mis la même date !\nÊtes-vous sûrs de la date où vous vous êtes mis ensemble ?"
-              );
-              // Reset des champs pour re-saisie propre
               setDay('');
               setMonth('');
               setYear('');
+              setErrorMessage(
+                "Ton partenaire n'a pas mis la même date !\nÊtes-vous sûrs de la date où vous vous êtes mis ensemble ?"
+              );
             }
           }
         }
@@ -141,14 +116,10 @@ export default function DateScreen() {
     };
 
     setupListener();
-
-    return () => {
-      if (unsubPartner) unsubPartner();
-    };
-  }, [myUid]); // ← Dépend UNIQUEMENT de myUid — le listener ne se recrée pas quand waitingForPartner change
+    return () => { if (unsubPartner) unsubPartner(); };
+  }, [myUid]); // Dépend UNIQUEMENT de myUid
 
   const handleSubmit = async () => {
-    // Validation
     const dayNum = parseInt(day, 10);
     const monthNum = parseInt(month, 10);
     const yearNum = parseInt(year, 10);
@@ -157,14 +128,8 @@ export default function DateScreen() {
       setErrorMessage('Veuillez remplir tous les champs (JJ / MM / AAAA).');
       return;
     }
-    if (dayNum < 1 || dayNum > 31) {
-      setErrorMessage('Le jour doit être entre 1 et 31.');
-      return;
-    }
-    if (monthNum < 1 || monthNum > 12) {
-      setErrorMessage('Le mois doit être entre 1 et 12.');
-      return;
-    }
+    if (dayNum < 1 || dayNum > 31) { setErrorMessage('Le jour doit être entre 1 et 31.'); return; }
+    if (monthNum < 1 || monthNum > 12) { setErrorMessage('Le mois doit être entre 1 et 12.'); return; }
     if (yearNum < 1900 || yearNum > new Date().getFullYear()) {
       setErrorMessage(`L'année doit être entre 1900 et ${new Date().getFullYear()}.`);
       return;
@@ -173,18 +138,13 @@ export default function DateScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
-      const formattedMonth = monthNum.toString().padStart(2, '0');
-      const formattedDay = dayNum.toString().padStart(2, '0');
-      const proposed = `${yearNum}-${formattedMonth}-${formattedDay}`;
-
+      const proposed = `${yearNum}-${monthNum.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
       if (myUid) {
-        // On enregistre la proposition et on passe en mode attente
-        // Les champs NE sont PAS remis à zéro ici — on reste en attente
         await updateDoc(doc(db, 'users', myUid), { proposedDate: proposed });
         setWaitingForPartner(true);
       }
     } catch (error: any) {
-      Alert.alert('Erreur', error.message);
+      setErrorMessage(error.message);
       setWaitingForPartner(false);
     }
     setLoading(false);
@@ -208,54 +168,30 @@ export default function DateScreen() {
             </Text>
           </Animated.View>
 
-          {errorMessage ? (
+          {!!errorMessage && (
             <Animated.View entering={FadeInDown.duration(400)} style={styles.errorBox}>
               <Text style={styles.errorText}>{errorMessage}</Text>
             </Animated.View>
-          ) : null}
+          )}
 
           {!waitingForPartner ? (
             <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.pickerContainer}>
               <Text style={styles.inputInstructions}>Saisissez la date au format JJ / MM / AAAA</Text>
               <View style={styles.pickersWrapper}>
-
                 <View style={styles.pickerCol}>
                   <Text style={styles.pickerLabel}>Jour</Text>
-                  <TextInput
-                    style={styles.dateInput}
-                    value={day}
-                    onChangeText={setDay}
-                    keyboardType="numeric"
-                    maxLength={2}
-                    placeholder="JJ"
-                    placeholderTextColor="#C4A8A4"
-                  />
+                  <TextInput style={styles.dateInput} value={day} onChangeText={setDay}
+                    keyboardType="numeric" maxLength={2} placeholder="JJ" placeholderTextColor="#C4A8A4" />
                 </View>
-
                 <View style={styles.pickerCol}>
                   <Text style={styles.pickerLabel}>Mois</Text>
-                  <TextInput
-                    style={styles.dateInput}
-                    value={month}
-                    onChangeText={setMonth}
-                    keyboardType="numeric"
-                    maxLength={2}
-                    placeholder="MM"
-                    placeholderTextColor="#C4A8A4"
-                  />
+                  <TextInput style={styles.dateInput} value={month} onChangeText={setMonth}
+                    keyboardType="numeric" maxLength={2} placeholder="MM" placeholderTextColor="#C4A8A4" />
                 </View>
-
                 <View style={styles.pickerCol}>
                   <Text style={styles.pickerLabel}>Année</Text>
-                  <TextInput
-                    style={styles.dateInput}
-                    value={year}
-                    onChangeText={setYear}
-                    keyboardType="numeric"
-                    maxLength={4}
-                    placeholder="AAAA"
-                    placeholderTextColor="#C4A8A4"
-                  />
+                  <TextInput style={styles.dateInput} value={year} onChangeText={setYear}
+                    keyboardType="numeric" maxLength={4} placeholder="AAAA" placeholderTextColor="#C4A8A4" />
                 </View>
               </View>
             </Animated.View>
@@ -271,7 +207,7 @@ export default function DateScreen() {
               </Animated.View>
               <Text style={styles.waitingText}>Croisons les doigts ! 🤞</Text>
               <Text style={{ color: theme.text, opacity: 0.5, fontSize: 13, marginTop: 10 }}>
-                Date proposée : {day.padStart(2,'0')}/{month.padStart(2,'0')}/{year}
+                Date proposée : {day.padStart(2, '0')}/{month.padStart(2, '0')}/{year}
               </Text>
             </Animated.View>
           )}
@@ -279,10 +215,7 @@ export default function DateScreen() {
           {!waitingForPartner && (
             <Animated.View entering={FadeInUp.duration(800).delay(400)} style={styles.buttonContainer}>
               <Pressable
-                style={({ pressed }) => [
-                  styles.button,
-                  { backgroundColor: theme.tint, opacity: pressed || loading ? 0.8 : 1 },
-                ]}
+                style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: pressed || loading ? 0.8 : 1 }]}
                 onPress={handleSubmit}
                 disabled={loading}
               >

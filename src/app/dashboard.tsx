@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, Image, Modal } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
-import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake } from 'lucide-react-native';
+import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake, Infinity as InfinityIcon } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeInDown, withRepeat, withSequence, withTiming, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
@@ -157,12 +157,23 @@ export default function DashboardScreen() {
                 <CalendarHeart color="white" size={32} />
               </Animated.View>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Question du Jour</Text>
-              <Text style={[styles.cardDesc, { color: theme.text }]}>À découvrir...</Text>
+              <Text style={[styles.cardDesc, { color: theme.text }]}>La même pour vous deux chaque jour !</Text>
+            </Link>
+          </Animated.View>
+
+          {/* Nouveau : Questions Illimitées */}
+          <Animated.View entering={FadeInUp.delay(300).duration(600)}>
+            <Link href="/unlimited" style={[styles.mainCard, { backgroundColor: 'rgba(168,85,247,0.08)', borderColor: 'rgba(168,85,247,0.25)' }]}>
+              <View style={[styles.iconWrapper, { backgroundColor: '#A855F7' }]}>
+                <InfinityIcon color="white" size={32} />
+              </View>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Questions Illimitées</Text>
+              <Text style={[styles.cardDesc, { color: theme.text }]}>Répondez à autant de questions que vous voulez 💫</Text>
             </Link>
           </Animated.View>
 
           <View style={styles.row}>
-            <Animated.View entering={FadeInUp.delay(300).duration(600)} style={styles.halfCardWrapper}>
+            <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.halfCardWrapper}>
               <View style={[styles.smallCard, { backgroundColor: 'rgba(255,255,255,0.4)', borderColor: theme.cardBorder }]}>
                 <MessageCircleHeart color={theme.tabIconDefault} size={28} />
                 <Text style={[styles.smallCardTitle, { color: theme.text }]}>Modes de Jeux</Text>
@@ -170,7 +181,7 @@ export default function DashboardScreen() {
               </View>
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.halfCardWrapper}>
+            <Animated.View entering={FadeInUp.delay(500).duration(600)} style={styles.halfCardWrapper}>
               <View style={[styles.smallCard, { backgroundColor: 'rgba(255,255,255,0.4)', borderColor: theme.cardBorder }]}>
                 <Trophy color={theme.tabIconDefault} size={28} />
                 <Text style={[styles.smallCardTitle, { color: theme.text }]}>Défis</Text>

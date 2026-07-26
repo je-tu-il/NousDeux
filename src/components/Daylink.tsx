@@ -12,6 +12,7 @@ import { useOnboardingStore } from '../store/onboardingStore';
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getById, getUnseen, QUESTIONS } from '../data/questions';
+import { getScheduledQuestionId } from '../data/scheduledQuestions';
 import type { Question } from '../data/questions';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -25,11 +26,25 @@ function coupleId(uid1: string, uid2: string): string {
   return [uid1, uid2].sort().join('_');
 }
 
-/** Sélectionne une question non vue et met à jour le suivi Firestore */
-async function pickNextQuestion(
+/** Sélectionne la question du jour :
+ *  1. Si une question est planifiée pour cette date → l'utilise (même pour tous les couples)
+ *  2. Sinon → choisit une question aléatoire non encore vue par ce couple
+ */
+async function pickDailyQuestion(
   cId: string,
   slotKey: string,
 ): Promise<string> {
+  // Priorité aux questions planifiées globalement
+  const scheduled = getScheduledQuestionId(slotKey);
+  if (scheduled) {
+    await setDoc(doc(db, 'couples', cId, 'daily', slotKey), {
+      questionId: scheduled,
+      createdAt: serverTimestamp(),
+    });
+    return scheduled;
+  }
+
+  // Fallback : question aléatoire non vue pour ce couple
   const progressSnap = await getDoc(doc(db, 'couples', cId, 'progress', 'seen'));
   const seenIds: string[] = progressSnap.exists() ? progressSnap.data().questionIds ?? [] : [];
 
@@ -93,7 +108,7 @@ export default function Daylink() {
     if (daySnap.exists()) {
       questionId = daySnap.data().questionId;
     } else {
-      questionId = await pickNextQuestion(cId, slot);
+      questionId = await pickDailyQuestion(cId, slot);
     }
 
     const q = getById(questionId);
@@ -267,45 +282,44 @@ export default function Daylink() {
                 </Text>
               </View>
 
+              {/* Réponse du partenaire — s'affiche quand dispo */}
               {partnerAnswer ? (
-                <>
-                  <Animated.View
-                    entering={FadeInUp.duration(600)}
-                    style={[styles.revealBox, { backgroundColor: theme.background }]}
-                  >
-                    <View style={styles.revealHeader}>
-                      <Unlock color={theme.gradientEnd} size={18} />
-                      <Text style={[styles.revealTitle, { color: theme.gradientEnd }]}>Réponse dévoilée !</Text>
-                    </View>
-                    <Text style={[styles.partnerText, { color: theme.text }]}>"{partnerAnswer}"</Text>
-                  </Animated.View>
-
-                  {/* Bouton "Question suivante" — mode illimité */}
-                  <Animated.View entering={FadeInUp.delay(400).duration(600)} style={{ marginTop: 16 }}>
-                    <Pressable
-                      style={({ pressed }) => [styles.nextButton, { opacity: pressed || loadingNext ? 0.8 : 1, backgroundColor: theme.gradientEnd }]}
-                      onPress={handleNextQuestion}
-                      disabled={loadingNext}
-                    >
-                      {loadingNext
-                        ? <ActivityIndicator color="white" />
-                        : (
-                          <>
-                            <Text style={styles.nextButtonText}>Question suivante</Text>
-                            <ChevronRight color="white" size={20} />
-                          </>
-                        )}
-                    </Pressable>
-                  </Animated.View>
-                </>
+                <Animated.View
+                  entering={FadeInUp.duration(600)}
+                  style={[styles.revealBox, { backgroundColor: theme.background }]}
+                >
+                  <View style={styles.revealHeader}>
+                    <Unlock color={theme.gradientEnd} size={18} />
+                    <Text style={[styles.revealTitle, { color: theme.gradientEnd }]}>Réponse dévoilée !</Text>
+                  </View>
+                  <Text style={[styles.partnerText, { color: theme.text }]}>"{partnerAnswer}"</Text>
+                </Animated.View>
               ) : (
                 <View style={styles.waitingBox}>
-                  <ActivityIndicator color={theme.tint} />
+                  <ActivityIndicator color={theme.tint} size="small" />
                   <Text style={[styles.waitingText, { color: '#A99693' }]}>
                     En attente de ton partenaire...
                   </Text>
                 </View>
               )}
+
+              {/* Bouton "Question suivante" — accessible dès que MOI j'ai répondu */}
+              <Animated.View entering={FadeInUp.delay(300).duration(600)} style={{ marginTop: 16 }}>
+                <Pressable
+                  style={({ pressed }) => [styles.nextButton, { opacity: pressed || loadingNext ? 0.8 : 1, backgroundColor: theme.gradientEnd }]}
+                  onPress={handleNextQuestion}
+                  disabled={loadingNext}
+                >
+                  {loadingNext
+                    ? <ActivityIndicator color="white" />
+                    : (
+                      <>
+                        <Text style={styles.nextButtonText}>Question suivante</Text>
+                        <ChevronRight color="white" size={20} />
+                      </>
+                    )}
+                </Pressable>
+              </Animated.View>
             </Animated.View>
           )}
         </View>
