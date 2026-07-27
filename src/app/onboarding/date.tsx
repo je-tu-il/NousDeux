@@ -9,20 +9,22 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
 
 export default function DateScreen() {
-  const [day, setDay] = useState('');
+  const [day, setDay]     = useState('');
   const [month, setMonth] = useState('');
-  const [year, setYear] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [waitingForPartner, setWaitingForPartner] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [year, setYear]   = useState('');
+  const [loading, setLoading]               = useState(false);
+  const [waitingForPartner, setWaiting]     = useState(false);
+  const [errorMessage, setError]            = useState('');
+  const [success, setSuccess]               = useState(false);
 
-  const theme = Colors.light;
-  const store = useOnboardingStore((state) => state);
-  const myUid = store.uid;
+  // partnerUid stocké en state pour être accessible dans handleSubmit
+  const [partnerUid, setPartnerUid] = useState<string | null>(null);
+
+  const theme    = Colors.light;
+  const store    = useOnboardingStore((s) => s);
+  const myUid    = store.uid;
   const spinAnim = useSharedValue(0);
 
-  // useRef pour lire waitingForPartner dans le listener sans recréer l'abonnement
   const waitingRef = useRef(false);
   useEffect(() => { waitingRef.current = waitingForPartner; }, [waitingForPartner]);
 
@@ -36,12 +38,31 @@ export default function DateScreen() {
     transform: [{ rotate: `${spinAnim.value}deg` }],
   }));
 
-  // Listener Firebase — créé UNE SEULE fois (dépend uniquement de myUid)
-  useEffect(() => {
-    if (!myUid) {
-      router.replace('/onboarding/login');
-      return;
+  // ── Comparaison des deux dates proposées ─────────────────────────────────
+  // Fonction partagée appelée depuis le listener ET depuis handleSubmit
+  const compareProposals = async (myProposed: string, partnerProposed: string, pUid: string) => {
+    if (myProposed === partnerProposed) {
+      setSuccess(true);
+      const batch = writeBatch(db);
+      if (myUid) batch.update(doc(db, 'users', myUid), { coupleDate: myProposed, proposedDate: deleteField() });
+      batch.update(doc(db, 'users', pUid), { coupleDate: myProposed, proposedDate: deleteField() });
+      await batch.commit();
+      setTimeout(() => router.replace('/dashboard'), 2000);
+    } else {
+      const batch = writeBatch(db);
+      if (myUid) batch.update(doc(db, 'users', myUid), { proposedDate: deleteField() });
+      batch.update(doc(db, 'users', pUid), { proposedDate: deleteField() });
+      await batch.commit();
+      setWaiting(false);
+      waitingRef.current = false;
+      setDay(''); setMonth(''); setYear('');
+      setError("Ton partenaire n'a pas mis la même date !\nÊtes-vous sûrs de la date où vous vous êtes mis ensemble ?");
     }
+  };
+
+  // ── Listener Firebase — créé UNE SEULE fois (dépend uniquement de myUid) ──
+  useEffect(() => {
+    if (!myUid) { router.replace('/onboarding/login'); return; }
 
     let unsubPartner: (() => void) | undefined;
 
@@ -49,107 +70,106 @@ export default function DateScreen() {
       const myDoc = await getDoc(doc(db, 'users', myUid));
       if (!myDoc.exists()) return;
       const data = myDoc.data();
-      const partnerUid = data.linkedTo;
+      const pUid = data.linkedTo as string | undefined;
 
-      if (!partnerUid) {
-        router.replace('/onboarding/sync');
-        return;
-      }
+      if (!pUid) { router.replace('/onboarding/sync'); return; }
 
-      // ✅ Si coupleDate est déjà présente sur MON compte → on va directement au dashboard.
-      // Pas de suppression ici : sync.tsx s'en est déjà chargé lors du re-pairing.
-      if (data.coupleDate) {
-        router.replace('/dashboard');
-        return;
-      }
+      // Stocker partnerUid dans le state pour handleSubmit
+      setPartnerUid(pUid);
 
-      // Listener sur le doc du partenaire — UNE SEULE fois
-      unsubPartner = onSnapshot(
-        doc(db, 'users', partnerUid),
-        { includeMetadataChanges: true },
-        async (partnerSnap) => {
-          if (!partnerSnap.exists() || partnerSnap.metadata.fromCache) return;
+      // Si coupleDate déjà présente → dashboard directement (pas de suppression!)
+      if (data.coupleDate) { router.replace('/dashboard'); return; }
 
-          const pData = partnerSnap.data();
-
-          // Cas 1 : le partenaire a déjà une coupleDate → on la copie et on part
-          if (pData.coupleDate) {
-            // Mise à jour silencieuse, sans Alert
-            await updateDoc(doc(db, 'users', myUid), { coupleDate: pData.coupleDate, proposedDate: deleteField() });
-            router.replace('/dashboard');
-            return;
-          }
-
-          // Cas 2 : les deux ont proposé une date → vérifier la correspondance
-          if (waitingRef.current && pData.proposedDate) {
-            const myLatestDoc = await getDoc(doc(db, 'users', myUid));
-            if (!myLatestDoc.exists() || !myLatestDoc.data().proposedDate) return;
-            const myProposed = myLatestDoc.data().proposedDate;
-
-            if (myProposed === pData.proposedDate) {
-              // ✅ Match ! Écriture atomique des deux côtés en même temps
-              setSuccess(true);
-              const batch = writeBatch(db);
-              batch.update(doc(db, 'users', myUid), { coupleDate: myProposed, proposedDate: deleteField() });
-              batch.update(doc(db, 'users', partnerUid), { coupleDate: myProposed, proposedDate: deleteField() });
-              await batch.commit();
-              // Petit délai pour que l'animation "✅" soit visible
-              setTimeout(() => router.replace('/dashboard'), 2000);
-            } else {
-              // ❌ Dates différentes — reset propre des deux propositions
-              const batch = writeBatch(db);
-              batch.update(doc(db, 'users', myUid), { proposedDate: deleteField() });
-              batch.update(doc(db, 'users', partnerUid), { proposedDate: deleteField() });
-              await batch.commit();
-              setWaitingForPartner(false);
-              waitingRef.current = false;
-              setDay('');
-              setMonth('');
-              setYear('');
-              setErrorMessage(
-                "Ton partenaire n'a pas mis la même date !\nÊtes-vous sûrs de la date où vous vous êtes mis ensemble ?"
-              );
-            }
-          }
+      // Restauration de l'état "en attente" après un refresh
+      if (data.proposedDate) {
+        setWaiting(true);
+        waitingRef.current = true;
+        // Extraire JJ/MM/AAAA de la date ISO stockée
+        const parts = (data.proposedDate as string).split('-');
+        if (parts.length === 3) {
+          setYear(parts[0]);
+          setMonth(String(parseInt(parts[1], 10)));
+          setDay(String(parseInt(parts[2], 10)));
         }
-      );
+      }
+
+      // Listener sur le doc du partenaire
+      unsubPartner = onSnapshot(doc(db, 'users', pUid), async (partnerSnap) => {
+        if (!partnerSnap.exists()) return;
+        const pData = partnerSnap.data();
+
+        // Cas 1 : partenaire a déjà une coupleDate → on la copie, on part
+        if (pData.coupleDate) {
+          await updateDoc(doc(db, 'users', myUid), { coupleDate: pData.coupleDate, proposedDate: deleteField() });
+          router.replace('/dashboard');
+          return;
+        }
+
+        // Cas 2 : partenaire a proposé une date et JE suis en attente
+        if (waitingRef.current && pData.proposedDate) {
+          const myLatest = await getDoc(doc(db, 'users', myUid));
+          if (!myLatest.exists() || !myLatest.data().proposedDate) return;
+          await compareProposals(myLatest.data().proposedDate, pData.proposedDate, pUid);
+        }
+      });
     };
 
     setupListener();
     return () => { if (unsubPartner) unsubPartner(); };
-  }, [myUid]); // Dépend UNIQUEMENT de myUid
+  }, [myUid]);
 
+  // ── Validation + soumission ───────────────────────────────────────────────
   const handleSubmit = async () => {
-    const dayNum = parseInt(day, 10);
+    const dayNum   = parseInt(day, 10);
     const monthNum = parseInt(month, 10);
-    const yearNum = parseInt(year, 10);
+    const yearNum  = parseInt(year, 10);
 
     if (!day || !month || !year || isNaN(dayNum) || isNaN(monthNum) || isNaN(yearNum)) {
-      setErrorMessage('Veuillez remplir tous les champs (JJ / MM / AAAA).');
-      return;
+      setError('Veuillez remplir tous les champs (JJ / MM / AAAA).'); return;
     }
-    if (dayNum < 1 || dayNum > 31) { setErrorMessage('Le jour doit être entre 1 et 31.'); return; }
-    if (monthNum < 1 || monthNum > 12) { setErrorMessage('Le mois doit être entre 1 et 12.'); return; }
+    if (dayNum < 1 || dayNum > 31)    { setError('Le jour doit être entre 1 et 31.'); return; }
+    if (monthNum < 1 || monthNum > 12) { setError('Le mois doit être entre 1 et 12.'); return; }
     if (yearNum < 1900 || yearNum > new Date().getFullYear()) {
-      setErrorMessage(`L'année doit être entre 1900 et ${new Date().getFullYear()}.`);
-      return;
+      setError(`L'année doit être entre 1900 et ${new Date().getFullYear()}.`); return;
     }
+    if (!myUid || !partnerUid) return;
 
     setLoading(true);
-    setErrorMessage('');
+    setError('');
     try {
       const proposed = `${yearNum}-${monthNum.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
-      if (myUid) {
-        await updateDoc(doc(db, 'users', myUid), { proposedDate: proposed });
-        setWaitingForPartner(true);
+
+      // 1. Écrire ma proposition
+      await updateDoc(doc(db, 'users', myUid), { proposedDate: proposed });
+      setWaiting(true);
+      waitingRef.current = true;
+
+      // 2. ⚠️ CORRECTION CLÉ : vérifier IMMÉDIATEMENT si le partenaire a déjà proposé
+      //    (le listener ne refired pas si le doc du partenaire n'a pas changé depuis le montage)
+      const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
+      if (partnerDoc.exists()) {
+        const pData = partnerDoc.data();
+        if (pData.coupleDate) {
+          // Partenaire a déjà une date officielle → on la prend
+          await updateDoc(doc(db, 'users', myUid), { coupleDate: pData.coupleDate, proposedDate: deleteField() });
+          router.replace('/dashboard');
+          return;
+        }
+        if (pData.proposedDate) {
+          // Partenaire a déjà proposé → comparer maintenant, sans attendre le listener
+          await compareProposals(proposed, pData.proposedDate, partnerUid);
+        }
+        // Sinon : on attend que le partenaire confirme (le listener gère ça)
       }
     } catch (error: any) {
-      setErrorMessage(error.message);
-      setWaitingForPartner(false);
+      setError(error.message);
+      setWaiting(false);
+      waitingRef.current = false;
     }
     setLoading(false);
   };
 
+  // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
     <ImageBackground
       source={require('../../../assets/images/romantic_calendar_bg.png')}
@@ -164,7 +184,7 @@ export default function DateScreen() {
             <Text style={[styles.subtitle, { color: theme.text }]}>
               {waitingForPartner
                 ? 'En attente de la réponse de ton partenaire...'
-                : "À quand remonte votre mise en couple ? Vos réponses doivent correspondre pour continuer !"}
+                : "À quand remonte votre mise en couple ? Vos réponses doivent correspondre !"}
             </Text>
           </Animated.View>
 

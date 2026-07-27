@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, Image, Modal } from 'react-native';
+import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, Image, Modal, ScrollView } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake, Infinity as InfinityIcon } from 'lucide-react-native';
@@ -7,8 +7,9 @@ import Animated, { FadeInUp, FadeInDown, withRepeat, withSequence, withTiming, u
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import StreakCalendar from '@/components/StreakCalendar';
 
-type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string };
+type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string; coupleId?: string };
 
 export default function DashboardScreen() {
   const theme = Colors.light;
@@ -58,6 +59,7 @@ export default function DashboardScreen() {
               avatarUrl: pData.avatarUrl,
               coupleDate: data.coupleDate,
               age: pData.age,
+              coupleId: [store.uid!, data.linkedTo].sort().join('_'),
             });
             setPartnerLeft(false);
           } else {
@@ -95,9 +97,9 @@ export default function DashboardScreen() {
 
   return (
     <ImageBackground source={require('../../assets/images/romantic_calendar_bg.png')} style={styles.container} resizeMode="cover">
-      <View style={styles.safeArea}>
+      <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 40 }}>
 
-        {/* Header */}
+        {/* Header */}}
         <Animated.View entering={FadeInUp.duration(600)}>
           <View style={styles.header}>
 
@@ -149,7 +151,14 @@ export default function DashboardScreen() {
           </View>
         </Animated.View>
 
-        {/* Main Grid */}
+        {/* Streak + calendrier */}
+        {partner?.coupleId && (
+          <Animated.View entering={FadeInUp.delay(150).duration(600)}>
+            <StreakCalendar coupleId={partner.coupleId} />
+          </Animated.View>
+        )}
+
+        {/* Main Grid */}}
         <View style={styles.grid}>
           <Animated.View entering={FadeInUp.delay(200).duration(600)}>
             <Link href="/daylink" style={[styles.mainCard, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
@@ -190,7 +199,7 @@ export default function DashboardScreen() {
             </Animated.View>
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       {/* ── Modal Mon Profil ───────────────────────────────────────────────── */}
       <Modal visible={showMyProfile} transparent animationType="fade">
