@@ -6,15 +6,11 @@ import { db } from '../lib/firebase';
 
 const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
-function getLastNDays(n: number): string[] {
-  const days: string[] = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    days.push(key);
-  }
-  return days;
+/** Retourne la clé YYYY-MM-DD d'un jour relatif à aujourd'hui (0 = aujourd'hui, -1 = hier, etc.) */
+function dateKeyOffset(offset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function dayLabel(dateKey: string): string {
@@ -31,12 +27,9 @@ interface Props {
 }
 
 export default function StreakCalendar({ coupleId }: Props) {
-  const [streak, setStreak]       = useState<number>(0);
-  const [activeDays, setActive]   = useState<Set<string>>(new Set());
-  const [loading, setLoading]     = useState(true);
-
-  const last7 = getLastNDays(7);
-  const today  = last7[last7.length - 1];
+  const [streak, setStreak]     = useState<number>(0);
+  const [activeDays, setActive] = useState<Set<string>>(new Set());
+  const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
     if (!coupleId) return;
@@ -44,14 +37,24 @@ export default function StreakCalendar({ coupleId }: Props) {
 
     const load = async () => {
       try {
-        // 1. Lire le streak depuis stats
+        // 1. Lire le streak courant
         const statsSnap = await getDoc(doc(db, 'couples', coupleId, 'stats', 'streak'));
-        const currentStreak = statsSnap.exists() ? (statsSnap.data().currentStreak ?? 0) : 0;
+        const currentStreak: number = statsSnap.exists()
+          ? (statsSnap.data().currentStreak ?? 0)
+          : 0;
 
-        // 2. Vérifier les 7 derniers jours pour le mini-calendrier
+        // 2. Vérifier les jours à afficher
+        //    On n'affiche que min(streak, 7) jours — du plus ancien au plus récent
+        const daysToShow = Math.min(Math.max(currentStreak, 1), 7);
+        const dateKeys: string[] = [];
+        for (let i = -(daysToShow - 1); i <= 0; i++) {
+          dateKeys.push(dateKeyOffset(i));
+        }
+
+        // 3. Pour chaque jour, vérifier si bothAnswered
         const active = new Set<string>();
         await Promise.all(
-          last7.map(async (dateKey) => {
+          dateKeys.map(async (dateKey) => {
             const daySnap = await getDoc(doc(db, 'couples', coupleId, 'daily', dateKey));
             if (daySnap.exists() && daySnap.data().bothAnswered === true) {
               active.add(dateKey);
@@ -82,9 +85,17 @@ export default function StreakCalendar({ coupleId }: Props) {
     );
   }
 
+  // Jours à afficher : au minimum aujourd'hui, au maximum 7
+  const daysToShow = Math.min(Math.max(streak, 1), 7);
+  const dateKeys: string[] = [];
+  for (let i = -(daysToShow - 1); i <= 0; i++) {
+    dateKeys.push(dateKeyOffset(i));
+  }
+  const today = dateKeyOffset(0);
+
   return (
     <View style={styles.container}>
-      {/* Streak count */}
+      {/* Compteur streak */}
       <View style={styles.streakRow}>
         <Flame color="#FF6B35" size={22} fill="#FF6B35" />
         <Text style={styles.streakNumber}>{streak}</Text>
@@ -92,29 +103,29 @@ export default function StreakCalendar({ coupleId }: Props) {
           {streak === 0
             ? 'Commencez votre streak !'
             : streak === 1
-            ? 'jour d\'affilée'
-            : 'jours d\'affilée'}
+            ? 'jour d\'affilée 🎉'
+            : `jour${streak > 1 ? 's' : ''} d'affilée 🔥`}
         </Text>
       </View>
 
-      {/* Mini calendrier — 7 derniers jours */}
+      {/* Mini calendrier glissant */}
       <View style={styles.calRow}>
-        {last7.map((dateKey) => {
-          const isToday   = dateKey === today;
-          const isActive  = activeDays.has(dateKey);
+        {dateKeys.map((dateKey) => {
+          const isToday  = dateKey === today;
+          const isActive = activeDays.has(dateKey);
           return (
             <View key={dateKey} style={styles.dayCol}>
-              <Text style={[styles.dayLabel, isToday && { color: '#FF9A8B', fontWeight: '800' }]}>
+              <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
                 {dayLabel(dateKey)}
               </Text>
               <View style={[
                 styles.dayCircle,
-                isActive  && styles.dayActive,
+                isActive && styles.dayActive,
                 isToday && !isActive && styles.dayToday,
               ]}>
                 {isActive
                   ? <Text style={styles.dayCheckmark}>✓</Text>
-                  : <Text style={[styles.dayNumber, isToday && { color: '#FF9A8B' }]}>
+                  : <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]}>
                       {dayNumber(dateKey)}
                     </Text>}
               </View>
@@ -158,11 +169,10 @@ const styles = StyleSheet.create({
   },
   calRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 4,
+    justifyContent: 'flex-start',
+    gap: 6,
   },
   dayCol: {
-    flex: 1,
     alignItems: 'center',
     gap: 4,
   },
@@ -171,10 +181,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#A99693',
   },
+  dayLabelToday: {
+    color: '#FF9A8B',
+    fontWeight: '800',
+  },
   dayCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(0,0,0,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -192,8 +206,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#A99693',
   },
+  dayNumberToday: {
+    color: '#FF9A8B',
+    fontWeight: '800',
+  },
   dayCheckmark: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '900',
     color: 'white',
   },

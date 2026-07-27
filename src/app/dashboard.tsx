@@ -99,7 +99,7 @@ export default function DashboardScreen() {
     <ImageBackground source={require('../../assets/images/romantic_calendar_bg.png')} style={styles.container} resizeMode="cover">
       <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 40 }}>
 
-        {/* Header */}}
+        {/* Header */}
         <Animated.View entering={FadeInUp.duration(600)}>
           <View style={styles.header}>
 
@@ -158,7 +158,7 @@ export default function DashboardScreen() {
           </Animated.View>
         )}
 
-        {/* Main Grid */}}
+        {/* Main Grid */}
         <View style={styles.grid}>
           <Animated.View entering={FadeInUp.delay(200).duration(600)}>
             <Link href="/daylink" style={[styles.mainCard, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
