@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TextInput, Pressable, Platform, ImageBackground
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/constants/Colors';
-import { ArrowLeft, HeartCrack, Camera, Trash2, Copy, CheckCircle2, Check } from 'lucide-react-native';
+import { ArrowLeft, HeartCrack, Camera, Trash2, Copy, CheckCircle2, Check, LogOut } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeIn, FadeOut } from 'react-native-reanimated';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
@@ -184,6 +184,31 @@ export default function SettingsScreen() {
     setLoading(false);
   };
 
+  // ── Déconnexion (efface l'état local sans supprimer les données) ──────────
+  const handleDisconnect = () => {
+    Alert.alert(
+      'Se déconnecter',
+      'Tu seras renvoyé à l\'écran de connexion. Tes données sont conservées.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Déconnecter',
+          style: 'destructive',
+          onPress: () => {
+            store.setPseudo('');
+            store.setAge('');
+            store.setAvatar(null);
+            store.setSynced(false);
+            store.setMyCode('');
+            store.setPartnerCode('');
+            store.setUid('');
+            router.replace('/onboarding/login');
+          },
+        },
+      ]
+    );
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <ImageBackground source={require('../../assets/images/settings_bg.png')} style={styles.container} resizeMode="cover">
@@ -295,8 +320,23 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
 
-        {/* Zone Danger */}
+        {/* Déconnexion */}
         <Animated.View entering={FadeInUp.duration(600).delay(200)} style={styles.section}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.disconnectButton,
+              { opacity: pressed ? 0.8 : 1 },
+            ]}
+            onPress={handleDisconnect}
+          >
+            <LogOut color="white" size={20} />
+            <Text style={styles.disconnectText}>Se déconnecter</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* Zone Danger */}
+        <Animated.View entering={FadeInUp.duration(600).delay(300)} style={styles.section}>
+
           <Text style={[styles.sectionTitle, { color: 'red' }]}>Zone Danger</Text>
 
           <View style={[styles.card, { backgroundColor: 'rgba(255,200,200,0.7)', borderColor: 'red' }]}>
@@ -432,4 +472,12 @@ const styles = StyleSheet.create({
   codeBox: { width: '100%', alignItems: 'center' },
   codeDisplay: { flexDirection: 'row', alignItems: 'center', gap: 16, borderWidth: 2, borderStyle: 'dashed', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 20 },
   codeText: { fontSize: 32, fontWeight: '900', letterSpacing: 8 },
+  disconnectButton: {
+    flexDirection: 'row', height: 50, borderRadius: 25,
+    backgroundColor: '#FF8C00',
+    alignItems: 'center', justifyContent: 'center', gap: 10,
+    shadowColor: '#FF8C00', shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3, shadowRadius: 10, width: '100%', maxWidth: 300, alignSelf: 'center',
+  },
+  disconnectText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });

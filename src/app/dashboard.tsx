@@ -151,10 +151,14 @@ export default function DashboardScreen() {
           </View>
         </Animated.View>
 
-        {/* Streak + calendrier */}
+        {/* Streak + calendrier — cliquable pour ouvrir le calendrier complet */}
         {partner?.coupleId && (
           <Animated.View entering={FadeInUp.delay(150).duration(600)}>
-            <StreakCalendar coupleId={partner.coupleId} />
+            <Link href="/calendar" asChild>
+              <Pressable>
+                <StreakCalendar coupleId={partner.coupleId} />
+              </Pressable>
+            </Link>
           </Animated.View>
         )}
 
