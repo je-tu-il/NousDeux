@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, Image, Modal, ScrollView } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
-import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake, Infinity as InfinityIcon } from 'lucide-react-native';
+import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake, Infinity as InfinityIcon, Split } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeInDown, withRepeat, withSequence, withTiming, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
@@ -187,11 +187,11 @@ export default function DashboardScreen() {
 
           <View style={styles.row}>
             <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.halfCardWrapper}>
-              <View style={[styles.smallCard, { backgroundColor: 'rgba(255,255,255,0.4)', borderColor: theme.cardBorder }]}>
-                <MessageCircleHeart color={theme.tabIconDefault} size={28} />
-                <Text style={[styles.smallCardTitle, { color: theme.text }]}>Modes de Jeux</Text>
-                <Text style={[styles.lockText, { color: theme.tabIconDefault }]}>Bientôt</Text>
-              </View>
+              <Link href="/pile-ou-face" style={[styles.smallCard, { backgroundColor: 'rgba(14,165,233,0.1)', borderColor: 'rgba(14,165,233,0.3)' }]}>
+                <Split color="#0EA5E9" size={28} />
+                <Text style={[styles.smallCardTitle, { color: theme.text }]}>Pile ou Face</Text>
+                <Text style={{ fontSize: 12, color: '#0EA5E9', fontWeight: 'bold' }}>Tu préfères ?</Text>
+              </Link>
             </Animated.View>
 
             <Animated.View entering={FadeInUp.delay(500).duration(600)} style={styles.halfCardWrapper}>
