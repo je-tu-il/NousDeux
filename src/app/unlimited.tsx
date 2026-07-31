@@ -1,12 +1,14 @@
 import React from 'react';
 import { StyleSheet, ImageBackground, View, Platform } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 
 import UnlimitedQuestions from '@/components/UnlimitedQuestions';
 import { Colors } from '@/constants/Colors';
 
 export default function UnlimitedScreen() {
+  const { category } = useLocalSearchParams<{ category?: string }>();
+  
   return (
     <ImageBackground
       source={require('../../assets/images/bloomy_warm_background.png')}
@@ -20,7 +22,7 @@ export default function UnlimitedScreen() {
           </Link>
         </View>
 
-        <UnlimitedQuestions />
+        <UnlimitedQuestions categoryFilter={category} />
       </View>
     </ImageBackground>
   );

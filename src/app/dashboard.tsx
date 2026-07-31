@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, Image, Modal, ScrollView } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
-import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake, Infinity as InfinityIcon, Split } from 'lucide-react-native';
+import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake, Infinity as InfinityIcon, Split, Heart, Smile, Brain, Flame, Home, MessageCircle, Rocket } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeInDown, withRepeat, withSequence, withTiming, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
@@ -185,22 +185,29 @@ export default function DashboardScreen() {
             </Link>
           </Animated.View>
 
-          <View style={styles.row}>
-            <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.halfCardWrapper}>
-              <Link href="/pile-ou-face" style={[styles.smallCard, { backgroundColor: 'rgba(14,165,233,0.1)', borderColor: 'rgba(14,165,233,0.3)' }]}>
-                <Split color="#0EA5E9" size={28} />
-                <Text style={[styles.smallCardTitle, { color: theme.text }]}>Pile ou Face</Text>
-                <Text style={{ fontSize: 12, color: '#0EA5E9', fontWeight: 'bold' }}>Tu préfères ?</Text>
-              </Link>
-            </Animated.View>
+          {/* Titre Thèmes */}
+          <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Thèmes Spécifiques</Text>
+          </Animated.View>
 
-            <Animated.View entering={FadeInUp.delay(500).duration(600)} style={styles.halfCardWrapper}>
-              <View style={[styles.smallCard, { backgroundColor: 'rgba(255,255,255,0.4)', borderColor: theme.cardBorder }]}>
-                <Trophy color={theme.tabIconDefault} size={28} />
-                <Text style={[styles.smallCardTitle, { color: theme.text }]}>Défis</Text>
-                <Text style={[styles.lockText, { color: theme.tabIconDefault }]}>Bientôt</Text>
-              </View>
-            </Animated.View>
+          <View style={styles.categoryGrid}>
+            {[
+              { id: 'amour', title: 'Amour', icon: <Heart color="#EF4444" size={24} />, bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.3)' },
+              { id: 'fun', title: 'Fun', icon: <Smile color="#F59E0B" size={24} />, bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' },
+              { id: 'profond', title: 'Profond', icon: <Brain color="#3B82F6" size={24} />, bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.3)' },
+              { id: 'intime', title: 'Intime', icon: <Flame color="#EC4899" size={24} />, bg: 'rgba(236,72,153,0.1)', border: 'rgba(236,72,153,0.3)' },
+              { id: 'pile_ou_face', title: 'Tu préfères', icon: <Split color="#0EA5E9" size={24} />, bg: 'rgba(14,165,233,0.1)', border: 'rgba(14,165,233,0.3)' },
+              { id: 'famille', title: 'Famille', icon: <Home color="#10B981" size={24} />, bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.3)' },
+              { id: 'debat', title: 'Débat', icon: <MessageCircle color="#8B5CF6" size={24} />, bg: 'rgba(139,92,246,0.1)', border: 'rgba(139,92,246,0.3)' },
+              { id: 'futur', title: 'Futur', icon: <Rocket color="#6366F1" size={24} />, bg: 'rgba(99,102,241,0.1)', border: 'rgba(99,102,241,0.3)' },
+            ].map((cat, index) => (
+              <Animated.View key={cat.id} entering={FadeInUp.delay(450 + index * 50).duration(500)} style={styles.categoryCardWrapper}>
+                <Link href={`/unlimited?category=${cat.id}`} style={[styles.categoryCard, { backgroundColor: cat.bg, borderColor: cat.border }]}>
+                  {cat.icon}
+                  <Text style={styles.categoryCardTitle}>{cat.title}</Text>
+                </Link>
+              </Animated.View>
+            ))}
           </View>
         </View>
       </ScrollView>
@@ -291,11 +298,18 @@ const styles = StyleSheet.create({
   iconWrapper: { padding: 20, borderRadius: 24, marginBottom: 16, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
   cardTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
   cardDesc: { fontSize: 16, opacity: 0.7 },
-  row: { flexDirection: 'row', gap: 20 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
   halfCardWrapper: { flex: 1 },
-  smallCard: { padding: 20, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 12, height: 140 },
-  smallCardTitle: { fontSize: 16, fontWeight: '600' },
-  lockText: { fontSize: 12, fontStyle: 'italic', opacity: 0.8 },
+  smallCard: { padding: 20, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 8, height: 130, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  smallCardTitle: { fontSize: 16, fontWeight: 'bold', marginTop: 5 },
+  lockText: { fontSize: 13, fontWeight: 'bold', opacity: 0.8 },
+  
+  sectionHeader: { marginTop: 10, marginBottom: 15, paddingHorizontal: 5 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#4A3B39' },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
+  categoryCardWrapper: { width: '48%', marginBottom: 12 },
+  categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5 },
+  categoryCardTitle: { fontSize: 15, fontWeight: '700', color: '#4A3B39' },
   settingsButton: { padding: 10 },
   // Modaux
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },

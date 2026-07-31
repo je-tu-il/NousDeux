@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Infinity as InfinityIcon, Lock, Unlock,
-  ChevronRight, CheckCircle2, Clock,
+  ChevronRight, CheckCircle2, Clock, Split
 } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeIn, Layout } from 'react-native-reanimated';
 
@@ -17,26 +17,38 @@ import {
   doc, getDoc, setDoc, onSnapshot,
   serverTimestamp, updateDoc, runTransaction,
 } from 'firebase/firestore';
-import { getById, getUnseen, QUESTIONS } from '../data/questions';
-import type { Question } from '../data/questions';
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+import { QUESTIONS } from '../data/questions';
+import { POF_QUESTIONS } from '../data/pileouface';
+import type { Question } from '../data/questions';
+import type { PileOuFaceQuestion } from '../data/pileouface';
+
+type AnyQuestion = Question | PileOuFaceQuestion;
+
+function isPof(q: AnyQuestion): q is PileOuFaceQuestion {
+  return 'optionA' in q;
+}
+
+function getQuestionById(id: string): AnyQuestion | null {
+  const q1 = QUESTIONS.find(q => q.id === id);
+  if (q1) return q1;
+  const q2 = POF_QUESTIONS.find(q => q.id === id);
+  if (q2) return q2;
+  return null;
+}
 
 function coupleId(uid1: string, uid2: string): string {
   return [uid1, uid2].sort().join('_');
 }
 
-function nowSlot(index: number): string {
+function nowSlot(index: number, categoryFilter?: string): string {
   const d = new Date();
   const base = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return `unlimited_${base}_${index}`;
+  const cat = categoryFilter ? categoryFilter : 'all';
+  return `unlimited_${base}_${cat}_${index}`;
 }
 
-/**
- * Transaction Firestore : garantit que les 2 utilisateurs voient la MÊME question,
- * même s'ils chargent le slot simultanément.
- */
-async function pickUnlimitedQuestion(cId: string, slot: string): Promise<string> {
+async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?: string): Promise<string> {
   return runTransaction(db, async (tx) => {
     const slotRef     = doc(db, 'couples', cId, 'daily', slot);
     const progressRef = doc(db, 'couples', cId, 'progress', 'seen');
@@ -46,24 +58,40 @@ async function pickUnlimitedQuestion(cId: string, slot: string): Promise<string>
 
     const progressDoc = await tx.get(progressRef);
     const seenIds: string[] = progressDoc.exists() ? progressDoc.data().questionIds ?? [] : [];
-    let unseen = getUnseen(seenIds);
+
+    let available: AnyQuestion[] = [];
+    if (!categoryFilter) {
+      available = [...QUESTIONS, ...POF_QUESTIONS];
+    } else if (categoryFilter === 'pile_ou_face') {
+      available = [...POF_QUESTIONS];
+    } else {
+      available = QUESTIONS.filter(q => (q as Question).category === categoryFilter);
+    }
+
+    let unseen = available.filter(q => !seenIds.includes(q.id));
     let newSeenIds = seenIds;
-    if (unseen.length === 0) { unseen = [...QUESTIONS]; newSeenIds = []; }
+
+    if (unseen.length === 0) {
+      unseen = [...available];
+      newSeenIds = seenIds.filter(id => !available.some(q => q.id === id)); // Reset just this category
+    }
+
+    if (unseen.length === 0) {
+      unseen = [...QUESTIONS]; // Fallback ultime
+      newSeenIds = [];
+    }
+
     const picked = unseen[Math.floor(Math.random() * unseen.length)];
     tx.set(progressRef, { questionIds: [...newSeenIds, picked.id], updatedAt: new Date() });
-    tx.set(slotRef, { questionId: picked.id, createdAt: new Date(), mode: 'unlimited' });
+    tx.set(slotRef, { questionId: picked.id, createdAt: new Date(), mode: 'unlimited', category: categoryFilter || 'all' });
     return picked.id;
   });
 }
 
-/**
- * Trouve l'index du slot courant : le premier où JE n'ai pas encore répondu.
- * Retourne 0 si la session n'a pas encore commencé.
- */
-async function findCurrentIndex(uid: string, cId: string): Promise<number> {
+async function findCurrentIndex(uid: string, cId: string, categoryFilter?: string): Promise<number> {
   let idx = 0;
   while (idx < 200) {
-    const slot = nowSlot(idx);
+    const slot = nowSlot(idx, categoryFilter);
     const myAns = await getDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', uid));
     if (!myAns.exists()) break;
     idx++;
@@ -71,15 +99,13 @@ async function findCurrentIndex(uid: string, cId: string): Promise<number> {
   return idx;
 }
 
-// ─── composant ───────────────────────────────────────────────────────────────
-
-export default function UnlimitedQuestions() {
+export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?: string }) {
   const theme  = Colors.light;
   const store  = useOnboardingStore((s) => s);
   const myUid  = store.uid;
   const pseudo = store.pseudo ?? 'Moi';
 
-  const [question, setQuestion]             = useState<Question | null>(null);
+  const [question, setQuestion]             = useState<AnyQuestion | null>(null);
   const [loadingQuestion, setLoading]       = useState(true);
   const [partnerUid, setPartnerUid]         = useState<string | null>(null);
   const [partnerPseudo, setPartnerPseudo]   = useState('Partenaire');
@@ -92,17 +118,15 @@ export default function UnlimitedQuestions() {
   const [isSubmitted, setIsSubmitted]       = useState(false);
   const [savingAnswer, setSavingAnswer]     = useState(false);
 
-  // État partenaire (temps réel, toujours actif)
+  // État partenaire (temps réel)
   const [partnerHasAnswered, setPartnerHasAnswered] = useState(false);
   const [partnerAnswer, setPartnerAnswer]           = useState<string | null>(null);
 
   const [loadingNext, setLoadingNext]       = useState(false);
-  const [coupId, setCoupId]                 = useState('');
 
   const isSubmittedRef = useRef(false);
   useEffect(() => { isSubmittedRef.current = isSubmitted; }, [isSubmitted]);
 
-  // ── Chargement d'un slot spécifique ───────────────────────────────────────
   const loadSlot = useCallback(async (uid: string, pUid: string, idx: number) => {
     setLoading(true);
     setMyAnswer('');
@@ -112,30 +136,29 @@ export default function UnlimitedQuestions() {
     isSubmittedRef.current = false;
 
     const cId = coupleId(uid, pUid);
-    const slot = nowSlot(idx);
+    const slot = nowSlot(idx, categoryFilter);
     setSlotKey(slot);
     setQuestionIndex(idx);
 
-    const questionId = await pickUnlimitedQuestion(cId, slot);
-    setQuestion(getById(questionId) ?? null);
+    const questionId = await pickUnlimitedQuestion(cId, slot, categoryFilter);
+    setQuestion(getQuestionById(questionId));
 
     const myAns = await getDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', uid));
     if (myAns.exists()) {
       setIsSubmitted(true);
       isSubmittedRef.current = true;
-      setMyAnswer(myAns.data().text ?? '');
+      setMyAnswer(myAns.data().text ?? myAns.data().choice ?? '');
     }
 
     const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', pUid));
     if (pAns.exists()) {
       setPartnerHasAnswered(true);
-      if (isSubmittedRef.current) setPartnerAnswer(pAns.data().text ?? '');
+      if (isSubmittedRef.current) setPartnerAnswer(pAns.data().text ?? pAns.data().choice ?? '');
     }
 
     setLoading(false);
-  }, []);
+  }, [categoryFilter]);
 
-  // ── Init : trouve le slot courant de la session ───────────────────────────
   useEffect(() => {
     if (!myUid) return;
     const init = async () => {
@@ -148,16 +171,12 @@ export default function UnlimitedQuestions() {
       if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
 
       const cId = coupleId(myUid, pUid);
-      setCoupId(cId);
-
-      // Trouver le slot courant (premier où je n'ai pas encore répondu)
-      const currentIdx = await findCurrentIndex(myUid, cId);
+      const currentIdx = await findCurrentIndex(myUid, cId, categoryFilter);
       await loadSlot(myUid, pUid, currentIdx);
     };
     init();
-  }, [myUid]);
+  }, [myUid, categoryFilter, loadSlot]);
 
-  // ── Listener partenaire — TOUJOURS actif ─────────────────────────────────
   useEffect(() => {
     if (!myUid || !partnerUid || !slotKey) return;
     const cId = coupleId(myUid, partnerUid);
@@ -165,7 +184,7 @@ export default function UnlimitedQuestions() {
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
         setPartnerHasAnswered(true);
-        if (isSubmittedRef.current) setPartnerAnswer(snap.data().text ?? '');
+        if (isSubmittedRef.current) setPartnerAnswer(snap.data().text ?? snap.data().choice ?? '');
       } else {
         setPartnerHasAnswered(false);
         setPartnerAnswer(null);
@@ -174,23 +193,24 @@ export default function UnlimitedQuestions() {
     return () => unsub();
   }, [myUid, partnerUid, slotKey]);
 
-  // ── Soumettre ─────────────────────────────────────────────────────────────
-  const handleSubmit = async () => {
-    if (!myAnswer.trim() || !myUid || !partnerUid || !question || !slotKey) return;
+  const handleSubmit = async (choice?: string) => {
+    const finalAnswer = choice || myAnswer;
+    if (!finalAnswer.trim() || !myUid || !partnerUid || !question || !slotKey) return;
+    
     setSavingAnswer(true);
+    if (choice) setMyAnswer(choice);
+
     try {
       const cId = coupleId(myUid, partnerUid);
-      await setDoc(
-        doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid),
-        { text: myAnswer.trim(), submittedAt: serverTimestamp() }
-      );
+      const dataPayload = question && isPof(question) ? { choice: finalAnswer, submittedAt: serverTimestamp() } : { text: finalAnswer.trim(), submittedAt: serverTimestamp() };
+      await setDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid), dataPayload);
       setIsSubmitted(true);
       isSubmittedRef.current = true;
 
       if (partnerHasAnswered) {
         const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
         if (pAns.exists()) {
-          setPartnerAnswer(pAns.data().text ?? '');
+          setPartnerAnswer(pAns.data().text ?? pAns.data().choice ?? '');
           await updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true });
         }
       }
@@ -201,19 +221,17 @@ export default function UnlimitedQuestions() {
     }
   };
 
-  // Quand le partenaire répond après moi → révéler + bothAnswered
   useEffect(() => {
     if (!partnerHasAnswered || !isSubmitted || !myUid || !partnerUid || !slotKey) return;
     const cId = coupleId(myUid, partnerUid);
     getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid)).then((snap) => {
       if (snap.exists()) {
-        setPartnerAnswer(snap.data().text ?? '');
+        setPartnerAnswer(snap.data().text ?? snap.data().choice ?? '');
         updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true }).catch(() => {});
       }
     });
   }, [partnerHasAnswered, isSubmitted]);
 
-  // ── Question suivante (bloquée si le partenaire n'a pas répondu) ──────────
   const handleNext = async () => {
     if (!myUid || !partnerUid || !partnerAnswer) return;
     setLoadingNext(true);
@@ -221,8 +239,6 @@ export default function UnlimitedQuestions() {
     await loadSlot(myUid, partnerUid, nextIdx);
     setLoadingNext(false);
   };
-
-  // ── Rendu ─────────────────────────────────────────────────────────────────
 
   if (loadingQuestion) {
     return (
@@ -236,131 +252,116 @@ export default function UnlimitedQuestions() {
   if (!question) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 30 }]}>
-        <Text style={{ color: '#4A3B39', textAlign: 'center', opacity: 0.6 }}>
-          Impossible de charger une question.{'\n'}Vérifie ta connexion.
-        </Text>
+        <Text style={{ color: '#4A3B39', textAlign: 'center', opacity: 0.6 }}>Impossible de charger une question.</Text>
       </View>
     );
   }
 
   const bothAnswered = isSubmitted && partnerAnswer !== null;
+  const isPofQuestion = isPof(question);
+
+  const getPofText = (ans: string) => {
+    if (!isPofQuestion) return ans;
+    return ans === 'A' ? question.optionA : question.optionB;
+  };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} showsVerticalScrollIndicator={false}>
-        <Animated.View
-          entering={FadeInUp.duration(600).springify()}
-          layout={Layout.springify()}
-          style={styles.card}
-        >
-          {/* Header */}
-          <LinearGradient
-            colors={['#A855F7', '#EC4899']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={styles.headerGradient}
-          >
-            <InfinityIcon color="white" size={22} />
-            <Text style={styles.headerTitle}>Questions Illimitées</Text>
-            {/* Badge : numéro de question dans la session (commence à 1) */}
+        <Animated.View entering={FadeInUp.duration(600).springify()} layout={Layout.springify()} style={styles.card}>
+          <LinearGradient colors={isPofQuestion ? ['#0EA5E9', '#38BDF8'] : ['#A855F7', '#D946EF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
+            {isPofQuestion ? <Split color="white" size={22} /> : <InfinityIcon color="white" size={22} />}
+            <Text style={styles.headerTitle}>{categoryFilter ? categoryFilter.toUpperCase() : 'ILLIMITÉ'}</Text>
             <View style={styles.badge}>
               <Text style={styles.badgeText}>Q.{questionIndex + 1}</Text>
             </View>
           </LinearGradient>
 
           <View style={styles.content}>
-            {/* ── Indicateurs de statut ── */}
             <View style={styles.statusRow}>
               <View style={[styles.pill, isSubmitted ? styles.pillDone : styles.pillWaiting]}>
-                {isSubmitted
-                  ? <CheckCircle2 color="#22c55e" size={14} />
-                  : <Clock color="#9CA3AF" size={14} />}
-                <Text style={[styles.pillText, { color: isSubmitted ? '#22c55e' : '#9CA3AF' }]}>
-                  {pseudo} {isSubmitted ? '✓' : '...'}
-                </Text>
+                {isSubmitted ? <CheckCircle2 color="#22c55e" size={14} /> : <Clock color="#9CA3AF" size={14} />}
+                <Text style={[styles.pillText, { color: isSubmitted ? '#22c55e' : '#9CA3AF' }]}>{pseudo} {isSubmitted ? '✓' : '...'}</Text>
               </View>
-
               <View style={[styles.pill, partnerHasAnswered ? styles.pillDone : styles.pillWaiting]}>
-                {partnerHasAnswered
-                  ? <CheckCircle2 color="#22c55e" size={14} />
-                  : <Clock color="#9CA3AF" size={14} />}
-                <Text style={[styles.pillText, { color: partnerHasAnswered ? '#22c55e' : '#9CA3AF' }]}>
-                  {partnerPseudo} {partnerHasAnswered ? '✓' : '...'}
-                </Text>
+                {partnerHasAnswered ? <CheckCircle2 color="#22c55e" size={14} /> : <Clock color="#9CA3AF" size={14} />}
+                <Text style={[styles.pillText, { color: partnerHasAnswered ? '#22c55e' : '#9CA3AF' }]}>{partnerPseudo} {partnerHasAnswered ? '✓' : '...'}</Text>
               </View>
             </View>
 
-            <Text style={styles.categoryTag}>{question.category.toUpperCase()}</Text>
-            <Text style={styles.question}>{question.text}</Text>
+            <Text style={styles.question}>{isPofQuestion ? question.question : question.text}</Text>
 
             {!isSubmitted ? (
               <Animated.View entering={FadeIn.delay(200)}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ta réponse..."
-                  placeholderTextColor="#C4A8C4"
-                  value={myAnswer}
-                  onChangeText={setMyAnswer}
-                  multiline
-                />
-                <Pressable
-                  style={({ pressed }) => [styles.button, { opacity: pressed ? 0.8 : 1 }]}
-                  onPress={handleSubmit}
-                  disabled={savingAnswer}
-                >
-                  {savingAnswer
-                    ? <ActivityIndicator color="white" />
-                    : <Text style={styles.buttonText}>Envoyer 💜</Text>}
-                </Pressable>
+                {isPofQuestion ? (
+                  <View style={styles.optionsRow}>
+                    <Pressable style={({ pressed }) => [styles.optionBtn, { opacity: pressed ? 0.8 : 1 }]} onPress={() => handleSubmit('A')} disabled={savingAnswer}>
+                      <Text style={styles.optionBtnText}>{question.optionA}</Text>
+                    </Pressable>
+                    <Pressable style={({ pressed }) => [styles.optionBtn, { opacity: pressed ? 0.8 : 1, backgroundColor: '#0EA5E9' }]} onPress={() => handleSubmit('B')} disabled={savingAnswer}>
+                      <Text style={styles.optionBtnText}>{question.optionB}</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <>
+                    <TextInput
+                      style={[styles.input, { borderColor: theme.cardBorder, color: theme.text, backgroundColor: 'rgba(0,0,0,0.02)' }]}
+                      placeholder="Ta réponse..."
+                      placeholderTextColor="#A99693"
+                      value={myAnswer}
+                      onChangeText={setMyAnswer}
+                      multiline
+                      maxLength={500}
+                    />
+                    <Pressable
+                      style={({ pressed }) => [styles.submitButton, { opacity: pressed || !myAnswer.trim() || savingAnswer ? 0.7 : 1 }]}
+                      onPress={() => handleSubmit()}
+                      disabled={!myAnswer.trim() || savingAnswer}
+                    >
+                      {savingAnswer ? <ActivityIndicator color="white" /> : <Text style={styles.submitButtonText}>Valider ma réponse</Text>}
+                    </Pressable>
+                  </>
+                )}
               </Animated.View>
             ) : (
               <Animated.View entering={FadeIn} layout={Layout.springify()}>
-                {/* Ma propre réponse (toujours visible) */}
-                <View style={styles.myAnswerBox}>
-                  <Text style={styles.myAnswerLabel}>Ta réponse 🔒</Text>
-                  <Text style={styles.myAnswerText}>"{myAnswer}"</Text>
+                <View style={[styles.myAnswerBox, isPofQuestion && { borderColor: '#0EA5E9', backgroundColor: 'rgba(14,165,233,0.05)' }]}>
+                  <Text style={[styles.myAnswerLabel, isPofQuestion && { color: '#0EA5E9' }]}>Ta réponse 🔒</Text>
+                  <Text style={styles.myAnswerText}>{getPofText(myAnswer)}</Text>
                 </View>
 
-                {/* Réponse du partenaire */}
                 {partnerAnswer !== null ? (
-                  <Animated.View entering={FadeInUp.duration(500)} style={styles.revealBox}>
+                  <Animated.View entering={FadeInUp.duration(500)} style={[styles.revealBox, isPofQuestion && { borderLeftColor: '#38BDF8', backgroundColor: 'rgba(56,189,248,0.05)' }]}>
                     <View style={styles.revealHeader}>
-                      <Unlock color="#EC4899" size={16} />
-                      <Text style={styles.revealTitle}>{partnerPseudo} a répondu !</Text>
+                      <Unlock color={isPofQuestion ? '#38BDF8' : '#D946EF'} size={16} />
+                      <Text style={[styles.revealTitle, isPofQuestion && { color: '#0EA5E9' }]}>{partnerPseudo} a répondu !</Text>
                     </View>
-                    <Text style={styles.partnerText}>"{partnerAnswer}"</Text>
+                    <Text style={styles.partnerText}>{getPofText(partnerAnswer)}</Text>
                   </Animated.View>
                 ) : (
                   <View style={styles.waitingBox}>
-                    <ActivityIndicator color="#A855F7" size="small" />
-                    <Text style={{ color: '#A99693', fontSize: 14, fontStyle: 'italic' }}>
-                      {partnerPseudo} n'a pas encore répondu...
-                    </Text>
+                    <ActivityIndicator color={isPofQuestion ? '#0EA5E9' : '#A855F7'} size="small" />
+                    <Text style={{ color: '#A99693', fontSize: 14, fontStyle: 'italic' }}>{partnerPseudo} n'a pas encore répondu...</Text>
                   </View>
                 )}
 
-                {/* Question suivante — bloquée jusqu'aux 2 réponses */}
                 <Animated.View entering={FadeInUp.delay(300).duration(500)} style={{ marginTop: 16 }}>
                   <Pressable
                     style={({ pressed }) => [
                       styles.nextButton,
+                      isPofQuestion && { backgroundColor: '#0EA5E9', shadowColor: '#0EA5E9' },
                       !bothAnswered && styles.nextButtonDisabled,
                       { opacity: pressed || loadingNext || !bothAnswered ? 0.55 : 1 },
                     ]}
                     onPress={handleNext}
                     disabled={loadingNext || !bothAnswered}
                   >
-                    {loadingNext
-                      ? <ActivityIndicator color="white" />
-                      : (
-                        <>
-                          <Text style={styles.nextButtonText}>
-                            {bothAnswered
-                              ? 'Question suivante'
-                              : `En attente de ${partnerPseudo}...`}
-                          </Text>
-                          {bothAnswered && <ChevronRight color="white" size={20} />}
-                        </>
-                      )}
+                    {loadingNext ? <ActivityIndicator color="white" /> : (
+                      <>
+                        <Text style={styles.nextButtonText}>{bothAnswered ? 'Question suivante' : `En attente de ${partnerPseudo}...`}</Text>
+                        {bothAnswered && <ChevronRight color="white" size={20} />}
+                      </>
+                    )}
                   </Pressable>
                 </Animated.View>
               </Animated.View>
@@ -374,22 +375,10 @@ export default function UnlimitedQuestions() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  card: {
-    borderRadius: 24, borderWidth: 1, borderColor: 'rgba(168,85,247,0.25)', overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    shadowColor: '#A855F7', shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2, shadowRadius: 20, elevation: 10,
-  },
-  headerGradient: {
-    padding: 20, flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'center', gap: 10,
-  },
+  card: { borderRadius: 24, borderWidth: 1, borderColor: 'rgba(168,85,247,0.25)', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.95)', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
+  headerGradient: { padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   headerTitle: { color: 'white', fontSize: 20, fontWeight: '800', letterSpacing: 1 },
-  badge: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    paddingHorizontal: 10, paddingVertical: 3,
-    borderRadius: 12, marginLeft: 8,
-  },
+  badge: { backgroundColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, marginLeft: 8 },
   badgeText: { color: 'white', fontWeight: '900', fontSize: 14 },
   content: { padding: 24, paddingTop: 20 },
   statusRow: { flexDirection: 'row', gap: 10, marginBottom: 16, justifyContent: 'center' },
@@ -397,37 +386,24 @@ const styles = StyleSheet.create({
   pillDone: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: '#22c55e' },
   pillWaiting: { backgroundColor: 'rgba(156,163,175,0.1)', borderColor: '#9CA3AF' },
   pillText: { fontSize: 12, fontWeight: '600' },
-  categoryTag: { fontSize: 11, fontWeight: '800', letterSpacing: 2, opacity: 0.5, color: '#A855F7', marginBottom: 8, textAlign: 'center' },
   question: { fontSize: 19, fontWeight: '600', textAlign: 'center', marginBottom: 24, lineHeight: 28, color: '#4A3B39' },
-  input: {
-    borderWidth: 1.5, borderColor: '#A855F7', padding: 16, borderRadius: 16,
-    minHeight: 110, fontSize: 16, marginBottom: 16,
-    backgroundColor: 'rgba(168,85,247,0.04)', color: '#4A3B39',
-  },
-  button: {
-    padding: 16, borderRadius: 16, alignItems: 'center', backgroundColor: '#A855F7',
-    shadowColor: '#A855F7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10,
-  },
-  buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  myAnswerBox: {
-    borderWidth: 1.5, borderColor: '#A855F7', borderRadius: 16,
-    padding: 16, marginBottom: 16, backgroundColor: 'rgba(168,85,247,0.05)',
-  },
+  input: { minHeight: 120, borderWidth: 1, borderRadius: 16, padding: 16, fontSize: 16, textAlignVertical: 'top', marginBottom: 16, lineHeight: 24 },
+  submitButton: { backgroundColor: '#A855F7', padding: 16, borderRadius: 16, alignItems: 'center' },
+  submitButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  
+  optionsRow: { flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
+  optionBtn: { flex: 1, backgroundColor: '#38BDF8', paddingVertical: 24, paddingHorizontal: 12, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#0EA5E9', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, minHeight: 120 },
+  optionBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold', textAlign: 'center', lineHeight: 22 },
+
+  myAnswerBox: { borderWidth: 1.5, borderColor: '#A855F7', borderRadius: 16, padding: 16, marginBottom: 16, backgroundColor: 'rgba(168,85,247,0.05)' },
   myAnswerLabel: { fontSize: 11, fontWeight: '800', color: '#A855F7', marginBottom: 6, letterSpacing: 0.5 },
-  myAnswerText: { fontSize: 16, fontStyle: 'italic', color: '#4A3B39', lineHeight: 24 },
+  myAnswerText: { fontSize: 16, fontWeight: '700', color: '#4A3B39', lineHeight: 24, textAlign: 'center' },
   waitingBox: { alignItems: 'center', gap: 10, paddingVertical: 16 },
-  revealBox: {
-    padding: 18, borderRadius: 16, borderLeftWidth: 4,
-    borderLeftColor: '#EC4899', backgroundColor: 'rgba(236,72,153,0.05)', marginBottom: 4,
-  },
+  revealBox: { padding: 18, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: '#D946EF', backgroundColor: 'rgba(217,70,239,0.05)', marginBottom: 4 },
   revealHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  revealTitle: { fontSize: 15, fontWeight: 'bold', color: '#EC4899' },
-  partnerText: { fontSize: 17, fontStyle: 'italic', lineHeight: 25, color: '#4A3B39' },
-  nextButton: {
-    flexDirection: 'row', padding: 16, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#A855F7',
-    shadowColor: '#A855F7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10,
-  },
-  nextButtonDisabled: { backgroundColor: '#C4B5D4', shadowOpacity: 0 },
+  revealTitle: { fontSize: 15, fontWeight: 'bold', color: '#A855F7' },
+  partnerText: { fontSize: 17, fontWeight: '700', lineHeight: 25, color: '#4A3B39', textAlign: 'center' },
+  nextButton: { flexDirection: 'row', padding: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#A855F7', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10 },
+  nextButtonDisabled: { backgroundColor: '#E9D5FF', shadowOpacity: 0 },
   nextButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
