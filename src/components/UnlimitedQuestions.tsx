@@ -90,11 +90,22 @@ async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?:
 
 async function findCurrentIndex(uid: string, cId: string, categoryFilter?: string): Promise<number> {
   let idx = 0;
+  const CHUNK_SIZE = 5;
   while (idx < 200) {
-    const slot = nowSlot(idx, categoryFilter);
-    const myAns = await getDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', uid));
-    if (!myAns.exists()) break;
-    idx++;
+    // Check in chunks of 5 to reduce sequential network roundtrips
+    const promises = [];
+    for (let i = 0; i < CHUNK_SIZE; i++) {
+      const slot = nowSlot(idx + i, categoryFilter);
+      promises.push(getDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', uid)));
+    }
+    const results = await Promise.all(promises);
+    
+    // Find the first missing answer in this chunk
+    const missingIndex = results.findIndex(snap => !snap.exists());
+    if (missingIndex !== -1) {
+      return idx + missingIndex;
+    }
+    idx += CHUNK_SIZE;
   }
   return idx;
 }

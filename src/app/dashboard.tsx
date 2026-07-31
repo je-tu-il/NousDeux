@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, Image, Modal, ScrollView } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
-import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake, Infinity as InfinityIcon, Split, Heart, Smile, Brain, Flame, Home, MessageCircle, Rocket } from 'lucide-react-native';
+import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake, Infinity as InfinityIcon, Split, Heart, Smile, Brain, Flame, Home, MessageCircle, Rocket, Camera, Star, Coffee } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeInDown, withRepeat, withSequence, withTiming, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
@@ -200,6 +200,10 @@ export default function DashboardScreen() {
               { id: 'famille', title: 'Famille', icon: <Home color="#10B981" size={24} />, bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.3)' },
               { id: 'debat', title: 'Débat', icon: <MessageCircle color="#8B5CF6" size={24} />, bg: 'rgba(139,92,246,0.1)', border: 'rgba(139,92,246,0.3)' },
               { id: 'futur', title: 'Futur', icon: <Rocket color="#6366F1" size={24} />, bg: 'rgba(99,102,241,0.1)', border: 'rgba(99,102,241,0.3)' },
+              { id: 'souvenir', title: 'Souvenir', icon: <Camera color="#14B8A6" size={24} />, bg: 'rgba(20,184,166,0.1)', border: 'rgba(20,184,166,0.3)' },
+              { id: 'reve', title: 'Rêve', icon: <Star color="#FCD34D" size={24} />, bg: 'rgba(252,211,77,0.1)', border: 'rgba(252,211,77,0.3)' },
+              { id: 'quotidien', title: 'Quotidien', icon: <Coffee color="#A8A29E" size={24} />, bg: 'rgba(168,162,158,0.1)', border: 'rgba(168,162,158,0.3)' },
+              { id: 'defi', title: 'Défi', icon: <Trophy color="#F97316" size={24} />, bg: 'rgba(249,115,22,0.1)', border: 'rgba(249,115,22,0.3)' },
             ].map((cat, index) => (
               <Animated.View key={cat.id} entering={FadeInUp.delay(450 + index * 50).duration(500)} style={styles.categoryCardWrapper}>
                 <Link href={`/unlimited?category=${cat.id}`} style={[styles.categoryCard, { backgroundColor: cat.bg, borderColor: cat.border }]}>
