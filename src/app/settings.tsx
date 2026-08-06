@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, View, Text, TextInput, Pressable, Platform, ImageBackground, Alert, Image, ScrollView, Modal, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import { router, Link } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/constants/Colors';
-import { ArrowLeft, HeartCrack, Camera, Trash2, Copy, CheckCircle2, Check, LogOut } from 'lucide-react-native';
+import { ArrowLeft, HeartCrack, Camera, Trash2, Copy, CheckCircle2, Check, LogOut, FileText, Shield } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeIn, FadeOut } from 'react-native-reanimated';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, arrayUnion, setDoc, deleteField } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, arrayUnion, setDoc, deleteField, collection, getDocs, writeBatch } from 'firebase/firestore';
 
 // Durée du debounce pour pseudo/age (ms)
 const DEBOUNCE_DELAY = 1000;
@@ -151,7 +151,34 @@ export default function SettingsScreen() {
     setLoading(true);
     try {
       if (!store.uid) return;
+
+      // 1. Récupérer le partnerUid avant suppression
+      const myDoc = await getDoc(doc(db, 'users', store.uid));
+      const partnerUid = myDoc.exists() ? myDoc.data().linkedTo : null;
+
+      // 2. Supprimer toutes les données du couple (droit à l'oubli RGPD)
+      if (partnerUid) {
+        const coupleKey = [store.uid, partnerUid].sort().join('_');
+        const coupleRef = doc(db, 'couples', coupleKey);
+
+        // Supprimer les sous-collections connues par batch
+        const subcollections = ['daily', 'progress'];
+        for (const sub of subcollections) {
+          const subCol = collection(db, 'couples', coupleKey, sub);
+          const snap = await getDocs(subCol);
+          if (!snap.empty) {
+            const batch = writeBatch(db);
+            snap.docs.forEach((d) => batch.delete(d.ref));
+            await batch.commit();
+          }
+        }
+        await deleteDoc(coupleRef);
+      }
+
+      // 3. Supprimer le document utilisateur
       await deleteDoc(doc(db, 'users', store.uid));
+
+      // 4. Réinitialiser le store local
       store.setUid(null);
       store.setPseudo('');
       store.setAge('');
@@ -159,6 +186,7 @@ export default function SettingsScreen() {
       store.setSynced(false);
       store.setMyCode('');
       store.setPartnerCode('');
+      store.clearPartnerCache();
       setShowDeleteModal(false);
       router.replace('/onboarding/login');
     } catch (error: any) {
@@ -375,7 +403,7 @@ export default function SettingsScreen() {
 
             <View style={styles.dangerItem}>
               <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
-                Cette action supprimera définitivement toutes tes données personnelles.
+                Cette action supprimera définitivement toutes tes données personnelles et tes réponses (conformément au RGPD).
               </Text>
               <Pressable
                 style={({ pressed }) => [styles.dangerButton, { backgroundColor: '#8B0000', opacity: pressed || loading ? 0.8 : 1 }]}
@@ -387,6 +415,20 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
           </View>
+        </Animated.View>
+
+        {/* Liens légaux */}
+        <Animated.View entering={FadeInUp.duration(600).delay(400)} style={[styles.section, { alignItems: 'center', gap: 12 }]}>
+          <Text style={{ color: '#A99693', fontSize: 12, marginBottom: 4 }}>Informations légales</Text>
+          <Link href="/terms" style={styles.legalLink}>
+            <FileText color="#A99693" size={14} />
+            <Text style={styles.legalLinkText}>Conditions Générales d'Utilisation</Text>
+          </Link>
+          <Link href="/privacy" style={styles.legalLink}>
+            <Shield color="#A99693" size={14} />
+            <Text style={styles.legalLinkText}>Politique de Confidentialité</Text>
+          </Link>
+          <Text style={{ color: '#C8B8B6', fontSize: 11, marginTop: 8 }}>Bloomy v1.0.0 — © 2026</Text>
         </Animated.View>
       </ScrollView>
 
@@ -480,4 +522,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 10, width: '100%', maxWidth: 300, alignSelf: 'center',
   },
   disconnectText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  legalLink: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 20 },
+  legalLinkText: { color: '#A99693', fontSize: 13, fontWeight: '600' },
 });

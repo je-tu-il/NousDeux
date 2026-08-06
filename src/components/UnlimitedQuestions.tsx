@@ -22,6 +22,7 @@ import { QUESTIONS } from '../data/questions';
 import { POF_QUESTIONS } from '../data/pileouface';
 import type { Question } from '../data/questions';
 import type { PileOuFaceQuestion } from '../data/pileouface';
+import { encryptText, decryptText } from '../lib/crypto';
 
 type AnyQuestion = Question | PileOuFaceQuestion;
 
@@ -46,6 +47,11 @@ function nowSlot(index: number, categoryFilter?: string): string {
   const base = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const cat = categoryFilter ? categoryFilter : 'all';
   return `unlimited_${base}_${cat}_${index}`;
+}
+
+// Clé d'index dans Firestore pour chaque catégorie
+function indexKey(categoryFilter?: string): string {
+  return `currentIndex_${categoryFilter ?? 'all'}`;
 }
 
 async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?: string): Promise<string> {
@@ -88,26 +94,40 @@ async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?:
   });
 }
 
-async function findCurrentIndex(uid: string, cId: string, categoryFilter?: string): Promise<number> {
-  let idx = 0;
-  const CHUNK_SIZE = 5;
-  while (idx < 200) {
-    // Check in chunks of 5 to reduce sequential network roundtrips
-    const promises = [];
-    for (let i = 0; i < CHUNK_SIZE; i++) {
-      const slot = nowSlot(idx + i, categoryFilter);
-      promises.push(getDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', uid)));
-    }
-    const results = await Promise.all(promises);
-    
-    // Find the first missing answer in this chunk
-    const missingIndex = results.findIndex(snap => !snap.exists());
-    if (missingIndex !== -1) {
-      return idx + missingIndex;
-    }
-    idx += CHUNK_SIZE;
+/**
+ * Lit l'index courant depuis Firestore (1 requête).
+ * Remplace findCurrentIndex qui faisait jusqu'à 40 requêtes séquentielles.
+ */
+async function readCurrentIndex(cId: string, categoryFilter?: string): Promise<number> {
+  const indexesRef = doc(db, 'couples', cId, 'progress', 'indexes');
+  const snap = await getDoc(indexesRef);
+  if (snap.exists()) {
+    return snap.data()[indexKey(categoryFilter)] ?? 0;
   }
-  return idx;
+  return 0;
+}
+
+/**
+ * Persiste l'index courant dans Firestore.
+ */
+async function saveCurrentIndex(cId: string, index: number, categoryFilter?: string): Promise<void> {
+  const indexesRef = doc(db, 'couples', cId, 'progress', 'indexes');
+  await setDoc(indexesRef, { [indexKey(categoryFilter)]: index }, { merge: true });
+}
+
+/**
+ * Déchiffre un champ texte stocké dans Firestore.
+ * Gère aussi les anciennes réponses non chiffrées (migration transparente).
+ */
+async function safeDecrypt(data: Record<string, any>, cId: string): Promise<string> {
+  if (data.iv && data.ciphertext) {
+    try {
+      return await decryptText({ ciphertext: data.ciphertext, iv: data.iv }, cId);
+    } catch {
+      return data.text ?? data.choice ?? '';
+    }
+  }
+  return data.text ?? data.choice ?? '';
 }
 
 export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?: string }) {
@@ -120,6 +140,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   const [loadingQuestion, setLoading]       = useState(true);
   const [partnerUid, setPartnerUid]         = useState<string | null>(null);
   const [partnerPseudo, setPartnerPseudo]   = useState('Partenaire');
+  const [cId, setCId]                       = useState('');
 
   const [questionIndex, setQuestionIndex]   = useState(0);
   const [slotKey, setSlotKey]               = useState('');
@@ -138,7 +159,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   const isSubmittedRef = useRef(false);
   useEffect(() => { isSubmittedRef.current = isSubmitted; }, [isSubmitted]);
 
-  const loadSlot = useCallback(async (uid: string, pUid: string, idx: number) => {
+  const loadSlot = useCallback(async (uid: string, pUid: string, coupleKey: string, idx: number) => {
     setLoading(true);
     setMyAnswer('');
     setPartnerAnswer(null);
@@ -146,25 +167,30 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     setIsSubmitted(false);
     isSubmittedRef.current = false;
 
-    const cId = coupleId(uid, pUid);
     const slot = nowSlot(idx, categoryFilter);
     setSlotKey(slot);
     setQuestionIndex(idx);
 
-    const questionId = await pickUnlimitedQuestion(cId, slot, categoryFilter);
+    // Paralléliser : question + mes réponses + réponses partenaire
+    const [questionId, myAns, pAns] = await Promise.all([
+      pickUnlimitedQuestion(coupleKey, slot, categoryFilter),
+      getDoc(doc(db, 'couples', coupleKey, 'daily', slot, 'answers', uid)),
+      getDoc(doc(db, 'couples', coupleKey, 'daily', slot, 'answers', pUid)),
+    ]);
+
     setQuestion(getQuestionById(questionId));
 
-    const myAns = await getDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', uid));
     if (myAns.exists()) {
       setIsSubmitted(true);
       isSubmittedRef.current = true;
-      setMyAnswer(myAns.data().text ?? myAns.data().choice ?? '');
+      setMyAnswer(await safeDecrypt(myAns.data(), coupleKey));
     }
 
-    const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', pUid));
     if (pAns.exists()) {
       setPartnerHasAnswered(true);
-      if (isSubmittedRef.current) setPartnerAnswer(pAns.data().text ?? pAns.data().choice ?? '');
+      if (isSubmittedRef.current) {
+        setPartnerAnswer(await safeDecrypt(pAns.data(), coupleKey));
+      }
     }
 
     setLoading(false);
@@ -173,47 +199,66 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   useEffect(() => {
     if (!myUid) return;
     const init = async () => {
+      // Paralléliser la lecture du doc utilisateur
       const myDoc = await getDoc(doc(db, 'users', myUid));
       if (!myDoc.exists()) return;
       const pUid = myDoc.data().linkedTo as string | undefined;
       if (!pUid) return;
       setPartnerUid(pUid);
-      const pDoc = await getDoc(doc(db, 'users', pUid));
+
+      const coupleKey = coupleId(myUid, pUid);
+      setCId(coupleKey);
+
+      // Paralléliser : pseudo partenaire + index courant
+      const [pDoc, currentIdx] = await Promise.all([
+        getDoc(doc(db, 'users', pUid)),
+        readCurrentIndex(coupleKey, categoryFilter),
+      ]);
+
       if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
 
-      const cId = coupleId(myUid, pUid);
-      const currentIdx = await findCurrentIndex(myUid, cId, categoryFilter);
-      await loadSlot(myUid, pUid, currentIdx);
+      await loadSlot(myUid, pUid, coupleKey, currentIdx);
     };
     init();
   }, [myUid, categoryFilter, loadSlot]);
 
+  // ── Listener partenaire ─────────────────────────────────────────────────
   useEffect(() => {
-    if (!myUid || !partnerUid || !slotKey) return;
-    const cId = coupleId(myUid, partnerUid);
+    if (!myUid || !partnerUid || !slotKey || !cId) return;
     const ref = doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid);
-    const unsub = onSnapshot(ref, (snap) => {
+    const unsub = onSnapshot(ref, async (snap) => {
       if (snap.exists()) {
         setPartnerHasAnswered(true);
-        if (isSubmittedRef.current) setPartnerAnswer(snap.data().text ?? snap.data().choice ?? '');
+        if (isSubmittedRef.current) {
+          setPartnerAnswer(await safeDecrypt(snap.data(), cId));
+        }
       } else {
         setPartnerHasAnswered(false);
         setPartnerAnswer(null);
       }
     });
     return () => unsub();
-  }, [myUid, partnerUid, slotKey]);
+  }, [myUid, partnerUid, slotKey, cId]);
 
   const handleSubmit = async (choice?: string) => {
     const finalAnswer = choice || myAnswer;
-    if (!finalAnswer.trim() || !myUid || !partnerUid || !question || !slotKey) return;
-    
+    if (!finalAnswer.trim() || !myUid || !partnerUid || !question || !slotKey || !cId) return;
+
     setSavingAnswer(true);
     if (choice) setMyAnswer(choice);
 
     try {
-      const cId = coupleId(myUid, partnerUid);
-      const dataPayload = question && isPof(question) ? { choice: finalAnswer, submittedAt: serverTimestamp() } : { text: finalAnswer.trim(), submittedAt: serverTimestamp() };
+      let dataPayload: Record<string, any>;
+      if (question && isPof(question)) {
+        // Pour les questions pile ou face, on chiffre le choix
+        const encrypted = await encryptText(finalAnswer.trim(), cId);
+        dataPayload = { ...encrypted, choice: finalAnswer, submittedAt: serverTimestamp() };
+      } else {
+        // Questions texte : chiffrement complet
+        const encrypted = await encryptText(finalAnswer.trim(), cId);
+        dataPayload = { ...encrypted, submittedAt: serverTimestamp() };
+      }
+
       await setDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid), dataPayload);
       setIsSubmitted(true);
       isSubmittedRef.current = true;
@@ -221,7 +266,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
       if (partnerHasAnswered) {
         const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
         if (pAns.exists()) {
-          setPartnerAnswer(pAns.data().text ?? pAns.data().choice ?? '');
+          setPartnerAnswer(await safeDecrypt(pAns.data(), cId));
           await updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true });
         }
       }
@@ -233,21 +278,22 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   };
 
   useEffect(() => {
-    if (!partnerHasAnswered || !isSubmitted || !myUid || !partnerUid || !slotKey) return;
-    const cId = coupleId(myUid, partnerUid);
-    getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid)).then((snap) => {
+    if (!partnerHasAnswered || !isSubmitted || !myUid || !partnerUid || !slotKey || !cId) return;
+    getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid)).then(async (snap) => {
       if (snap.exists()) {
-        setPartnerAnswer(snap.data().text ?? snap.data().choice ?? '');
+        setPartnerAnswer(await safeDecrypt(snap.data(), cId));
         updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true }).catch(() => {});
       }
     });
   }, [partnerHasAnswered, isSubmitted]);
 
   const handleNext = async () => {
-    if (!myUid || !partnerUid || !partnerAnswer) return;
+    if (!myUid || !partnerUid || !partnerAnswer || !cId) return;
     setLoadingNext(true);
     const nextIdx = questionIndex + 1;
-    await loadSlot(myUid, partnerUid, nextIdx);
+    // Persister l'index dans Firestore pour la continuité entre sessions
+    await saveCurrentIndex(cId, nextIdx, categoryFilter);
+    await loadSlot(myUid, partnerUid, cId, nextIdx);
     setLoadingNext(false);
   };
 
@@ -401,11 +447,9 @@ const styles = StyleSheet.create({
   input: { minHeight: 120, borderWidth: 1, borderRadius: 16, padding: 16, fontSize: 16, textAlignVertical: 'top', marginBottom: 16, lineHeight: 24 },
   submitButton: { backgroundColor: '#A855F7', padding: 16, borderRadius: 16, alignItems: 'center' },
   submitButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  
   optionsRow: { flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
   optionBtn: { flex: 1, backgroundColor: '#38BDF8', paddingVertical: 24, paddingHorizontal: 12, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#0EA5E9', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, minHeight: 120 },
   optionBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold', textAlign: 'center', lineHeight: 22 },
-
   myAnswerBox: { borderWidth: 1.5, borderColor: '#A855F7', borderRadius: 16, padding: 16, marginBottom: 16, backgroundColor: 'rgba(168,85,247,0.05)' },
   myAnswerLabel: { fontSize: 11, fontWeight: '800', color: '#A855F7', marginBottom: 6, letterSpacing: 0.5 },
   myAnswerText: { fontSize: 16, fontWeight: '700', color: '#4A3B39', lineHeight: 24, textAlign: 'center' },

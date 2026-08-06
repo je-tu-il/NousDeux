@@ -17,6 +17,7 @@ import {
 import { getById, getUnseen, QUESTIONS } from '../data/questions';
 import { getScheduledQuestionId } from '../data/scheduledQuestions';
 import type { Question } from '../data/questions';
+import { encryptText, decryptText } from '../lib/crypto';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -39,12 +40,16 @@ async function pickDailyQuestion(cId: string, slotKey: string): Promise<string> 
     const slotRef = doc(db, 'couples', cId, 'daily', slotKey);
     const slotDoc = await tx.get(slotRef);
 
-    // Slot déjà créé → on réutilise la question existante (même pour les 2)
-    if (slotDoc.exists()) return slotDoc.data().questionId as string;
+    // Slot déjà créé → on réutilise SI l'ID est encore valide (question non supprimée)
+    if (slotDoc.exists()) {
+      const cachedId = slotDoc.data().questionId as string;
+      if (getById(cachedId)) return cachedId; // ID toujours valide ✓
+      // Sinon, l'ID est devenu obsolète → on réassigne
+    }
 
     // Question planifiée → prioritaire, même pour tous les couples
     const scheduled = getScheduledQuestionId(slotKey);
-    if (scheduled) {
+    if (scheduled && getById(scheduled)) {
       tx.set(slotRef, { questionId: scheduled, createdAt: new Date() });
       return scheduled;
     }
@@ -63,6 +68,21 @@ async function pickDailyQuestion(cId: string, slotKey: string): Promise<string> 
   });
 }
 
+/**
+ * Déchiffre un champ texte stocké dans Firestore.
+ * Gère aussi les anciennes réponses non chiffrées (migration transparente).
+ */
+async function safeDecrypt(data: Record<string, any>, cId: string): Promise<string> {
+  if (data.iv && data.ciphertext) {
+    try {
+      return await decryptText({ ciphertext: data.ciphertext, iv: data.iv }, cId);
+    } catch {
+      return data.text ?? '';
+    }
+  }
+  return data.text ?? '';
+}
+
 // ─── composant ───────────────────────────────────────────────────────────────
 
 export default function Daylink() {
@@ -77,6 +97,7 @@ export default function Daylink() {
   const [loadingQuestion, setLoading]       = useState(true);
   const [partnerUid, setPartnerUid]         = useState<string | null>(null);
   const [partnerPseudo, setPartnerPseudo]   = useState('Partenaire');
+  const [cId, setCId]                       = useState('');
 
   // Ma réponse (texte tapé ou chargé depuis Firestore)
   const [myAnswer, setMyAnswer]             = useState('');
@@ -96,32 +117,45 @@ export default function Daylink() {
     if (!myUid) return;
     const init = async () => {
       setLoading(true);
-      const myDoc = await getDoc(doc(db, 'users', myUid));
-      if (!myDoc.exists()) return;
-      const pUid = myDoc.data().linkedTo as string | undefined;
+
+      // Paralléliser les lectures indépendantes
+      const myDocRef = doc(db, 'users', myUid);
+      const myDocSnap = await getDoc(myDocRef);
+      if (!myDocSnap.exists()) return;
+
+      const pUid = myDocSnap.data().linkedTo as string | undefined;
       if (!pUid) return;
       setPartnerUid(pUid);
 
-      const pDoc = await getDoc(doc(db, 'users', pUid));
-      if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
+      const coupleKey = coupleId(myUid, pUid);
+      setCId(coupleKey);
 
-      const cId = coupleId(myUid, pUid);
-      const questionId = await pickDailyQuestion(cId, slotKey);
+      // Paralléliser : partnerDoc + question + réponses
+      const [pDoc, questionId] = await Promise.all([
+        getDoc(doc(db, 'users', pUid)),
+        pickDailyQuestion(coupleKey, slotKey),
+      ]);
+
+      if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
       setQuestion(getById(questionId) ?? null);
 
-      // Charger ma réponse existante
-      const myAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid));
+      // Charger mes réponses + partenaire en parallèle
+      const [myAns, pAns] = await Promise.all([
+        getDoc(doc(db, 'couples', coupleKey, 'daily', slotKey, 'answers', myUid)),
+        getDoc(doc(db, 'couples', coupleKey, 'daily', slotKey, 'answers', pUid)),
+      ]);
+
       if (myAns.exists()) {
         setIsSubmitted(true);
         isSubmittedRef.current = true;
-        setMyAnswer(myAns.data().text ?? '');
+        setMyAnswer(await safeDecrypt(myAns.data(), coupleKey));
       }
 
-      // Charger la réponse du partenaire si déjà envoyée
-      const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', pUid));
       if (pAns.exists()) {
         setPartnerHasAnswered(true);
-        if (isSubmittedRef.current) setPartnerAnswer(pAns.data().text ?? '');
+        if (isSubmittedRef.current) {
+          setPartnerAnswer(await safeDecrypt(pAns.data(), coupleKey));
+        }
       }
 
       setLoading(false);
@@ -131,15 +165,14 @@ export default function Daylink() {
 
   // ── Listener partenaire — TOUJOURS actif (pas besoin que j'aie répondu) ──
   useEffect(() => {
-    if (!myUid || !partnerUid) return;
-    const cId = coupleId(myUid, partnerUid);
+    if (!myUid || !partnerUid || !cId) return;
     const ref = doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid);
-    const unsub = onSnapshot(ref, (snap) => {
+    const unsub = onSnapshot(ref, async (snap) => {
       if (snap.exists()) {
         setPartnerHasAnswered(true);
         // On révèle le texte seulement si j'ai aussi répondu
         if (isSubmittedRef.current) {
-          setPartnerAnswer(snap.data().text ?? '');
+          setPartnerAnswer(await safeDecrypt(snap.data(), cId));
         }
       } else {
         setPartnerHasAnswered(false);
@@ -147,17 +180,18 @@ export default function Daylink() {
       }
     });
     return () => unsub();
-  }, [myUid, partnerUid]);
+  }, [myUid, partnerUid, cId]);
 
   // ── Soumettre ma réponse ──────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!myAnswer.trim() || !myUid || !partnerUid || !question) return;
+    if (!myAnswer.trim() || !myUid || !partnerUid || !question || !cId) return;
     setSavingAnswer(true);
     try {
-      const cId = coupleId(myUid, partnerUid);
+      // Chiffrer avant envoi
+      const encrypted = await encryptText(myAnswer.trim(), cId);
       await setDoc(
         doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid),
-        { text: myAnswer.trim(), submittedAt: serverTimestamp() }
+        { ...encrypted, submittedAt: serverTimestamp() }
       );
       setIsSubmitted(true);
       isSubmittedRef.current = true;
@@ -166,7 +200,7 @@ export default function Daylink() {
       if (partnerHasAnswered) {
         const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
         if (pAns.exists()) {
-          setPartnerAnswer(pAns.data().text ?? '');
+          setPartnerAnswer(await safeDecrypt(pAns.data(), cId));
           await updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true });
         }
       }
@@ -179,14 +213,11 @@ export default function Daylink() {
 
   // Quand le partenaire répond après moi → mettre à jour bothAnswered + révéler
   useEffect(() => {
-    if (!partnerHasAnswered || !isSubmitted || !myUid || !partnerUid) return;
-    const cId = coupleId(myUid, partnerUid);
-    // Le listener a déjà mis à jour partnerAnswer via isSubmittedRef
-    // On met à jour bothAnswered
+    if (!partnerHasAnswered || !isSubmitted || !myUid || !partnerUid || !cId) return;
     const pAnsRef = doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid);
-    getDoc(pAnsRef).then((snap) => {
+    getDoc(pAnsRef).then(async (snap) => {
       if (snap.exists()) {
-        setPartnerAnswer(snap.data().text ?? '');
+        setPartnerAnswer(await safeDecrypt(snap.data(), cId));
         updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true }).catch(() => {});
       }
     });
@@ -280,7 +311,7 @@ export default function Daylink() {
               {/* Ma propre réponse (toujours visible) */}
               <View style={[styles.myAnswerBox, { borderColor: theme.tint }]}>
                 <Text style={[styles.myAnswerLabel, { color: theme.tint }]}>Ta réponse 🔒</Text>
-                <Text style={[styles.myAnswerText, { color: theme.text }]}>"{myAnswer}"</Text>
+                <Text style={[styles.myAnswerText, { color: theme.text }]}>{myAnswer}</Text>
               </View>
 
               {/* Réponse du partenaire (visible quand les 2 ont répondu) */}
@@ -295,7 +326,7 @@ export default function Daylink() {
                       {partnerPseudo} a répondu !
                     </Text>
                   </View>
-                  <Text style={[styles.partnerText, { color: theme.text }]}>"{partnerAnswer}"</Text>
+                  <Text style={[styles.partnerText, { color: theme.text }]}>{partnerAnswer}</Text>
                 </Animated.View>
               ) : (
                 <View style={styles.waitingBox}>

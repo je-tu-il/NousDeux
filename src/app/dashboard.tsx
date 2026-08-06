@@ -50,10 +50,29 @@ export default function DashboardScreen() {
           return;
         }
 
+        // Utiliser le cache du store pour éviter un getDoc inutile
+        const cachedPartnerUid = store.partnerUid;
+        const cachedPseudo = store.partnerPseudo;
+        const cachedAvatar = store.partnerAvatar;
+
+        if (cachedPartnerUid === data.linkedTo && cachedPseudo) {
+          setPartner({
+            pseudo: cachedPseudo,
+            avatarUrl: cachedAvatar ?? undefined,
+            coupleDate: data.coupleDate,
+            coupleId: [store.uid!, data.linkedTo].sort().join('_'),
+          });
+          setPartnerLeft(false);
+          setIsLoading(false);
+          return;
+        }
+
+        // Cache absent ou périmé → fetch et mise à jour du cache
         const partnerDoc = await getDoc(doc(db, 'users', data.linkedTo));
         if (partnerDoc.exists()) {
           const pData = partnerDoc.data();
           if (pData.linkedTo === store.uid) {
+            store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
             setPartner({
               pseudo: pData.pseudo,
               avatarUrl: pData.avatarUrl,
@@ -153,7 +172,7 @@ export default function DashboardScreen() {
 
         {/* Streak + calendrier — cliquable pour ouvrir le calendrier complet */}
         {partner?.coupleId && (
-          <Animated.View entering={FadeInUp.delay(150).duration(600)}>
+          <Animated.View entering={FadeInUp.delay(100).duration(400)}>
             <Link href="/calendar" asChild>
               <Pressable>
                 <StreakCalendar coupleId={partner.coupleId} />
@@ -164,7 +183,7 @@ export default function DashboardScreen() {
 
         {/* Main Grid */}
         <View style={styles.grid}>
-          <Animated.View entering={FadeInUp.delay(200).duration(600)}>
+          <Animated.View entering={FadeInUp.delay(150).duration(400)}>
             <Link href="/daylink" style={[styles.mainCard, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
               <Animated.View style={[styles.iconWrapper, { backgroundColor: theme.tint }, pulseStyle]}>
                 <CalendarHeart color="white" size={32} />
@@ -174,8 +193,8 @@ export default function DashboardScreen() {
             </Link>
           </Animated.View>
 
-          {/* Nouveau : Questions Illimitées */}
-          <Animated.View entering={FadeInUp.delay(300).duration(600)}>
+          {/* Questions Illimitées */}
+          <Animated.View entering={FadeInUp.delay(220).duration(400)}>
             <Link href="/unlimited" style={[styles.mainCard, { backgroundColor: 'rgba(168,85,247,0.08)', borderColor: 'rgba(168,85,247,0.25)' }]}>
               <View style={[styles.iconWrapper, { backgroundColor: '#A855F7' }]}>
                 <InfinityIcon color="white" size={32} />
@@ -186,7 +205,7 @@ export default function DashboardScreen() {
           </Animated.View>
 
           {/* Titre Thèmes */}
-          <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.sectionHeader}>
+          <Animated.View entering={FadeInUp.delay(290).duration(400)} style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Thèmes Spécifiques</Text>
           </Animated.View>
 
@@ -205,7 +224,7 @@ export default function DashboardScreen() {
               { id: 'quotidien', title: 'Quotidien', icon: <Coffee color="#A8A29E" size={24} />, bg: 'rgba(168,162,158,0.1)', border: 'rgba(168,162,158,0.3)' },
               { id: 'defi', title: 'Défi', icon: <Trophy color="#F97316" size={24} />, bg: 'rgba(249,115,22,0.1)', border: 'rgba(249,115,22,0.3)' },
             ].map((cat, index) => (
-              <Animated.View key={cat.id} entering={FadeInUp.delay(450 + index * 50).duration(500)} style={styles.categoryCardWrapper}>
+              <Animated.View key={cat.id} entering={FadeInUp.delay(300 + index * 25).duration(350)} style={styles.categoryCardWrapper}>
                 <Link href={`/unlimited?category=${cat.id}`} style={[styles.categoryCard, { backgroundColor: cat.bg, borderColor: cat.border }]}>
                   {cat.icon}
                   <Text style={styles.categoryCardTitle}>{cat.title}</Text>
