@@ -115,8 +115,7 @@ async function safeDecrypt(data: Record<string, any>, cId: string): Promise<stri
 }
 
 /**
- * Efface les réponses de l'ancien slot (provisoire).
- * Appelé juste avant de charger la question suivante.
+ * Efface les réponses des deux partenaires (appelé quand les 2 ont avancé).
  */
 async function deleteSlotAnswers(cId: string, slot: string, myUid: string, pUid: string): Promise<void> {
   await Promise.all([
@@ -150,6 +149,9 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
   const [loadingNext, setLoadingNext]       = useState(false);
 
+  // Vrai quand le partenaire a déjà cliqué "Suivante" pour ce slot
+  const [partnerMovedToNext, setPartnerMovedToNext] = useState(false);
+
   const isSubmittedRef = useRef(false);
   useEffect(() => { isSubmittedRef.current = isSubmitted; }, [isSubmitted]);
 
@@ -164,6 +166,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     const slot = nowSlot(idx, categoryFilter);
     setSlotKey(slot);
     setQuestionIndex(idx);
+    setPartnerMovedToNext(false);
 
     // Paralléliser : question + réponses existantes
     const [questionId, myAns, pAns] = await Promise.all([
@@ -219,13 +222,21 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     const ref = doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid);
     const unsub = onSnapshot(ref, async (snap) => {
       if (snap.exists()) {
+        const data = snap.data();
+        // Le partenaire a avancé à la question suivante
+        if (data.movedToNext) {
+          setPartnerMovedToNext(true);
+          // Ne pas écraser partnerHasAnswered — il avait bien répondu
+          return;
+        }
         setPartnerHasAnswered(true);
         if (isSubmittedRef.current) {
-          setPartnerAnswer(await safeDecrypt(snap.data(), cId));
+          setPartnerAnswer(await safeDecrypt(data, cId));
         }
       } else {
         setPartnerHasAnswered(false);
         setPartnerAnswer(null);
+        setPartnerMovedToNext(false);
       }
     });
     return () => unsub();
@@ -273,13 +284,26 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     });
   }, [partnerHasAnswered, isSubmitted]);
 
-  // ── Question suivante — efface les réponses de l'ancien slot ─────────────
+  // ── Question suivante — stockage provisoire avec flag movedToNext ────────
   const handleNext = async () => {
-    if (!myUid || !partnerUid || !partnerAnswer || !cId) return;
+    if (!myUid || !partnerUid || !cId) return;
     setLoadingNext(true);
 
-    // Supprimer les réponses provisoires de ce slot avant de passer à la suite
-    await deleteSlotAnswers(cId, slotKey, myUid, partnerUid);
+    const myAnsRef = doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid);
+    const pAnsRef  = doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid);
+
+    // Si le partenaire a déjà marqué movedToNext → les 2 ont avancé → on supprime
+    if (partnerMovedToNext) {
+      await deleteSlotAnswers(cId, slotKey, myUid, partnerUid);
+    } else {
+      // Sinon, marquer seulement MON doc — le partenaire verra le flag via onSnapshot
+      try {
+        await updateDoc(myAnsRef, { movedToNext: true });
+      } catch {
+        // Si mon doc n'existe pas encore (cas rare), on le crée
+        await setDoc(myAnsRef, { movedToNext: true }, { merge: true });
+      }
+    }
 
     const nextIdx = questionIndex + 1;
     await saveCurrentIndex(cId, nextIdx, categoryFilter);
@@ -379,7 +403,14 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
                 </View>
 
                 {/* Réponse partenaire — visible quand les 2 ont répondu */}
-                {partnerAnswer !== null ? (
+                {partnerMovedToNext ? (
+                  // Partenaire déjà à la question suivante
+                  <Animated.View entering={FadeInUp.duration(400)} style={[styles.movedOnBox]}>
+                    <Text style={styles.movedOnEmoji}>👟</Text>
+                    <Text style={styles.movedOnTitle}>{partnerPseudo} est déjà à la suivante !</Text>
+                    <Text style={styles.movedOnSub}>Avance pour rejoindre {partnerPseudo}.</Text>
+                  </Animated.View>
+                ) : partnerAnswer !== null ? (
                   <Animated.View entering={FadeInUp.duration(500)} style={[styles.revealBox, isPofQuestion && { borderLeftColor: '#38BDF8', backgroundColor: 'rgba(56,189,248,0.05)' }]}>
                     <View style={styles.revealHeader}>
                       <Unlock color={isPofQuestion ? '#38BDF8' : '#D946EF'} size={16} />
@@ -400,16 +431,22 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
                     style={({ pressed }) => [
                       styles.nextButton,
                       isPofQuestion && { backgroundColor: '#0EA5E9', shadowColor: '#0EA5E9' },
-                      !bothAnswered && styles.nextButtonDisabled,
-                      { opacity: pressed || loadingNext || !bothAnswered ? 0.55 : 1 },
+                      (!bothAnswered && !partnerMovedToNext) && styles.nextButtonDisabled,
+                      { opacity: pressed || loadingNext || (!bothAnswered && !partnerMovedToNext) ? 0.55 : 1 },
                     ]}
                     onPress={handleNext}
-                    disabled={loadingNext || !bothAnswered}
+                    disabled={loadingNext || (!bothAnswered && !partnerMovedToNext)}
                   >
                     {loadingNext ? <ActivityIndicator color="white" /> : (
                       <>
-                        <Text style={styles.nextButtonText}>{bothAnswered ? 'Question suivante' : `En attente de ${partnerPseudo}...`}</Text>
-                        {bothAnswered && <ChevronRight color="white" size={20} />}
+                        <Text style={styles.nextButtonText}>
+                          {partnerMovedToNext
+                            ? `Rejoindre ${partnerPseudo} →`
+                            : bothAnswered
+                              ? 'Question suivante'
+                              : `En attente de ${partnerPseudo}...`}
+                        </Text>
+                        {(bothAnswered || partnerMovedToNext) && <ChevronRight color="white" size={20} />}
                       </>
                     )}
                   </Pressable>
@@ -454,4 +491,8 @@ const styles = StyleSheet.create({
   nextButton: { flexDirection: 'row', padding: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#A855F7', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10 },
   nextButtonDisabled: { backgroundColor: '#E9D5FF', shadowOpacity: 0 },
   nextButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  movedOnBox: { alignItems: 'center', gap: 6, paddingVertical: 20, paddingHorizontal: 16, backgroundColor: 'rgba(168,85,247,0.06)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(168,85,247,0.2)', borderStyle: 'dashed', marginBottom: 4 },
+  movedOnEmoji: { fontSize: 28 },
+  movedOnTitle: { fontSize: 15, fontWeight: '700', color: '#A855F7', textAlign: 'center' },
+  movedOnSub: { fontSize: 12, color: '#A99693', fontStyle: 'italic', textAlign: 'center' },
 });
