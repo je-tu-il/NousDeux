@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  Infinity as InfinityIcon, Lock, Unlock,
+  Infinity as InfinityIcon, Unlock,
   ChevronRight, CheckCircle2, Clock, Split
 } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeIn, Layout } from 'react-native-reanimated';
@@ -14,7 +14,7 @@ import { Colors } from '../constants/Colors';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { db } from '../lib/firebase';
 import {
-  doc, getDoc, setDoc, onSnapshot,
+  doc, getDoc, setDoc, deleteDoc, onSnapshot,
   serverTimestamp, updateDoc, runTransaction,
 } from 'firebase/firestore';
 
@@ -49,7 +49,6 @@ function nowSlot(index: number, categoryFilter?: string): string {
   return `unlimited_${base}_${cat}_${index}`;
 }
 
-// Clé d'index dans Firestore pour chaque catégorie
 function indexKey(categoryFilter?: string): string {
   return `currentIndex_${categoryFilter ?? 'all'}`;
 }
@@ -79,11 +78,10 @@ async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?:
 
     if (unseen.length === 0) {
       unseen = [...available];
-      newSeenIds = seenIds.filter(id => !available.some(q => q.id === id)); // Reset just this category
+      newSeenIds = seenIds.filter(id => !available.some(q => q.id === id));
     }
-
     if (unseen.length === 0) {
-      unseen = [...QUESTIONS]; // Fallback ultime
+      unseen = [...QUESTIONS];
       newSeenIds = [];
     }
 
@@ -94,33 +92,19 @@ async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?:
   });
 }
 
-/**
- * Lit l'index courant depuis Firestore (1 requête).
- * Remplace findCurrentIndex qui faisait jusqu'à 40 requêtes séquentielles.
- */
 async function readCurrentIndex(cId: string, categoryFilter?: string): Promise<number> {
-  const indexesRef = doc(db, 'couples', cId, 'progress', 'indexes');
-  const snap = await getDoc(indexesRef);
-  if (snap.exists()) {
-    return snap.data()[indexKey(categoryFilter)] ?? 0;
-  }
+  const snap = await getDoc(doc(db, 'couples', cId, 'progress', 'indexes'));
+  if (snap.exists()) return snap.data()[indexKey(categoryFilter)] ?? 0;
   return 0;
 }
 
-/**
- * Persiste l'index courant dans Firestore.
- */
 async function saveCurrentIndex(cId: string, index: number, categoryFilter?: string): Promise<void> {
-  const indexesRef = doc(db, 'couples', cId, 'progress', 'indexes');
-  await setDoc(indexesRef, { [indexKey(categoryFilter)]: index }, { merge: true });
+  await setDoc(doc(db, 'couples', cId, 'progress', 'indexes'), { [indexKey(categoryFilter)]: index }, { merge: true });
 }
 
-/**
- * Déchiffre un champ texte stocké dans Firestore.
- * Gère aussi les anciennes réponses non chiffrées (migration transparente).
- */
+/** Déchiffre une réponse Firestore. Gère la migration depuis les anciens formats. */
 async function safeDecrypt(data: Record<string, any>, cId: string): Promise<string> {
-  if (data.iv && data.ciphertext) {
+  if (data.ciphertext && data.iv) {
     try {
       return await decryptText({ ciphertext: data.ciphertext, iv: data.iv }, cId);
     } catch {
@@ -128,6 +112,17 @@ async function safeDecrypt(data: Record<string, any>, cId: string): Promise<stri
     }
   }
   return data.text ?? data.choice ?? '';
+}
+
+/**
+ * Efface les réponses de l'ancien slot (provisoire).
+ * Appelé juste avant de charger la question suivante.
+ */
+async function deleteSlotAnswers(cId: string, slot: string, myUid: string, pUid: string): Promise<void> {
+  await Promise.all([
+    deleteDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', myUid)).catch(() => {}),
+    deleteDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', pUid)).catch(() => {}),
+  ]);
 }
 
 export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?: string }) {
@@ -145,12 +140,11 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   const [questionIndex, setQuestionIndex]   = useState(0);
   const [slotKey, setSlotKey]               = useState('');
 
-  // Ma réponse
+  // Réponses — chiffrées dans Firestore, affichées en clair en local
   const [myAnswer, setMyAnswer]             = useState('');
   const [isSubmitted, setIsSubmitted]       = useState(false);
   const [savingAnswer, setSavingAnswer]     = useState(false);
 
-  // État partenaire (temps réel)
   const [partnerHasAnswered, setPartnerHasAnswered] = useState(false);
   const [partnerAnswer, setPartnerAnswer]           = useState<string | null>(null);
 
@@ -171,7 +165,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     setSlotKey(slot);
     setQuestionIndex(idx);
 
-    // Paralléliser : question + mes réponses + réponses partenaire
+    // Paralléliser : question + réponses existantes
     const [questionId, myAns, pAns] = await Promise.all([
       pickUnlimitedQuestion(coupleKey, slot, categoryFilter),
       getDoc(doc(db, 'couples', coupleKey, 'daily', slot, 'answers', uid)),
@@ -199,7 +193,6 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   useEffect(() => {
     if (!myUid) return;
     const init = async () => {
-      // Paralléliser la lecture du doc utilisateur
       const myDoc = await getDoc(doc(db, 'users', myUid));
       if (!myDoc.exists()) return;
       const pUid = myDoc.data().linkedTo as string | undefined;
@@ -209,14 +202,12 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
       const coupleKey = coupleId(myUid, pUid);
       setCId(coupleKey);
 
-      // Paralléliser : pseudo partenaire + index courant
       const [pDoc, currentIdx] = await Promise.all([
         getDoc(doc(db, 'users', pUid)),
         readCurrentIndex(coupleKey, categoryFilter),
       ]);
 
       if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
-
       await loadSlot(myUid, pUid, coupleKey, currentIdx);
     };
     init();
@@ -240,6 +231,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     return () => unsub();
   }, [myUid, partnerUid, slotKey, cId]);
 
+  // ── Soumettre ma réponse — stockage chiffré temporaire ───────────────────
   const handleSubmit = async (choice?: string) => {
     const finalAnswer = choice || myAnswer;
     if (!finalAnswer.trim() || !myUid || !partnerUid || !question || !slotKey || !cId) return;
@@ -248,18 +240,12 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     if (choice) setMyAnswer(choice);
 
     try {
-      let dataPayload: Record<string, any>;
-      if (question && isPof(question)) {
-        // Pour les questions pile ou face, on chiffre le choix
-        const encrypted = await encryptText(finalAnswer.trim(), cId);
-        dataPayload = { ...encrypted, choice: finalAnswer, submittedAt: serverTimestamp() };
-      } else {
-        // Questions texte : chiffrement complet
-        const encrypted = await encryptText(finalAnswer.trim(), cId);
-        dataPayload = { ...encrypted, submittedAt: serverTimestamp() };
-      }
-
-      await setDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid), dataPayload);
+      // Chiffrement AES-GCM avant envoi
+      const encrypted = await encryptText(finalAnswer.trim(), cId);
+      await setDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid), {
+        ...encrypted,
+        submittedAt: serverTimestamp(),
+      });
       setIsSubmitted(true);
       isSubmittedRef.current = true;
 
@@ -287,11 +273,15 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     });
   }, [partnerHasAnswered, isSubmitted]);
 
+  // ── Question suivante — efface les réponses de l'ancien slot ─────────────
   const handleNext = async () => {
     if (!myUid || !partnerUid || !partnerAnswer || !cId) return;
     setLoadingNext(true);
+
+    // Supprimer les réponses provisoires de ce slot avant de passer à la suite
+    await deleteSlotAnswers(cId, slotKey, myUid, partnerUid);
+
     const nextIdx = questionIndex + 1;
-    // Persister l'index dans Firestore pour la continuité entre sessions
     await saveCurrentIndex(cId, nextIdx, categoryFilter);
     await loadSlot(myUid, partnerUid, cId, nextIdx);
     setLoadingNext(false);
@@ -362,7 +352,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
                 ) : (
                   <>
                     <TextInput
-                      style={[styles.input, { borderColor: theme.cardBorder, color: theme.text, backgroundColor: 'rgba(0,0,0,0.02)' }]}
+                      style={[styles.input, { borderColor: '#E9D5FF', color: '#4A3B39', backgroundColor: 'rgba(0,0,0,0.02)' }]}
                       placeholder="Ta réponse..."
                       placeholderTextColor="#A99693"
                       value={myAnswer}
@@ -382,11 +372,13 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
               </Animated.View>
             ) : (
               <Animated.View entering={FadeIn} layout={Layout.springify()}>
+                {/* Ma réponse — chiffrée en Firestore, affichée ici */}
                 <View style={[styles.myAnswerBox, isPofQuestion && { borderColor: '#0EA5E9', backgroundColor: 'rgba(14,165,233,0.05)' }]}>
                   <Text style={[styles.myAnswerLabel, isPofQuestion && { color: '#0EA5E9' }]}>Ta réponse 🔒</Text>
                   <Text style={styles.myAnswerText}>{getPofText(myAnswer)}</Text>
                 </View>
 
+                {/* Réponse partenaire — visible quand les 2 ont répondu */}
                 {partnerAnswer !== null ? (
                   <Animated.View entering={FadeInUp.duration(500)} style={[styles.revealBox, isPofQuestion && { borderLeftColor: '#38BDF8', backgroundColor: 'rgba(56,189,248,0.05)' }]}>
                     <View style={styles.revealHeader}>
@@ -402,6 +394,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
                   </View>
                 )}
 
+                {/* Bouton suivant — n'apparaît que quand les 2 ont répondu */}
                 <Animated.View entering={FadeInUp.delay(300).duration(500)} style={{ marginTop: 16 }}>
                   <Pressable
                     style={({ pressed }) => [
