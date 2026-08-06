@@ -49,8 +49,8 @@ function nowSlot(index: number, categoryFilter?: string): string {
   return `unlimited_${base}_${cat}_${index}`;
 }
 
-function indexKey(categoryFilter?: string): string {
-  return `currentIndex_${categoryFilter ?? 'all'}`;
+function indexKey(uid: string, categoryFilter?: string): string {
+  return `currentIndex_${uid}_${categoryFilter ?? 'all'}`;
 }
 
 async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?: string): Promise<string> {
@@ -92,14 +92,14 @@ async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?:
   });
 }
 
-async function readCurrentIndex(cId: string, categoryFilter?: string): Promise<number> {
+async function readCurrentIndex(cId: string, uid: string, categoryFilter?: string): Promise<number> {
   const snap = await getDoc(doc(db, 'couples', cId, 'progress', 'indexes'));
-  if (snap.exists()) return snap.data()[indexKey(categoryFilter)] ?? 0;
+  if (snap.exists()) return snap.data()[indexKey(uid, categoryFilter)] ?? 0;
   return 0;
 }
 
-async function saveCurrentIndex(cId: string, index: number, categoryFilter?: string): Promise<void> {
-  await setDoc(doc(db, 'couples', cId, 'progress', 'indexes'), { [indexKey(categoryFilter)]: index }, { merge: true });
+async function saveCurrentIndex(cId: string, uid: string, index: number, categoryFilter?: string): Promise<void> {
+  await setDoc(doc(db, 'couples', cId, 'progress', 'indexes'), { [indexKey(uid, categoryFilter)]: index }, { merge: true });
 }
 
 /** Déchiffre une réponse Firestore. Gère la migration depuis les anciens formats. */
@@ -184,9 +184,13 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     }
 
     if (pAns.exists()) {
+      const data = pAns.data();
       setPartnerHasAnswered(true);
+      if (data.movedToNext) {
+        setPartnerMovedToNext(true);
+      }
       if (isSubmittedRef.current) {
-        setPartnerAnswer(await safeDecrypt(pAns.data(), coupleKey));
+        setPartnerAnswer(await safeDecrypt(data, coupleKey));
       }
     }
 
@@ -207,7 +211,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
       const [pDoc, currentIdx] = await Promise.all([
         getDoc(doc(db, 'users', pUid)),
-        readCurrentIndex(coupleKey, categoryFilter),
+        readCurrentIndex(coupleKey, myUid, categoryFilter),
       ]);
 
       if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
@@ -306,7 +310,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     }
 
     const nextIdx = questionIndex + 1;
-    await saveCurrentIndex(cId, nextIdx, categoryFilter);
+    await saveCurrentIndex(cId, myUid, nextIdx, categoryFilter);
     await loadSlot(myUid, partnerUid, cId, nextIdx);
     setLoadingNext(false);
   };
