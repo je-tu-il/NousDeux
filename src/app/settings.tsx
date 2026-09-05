@@ -1,20 +1,24 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, Platform, ImageBackground, Alert, Image, ScrollView, Modal, ActivityIndicator } from 'react-native';
-import { router, Link } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/constants/Colors';
-import { ArrowLeft, HeartCrack, Camera, Trash2, Copy, CheckCircle2, Check, LogOut, FileText, Shield } from 'lucide-react-native';
-import Animated, { FadeInUp, FadeIn, FadeOut } from 'react-native-reanimated';
-import { useOnboardingStore } from '@/store/onboardingStore';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, arrayUnion, setDoc, deleteField, collection, getDocs, writeBatch } from 'firebase/firestore';
+import { useOnboardingStore } from '@/store/onboardingStore';
+import * as ImagePicker from 'expo-image-picker';
+import { Link, router } from 'expo-router';
+import { arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { ArrowLeft, Camera, Check, CheckCircle2, Copy, FileText, HeartCrack, LogOut, Mail, Shield, Trash2 } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import Animated, { Easing, FadeIn, FadeInUp, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 // Durée du debounce pour pseudo/age (ms)
 const DEBOUNCE_DELAY = 1000;
 
 export default function SettingsScreen() {
-  const theme = Colors.light;
   const store = useOnboardingStore((state) => state);
+  const { width: windowWidth } = useWindowDimensions();
+  // ✅ FIX CRITIQUE : utiliser le bon thème selon isDarkMode
+  const theme = store.isDarkMode ? Colors.dark : Colors.light;
+  const styles = getStyles(theme);
 
   const [pseudo, setPseudo] = useState(store.pseudo);
   const [age, setAge] = useState(store.age);
@@ -238,8 +242,19 @@ export default function SettingsScreen() {
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
+  const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
+  const defaultBg = store.isDarkMode
+    ? require('../../assets/images/nousdeux_dark_background.png')
+    : require('../../assets/images/nousdeux_warm_background.png');
+  const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
+
   return (
-    <ImageBackground source={require('../../assets/images/settings_bg.png')} style={styles.container} resizeMode="cover">
+    <ImageBackground source={bgImage} style={styles.container} resizeMode="cover" imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
+
+      {/* Overlay pour lisibilité en dark mode */}
+      {store.isDarkMode && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
+      )}
       <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 60 }}>
 
         {/* Header */}
@@ -270,7 +285,7 @@ export default function SettingsScreen() {
         <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Mon Profil</Text>
 
-          <View style={[styles.card, { backgroundColor: 'rgba(255,255,255,0.7)', borderColor: theme.cardBorder, alignItems: 'center' }]}>
+          <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, alignItems: 'center' }]}>
 
             {/* Photo de profil — sauvegarde immédiate au changement */}
             <Pressable style={[styles.avatarWrapper, { borderColor: theme.tint }]} onPress={pickImage}>
@@ -293,25 +308,23 @@ export default function SettingsScreen() {
               {/* Pseudo — autosave après 1s sans frappe */}
               <Text style={[styles.label, { color: theme.text }]}>Pseudo</Text>
               <TextInput
-                style={[styles.input, { color: theme.text, backgroundColor: 'rgba(255,255,255,0.5)' }]}
+                style={styles.input}
                 value={pseudo}
                 onChangeText={handlePseudoChange}
                 placeholder="Ton pseudo"
-                placeholderTextColor="#A99693"
+                placeholderTextColor={theme.tabIconDefault}
               />
 
               {/* Âge — autosave après 1s sans frappe */}
               <Text style={[styles.label, { color: theme.text }]}>Âge</Text>
               <TextInput
-                style={[styles.input, { color: theme.text, backgroundColor: 'rgba(255,255,255,0.5)' }]}
+                style={styles.input}
                 value={age}
                 onChangeText={handleAgeChange}
                 keyboardType="numeric"
                 placeholder="Ton âge"
-                placeholderTextColor="#A99693"
+                placeholderTextColor={theme.tabIconDefault}
               />
-
-              {/* Plus de bouton "Enregistrer" — tout est autosavé */}
 
               {isAlone && (
                 <Animated.View entering={FadeInUp} style={{ marginTop: 25, width: '100%', alignItems: 'center' }}>
@@ -321,7 +334,7 @@ export default function SettingsScreen() {
                         Ton code de partage
                       </Text>
                       <Pressable
-                        style={[styles.codeDisplay, { borderColor: theme.tint, backgroundColor: 'rgba(255,255,255,0.6)' }]}
+                        style={[styles.codeDisplay, { borderColor: theme.tint, backgroundColor: theme.glassBackground }]}
                         onPress={async () => {
                           const Clipboard = await import('expo-clipboard');
                           await Clipboard.setStringAsync(store.myCode!);
@@ -335,11 +348,11 @@ export default function SettingsScreen() {
                     </View>
                   ) : (
                     <Pressable
-                      style={({ pressed }) => [styles.actionButton, { backgroundColor: '#4A3B39', opacity: pressed || loading ? 0.8 : 1 }]}
+                      style={({ pressed }) => [styles.actionButton, { backgroundColor: theme.card, opacity: pressed || loading ? 0.8 : 1 }]}
                       onPress={generateNewCode}
                       disabled={loading}
                     >
-                      <Text style={styles.actionButtonText}>Regénérer mon code de partage</Text>
+                      <Text style={[styles.actionButtonText, { color: theme.text }]}>Régénérer mon code de partage</Text>
                     </Pressable>
                   )}
                 </Animated.View>
@@ -360,6 +373,54 @@ export default function SettingsScreen() {
             <LogOut color="white" size={20} />
             <Text style={styles.disconnectText}>Se déconnecter</Text>
           </Pressable>
+        </Animated.View>
+
+        {/* Préférences */}
+        <Animated.View entering={FadeInUp.duration(600).delay(240)} style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Préférences</Text>
+          <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, gap: 15 }]}>
+            
+            {/* Dark Mode Toggle — animé */}
+            <DarkModeToggle isDark={store.isDarkMode} onToggle={() => store.setDarkMode(!store.isDarkMode)} theme={theme} styles={styles} />
+
+            {/* Admin Panel Link - Only visible to admins */}
+            {(store.uid === '0SDwLPRnKRaq0SMn0RkjEfWTugl1' || store.uid === 'rfI3GYRmLPcMCCwejgnF22yy1ni2') && (
+              <>
+                <View style={styles.divider} />
+                <Link href="/admin" asChild>
+                  <Pressable style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={[styles.supportIcon, { backgroundColor: 'rgba(234,179,8,0.15)' }]}>
+                        <Text style={{ fontSize: 20 }}>⚙️</Text>
+                      </View>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Panel Administrateur</Text>
+                    </View>
+                    <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
+                  </Pressable>
+                </Link>
+              </>
+            )}
+
+          </View>
+        </Animated.View>
+
+        {/* Contact & Support */}
+        <Animated.View entering={FadeInUp.duration(600).delay(280)} style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Support</Text>
+          <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
+            <Link href="/contact" asChild>
+              <Pressable style={styles.supportRow}>
+                <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,154,139,0.15)' }]}>
+                  <Mail color={theme.tint} size={22} />
+                </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.supportTitle, { color: theme.text }]}>Nous contacter</Text>
+                    <Text style={styles.supportSub}>Bug, suggestion, question…</Text>
+                  </View>
+                <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
+              </Pressable>
+            </Link>
+          </View>
         </Animated.View>
 
         {/* Zone Danger */}
@@ -383,21 +444,7 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.divider} />
 
-            <View style={styles.dangerItem}>
-              <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
-                Remettre toutes vos statistiques et défis à zéro. (À venir)
-              </Text>
-              <Pressable
-                style={({ pressed }) => [styles.dangerButton, { backgroundColor: '#FFA500', opacity: pressed || loading ? 0.8 : 1 }]}
-                onPress={() => Alert.alert('Info', "La réinitialisation des statistiques arrivera bientôt !")}
-                disabled={loading}
-              >
-                <Trash2 color="white" size={20} />
-                <Text style={styles.dangerButtonText}>Réinitialiser les stats</Text>
-              </Pressable>
-            </View>
 
             <View style={styles.divider} />
 
@@ -420,15 +467,15 @@ export default function SettingsScreen() {
         {/* Liens légaux */}
         <Animated.View entering={FadeInUp.duration(600).delay(400)} style={[styles.section, { alignItems: 'center', gap: 12 }]}>
           <Text style={{ color: '#A99693', fontSize: 12, marginBottom: 4 }}>Informations légales</Text>
-          <Link href="/terms" style={styles.legalLink}>
-            <FileText color="#A99693" size={14} />
-            <Text style={styles.legalLinkText}>Conditions Générales d'Utilisation</Text>
-          </Link>
-          <Link href="/privacy" style={styles.legalLink}>
-            <Shield color="#A99693" size={14} />
-            <Text style={styles.legalLinkText}>Politique de Confidentialité</Text>
-          </Link>
-          <Text style={{ color: '#C8B8B6', fontSize: 11, marginTop: 8 }}>Bloomy v1.0.0 — © 2026</Text>
+            <Link href="/terms" style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
+              <FileText color={theme.text} size={14} />
+              <Text style={[styles.legalLinkText, { color: theme.text }]}>Conditions Générales d'Utilisation</Text>
+            </Link>
+            <Link href="/privacy" style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
+              <Shield color={theme.text} size={14} />
+              <Text style={[styles.legalLinkText, { color: theme.text }]}>Politique de Confidentialité</Text>
+            </Link>
+          <Text style={{ color: '#C8B8B6', fontSize: 11, marginTop: 8 }}>NousDeux v1.0.0 — © 2026</Text>
         </Animated.View>
       </ScrollView>
 
@@ -477,11 +524,68 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%' },
+// ── Composant Toggle Dark Mode Animé ─────────────────────────────────────────
+function DarkModeToggle({ isDark, onToggle, theme, styles }: { isDark: boolean; onToggle: () => void; theme: any; styles: any }) {
+  const thumbX = useSharedValue(isDark ? 20 : 0);
+
+  useEffect(() => {
+    thumbX.value = withTiming(isDark ? 20 : 0, {
+      duration: 250,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+    });
+  }, [isDark]);
+
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: thumbX.value }],
+  }));
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={[styles.supportIcon, { backgroundColor: isDark ? 'rgba(255,184,173,0.15)' : 'rgba(59,130,246,0.15)' }]}>
+          <Text style={{ fontSize: 20 }}>{isDark ? '🌙' : '☀️'}</Text>
+        </View>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Mode Sombre</Text>
+      </View>
+      <Pressable
+        onPress={onToggle}
+        style={{
+          width: 52,
+          height: 30,
+          borderRadius: 15,
+          backgroundColor: isDark ? '#FF9A8B' : '#E5E7EB',
+          padding: 2,
+          justifyContent: 'center',
+        }}
+      >
+        <Animated.View
+          style={[
+            {
+              width: 26,
+              height: 26,
+              borderRadius: 13,
+              backgroundColor: 'white',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 3,
+              elevation: 3,
+            },
+            thumbStyle,
+          ]}
+        />
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Styles adaptés au thème ───────────────────────────────────────────────────
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, width: '100%', height: '100%', minHeight: '100vh' as any, backgroundColor: 'transparent' },
+  bgImage: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 },
   safeArea: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 40 : 60, width: '100%', maxWidth: 500, alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 40 },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
+  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.glassBackground, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 24, fontWeight: '800' },
   saveIndicator: { width: 110, alignItems: 'flex-end' },
   saveChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,154,139,0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
@@ -490,25 +594,35 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 10 },
   card: { padding: 20, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
   label: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginLeft: 5 },
-  input: { height: 50, borderRadius: 15, paddingHorizontal: 15, fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: 'transparent' },
+  input: {
+    height: 50,
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: theme.cardBorder,
+    backgroundColor: theme.glassBackground,
+    color: theme.text,
+  },
   avatarWrapper: { width: 110, height: 110, borderRadius: 55, borderWidth: 3, overflow: 'visible', marginBottom: 6, position: 'relative' },
   avatarImage: { width: 110, height: 110, borderRadius: 55 },
-  avatarPlaceholder: { width: 110, height: 110, borderRadius: 55, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.5)' },
+  avatarPlaceholder: { width: 110, height: 110, borderRadius: 55, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.glassBackground },
   cameraOverlay: { position: 'absolute', bottom: 4, right: 4, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white' },
-  changePhotoText: { color: '#888', fontSize: 13, marginBottom: 6 },
+  changePhotoText: { color: theme.tabIconDefault, fontSize: 13, marginBottom: 6 },
   actionButton: { flexDirection: 'row', height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 10, paddingHorizontal: 20, width: '100%' },
   actionButtonText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
   dangerItem: { paddingVertical: 10 },
   divider: { height: 1, backgroundColor: 'rgba(255,0,0,0.1)', marginVertical: 15 },
   dangerButton: { flexDirection: 'row', height: 50, borderRadius: 25, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10, width: '100%', maxWidth: 300, alignSelf: 'center' },
   dangerButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { width: '100%', maxWidth: 400, backgroundColor: '#FFF5F2', padding: 30, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
-  modalTitle: { fontSize: 24, fontWeight: '900', color: '#4A3B39', textAlign: 'center', marginBottom: 15 },
-  modalText: { fontSize: 16, color: '#4A3B39', textAlign: 'center', marginBottom: 30, opacity: 0.8, lineHeight: 24 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { width: '100%', maxWidth: 400, backgroundColor: theme.card, padding: 30, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
+  modalTitle: { fontSize: 24, fontWeight: '900', color: theme.text, textAlign: 'center', marginBottom: 15 },
+  modalText: { fontSize: 16, color: theme.text, textAlign: 'center', marginBottom: 30, opacity: 0.8, lineHeight: 24 },
   modalActions: { flexDirection: 'row', gap: 15 },
-  modalCancel: { flex: 1, height: 50, borderRadius: 25, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
-  modalCancelText: { fontSize: 16, fontWeight: 'bold', color: '#4A3B39' },
+  modalCancel: { flex: 1, height: 50, borderRadius: 25, backgroundColor: theme.glassBackground, justifyContent: 'center', alignItems: 'center' },
+  modalCancelText: { fontSize: 16, fontWeight: 'bold', color: theme.text },
   modalConfirm: { flex: 1, height: 50, borderRadius: 25, backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center', shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10 },
   modalConfirmText: { fontSize: 16, fontWeight: 'bold', color: 'white' },
   codeBox: { width: '100%', alignItems: 'center' },
@@ -522,6 +636,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 10, width: '100%', maxWidth: 300, alignSelf: 'center',
   },
   disconnectText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  legalLink: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 20 },
-  legalLinkText: { color: '#A99693', fontSize: 13, fontWeight: '600' },
+  legalLink: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  legalLinkText: { fontSize: 13, fontWeight: '600' },
+  supportRow: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 10 },
+  supportIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  supportTitle: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  supportSub: { fontSize: 13, color: theme.tabIconDefault },
 });

@@ -79,10 +79,10 @@ export default function SyncScreen() {
     try {
       const shareUrl = Platform.OS === 'web' 
         ? `${window.location.origin}/onboarding/sync?code=${myCode}`
-        : `bloomy://sync?code=${myCode}`;
+        : `nousdeux://sync?code=${myCode}`;
 
       await Share.share({
-        message: `Rejoins-moi sur Bloomy ! Clique sur ce lien pour lier nos comptes : ${shareUrl}`,
+        message: `Rejoins-moi sur NousDeux ! Clique sur ce lien pour lier nos comptes : ${shareUrl}`,
       });
     } catch (error: any) {
       Alert.alert(error.message);
@@ -157,7 +157,7 @@ export default function SyncScreen() {
 
   if (success) {
     return (
-      <ImageBackground source={require('../../../assets/images/bloomy_warm_background.png')} style={styles.container} resizeMode="cover">
+      <ImageBackground source={require('../../../assets/images/nousdeux_warm_background.png')} style={styles.container} resizeMode="cover">
         <View style={[styles.successContent, { flex: 1, justifyContent: 'center', padding: 20 }]}>
           <Animated.View entering={ZoomIn.duration(800)} style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 40, gap: 15 }}>
             <View style={[styles.avatarCircle, { backgroundColor: theme.tint, position: 'relative', left: 0 }]}>
@@ -204,7 +204,7 @@ export default function SyncScreen() {
   }
 
   return (
-    <ImageBackground source={require('../../../assets/images/bloomy_warm_background.png')} style={styles.container} resizeMode="cover">
+    <ImageBackground source={require('../../../assets/images/nousdeux_warm_background.png')} style={styles.container} resizeMode="cover">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
         
         {/* Header */}

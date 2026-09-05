@@ -1,0 +1,75 @@
+ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: () => void }) {
+  const [targetCoupleId, setTargetCoupleId] = useState('');
+  const [petalAmount, setPetalAmount] = useState('100');
+  const [overrideDate, setOverrideDate] = useState('');
+  const [savedOverride, setSavedOverride] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('debug_date_override').then(v => {
+      if (v) { setOverrideDate(v); setSavedOverride(v); }
+    });
+  }, []);
+
+  const applyDateOverride = async () => {
+    if (overrideDate.trim()) {
+      await AsyncStorage.setItem('debug_date_override', overrideDate.trim());
+      setSavedOverride(overrideDate.trim());
+      Alert.alert('✅ Date override sauvegardée', `Les composants utilisant todayKey() doivent être mis à jour pour lire cet override.\nDate: ${overrideDate.trim()}`);
+    } else {
+      await AsyncStorage.removeItem('debug_date_override');
+      setSavedOverride('');
+      Alert.alert('🗑 Override supprimé', 'La date système sera utilisée.');
+    }
+  };
+
+  const syncLegacyStreaks = async () => {
+    Alert.alert(
+      '⚠️ Confirmer',
+      'Calculer les vraies séries pour TOUS les couples (basé sur couples/daily) et mettre à jour wallet.streak ?\nCela peut prendre du temps.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Oui, synchroniser',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              let updated = 0;
+              for (const c of couples) {
+                const today = new Date();
+                let streak = 0;
+                let offset = 0;
+
+                const toKey = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const todaySnap = await getDoc(doc(db, 'couples', c.id, 'daily', toKey(today.getFullYear(), today.getMonth(), today.getDate())));
+                const todayDone = todaySnap.exists() && todaySnap.data().bothAnswered === true;
+                if (todayDone) { streak = 1; offset = -1; } else { offset = -1; }
+
+                while (offset >= -90) {
+                  const d = new Date(today);
+                  d.setDate(d.getDate() + offset);
+                  const snap = await getDoc(doc(db, 'couples', c.id, 'daily', toKey(d.getFullYear(), d.getMonth(), d.getDate())));
+                  if (snap.exists() && snap.data().bothAnswered === true) { streak++; offset--; } else break;
+                }
+
+                if (streak > (c.wallet?.streak ?? 0)) {
+                  const walletRef = doc(db, `couples/${c.id}/economy/wallet`);
+                  const walletSnap = await getDoc(walletRef);
+                  const current = walletSnap.exists() ? walletSnap.data() : { petals: 0, streak: 0, lastClaimDate: '', totalEarned: 0 };
+                  await setDoc(walletRef, { ...current, streak }, { merge: true });
+                  updated++;
+                }
+              }
+              onRefresh();
+              Alert.alert('✅ Terminé', `${updated} couples mis à jour avec leur véritable série !`);
+            } catch (e) {
+              Alert.alert('Erreur', String(e));
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+ 

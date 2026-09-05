@@ -1,28 +1,53 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  View, Text, TextInput, StyleSheet, ActivityIndicator,
-  Pressable, KeyboardAvoidingView, Platform, ScrollView,
-} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import {
-  Infinity as InfinityIcon, Unlock,
-  ChevronRight, CheckCircle2, Clock, Split
+    Brain,
+    Camera,
+    CheckCircle2,
+    ChevronRight,
+    Clock,
+    Flame,
+    Heart,
+    Home,
+    Infinity as InfinityIcon,
+    MessageCircle, Rocket,
+    Smile,
+    Split,
+    Unlock
 } from 'lucide-react-native';
-import Animated, { FadeInUp, FadeIn, Layout } from 'react-native-reanimated';
-
-import { Colors } from '../constants/Colors';
-import { useOnboardingStore } from '../store/onboardingStore';
-import { db } from '../lib/firebase';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  doc, getDoc, setDoc, deleteDoc, onSnapshot,
-  serverTimestamp, updateDoc, runTransaction,
-} from 'firebase/firestore';
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView, Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text, TextInput,
+    View,
+} from 'react-native';
+import Animated, { FadeIn, FadeInUp, Layout } from 'react-native-reanimated';
 
-import { QUESTIONS } from '../data/questions';
+import {
+    deleteDoc,
+    doc, getDoc,
+    onSnapshot,
+    runTransaction,
+    serverTimestamp,
+    setDoc,
+    updateDoc,
+    increment,
+} from 'firebase/firestore';
+import { Colors } from '../constants/Colors';
+import { db } from '../lib/firebase';
+import { useOnboardingStore } from '../store/onboardingStore';
+
+import type { PileOuFaceQuestion } from '../data/pileouface';
 import { POF_QUESTIONS } from '../data/pileouface';
 import type { Question } from '../data/questions';
-import type { PileOuFaceQuestion } from '../data/pileouface';
-import { encryptText, decryptText } from '../lib/crypto';
+import { QUESTIONS } from '../data/questions';
+import { decryptText, encryptText } from '../lib/crypto';
+import { updateWalletStreak } from '../lib/economy';
 
 type AnyQuestion = Question | PileOuFaceQuestion;
 
@@ -124,6 +149,26 @@ async function deleteSlotAnswers(cId: string, slot: string, myUid: string, pUid:
   ]);
 }
 
+async function completeUnlimitedQuestion(cId: string, slot: string, category: string | undefined, uid: string, partnerUid: string): Promise<void> {
+  const slotRef = doc(db, 'couples', cId, 'daily', slot);
+  const walletRef = doc(db, `couples/${cId}/economy/wallet`);
+  const myAnswerRef = doc(db, 'couples', cId, 'daily', slot, 'answers', uid);
+  const partnerAnswerRef = doc(db, 'couples', cId, 'daily', slot, 'answers', partnerUid);
+
+  await runTransaction(db, async (tx) => {
+    const slotSnap = await tx.get(slotRef);
+    const myAnswer = await tx.get(myAnswerRef);
+    const partnerAnswer = await tx.get(partnerAnswerRef);
+    if (category) await tx.get(walletRef);
+    if (!slotSnap.exists() || slotSnap.data().bothAnswered === true || !myAnswer.exists() || !partnerAnswer.exists()) return;
+
+    tx.update(slotRef, { bothAnswered: true });
+    if (category) {
+      tx.set(walletRef, { unlimitedStats: { [category]: increment(1) } }, { merge: true });
+    }
+  });
+}
+
 export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?: string }) {
   const theme  = Colors.light;
   const store  = useOnboardingStore((s) => s);
@@ -209,6 +254,27 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
       const coupleKey = coupleId(myUid, pUid);
       setCId(coupleKey);
 
+      // --- VÉRIFICATION DE VERROUILLAGE DES THÈMES ---
+      if (categoryFilter) {
+        const CATEGORY_REQUIREMENTS: Record<string, string | null> = {
+          amour: null, fun: 'amour', profond: 'fun', intime: 'profond',
+          pile_ou_face: 'intime', famille: 'pile_ou_face', debat: 'famille',
+          futur: 'debat', souvenir: 'futur', reve: 'souvenir',
+          quotidien: 'reve', defi: 'quotidien'
+        };
+        const req = CATEGORY_REQUIREMENTS[categoryFilter];
+        if (req) {
+          const walletSnap = await getDoc(doc(db, 'couples', coupleKey, 'economy', 'wallet'));
+          const reqCount = walletSnap.exists() ? (walletSnap.data().unlimitedStats?.[req] || 0) : 0;
+          if (reqCount < 10) {
+            Alert.alert("Accès refusé", "Tu dois répondre à au moins 10 questions de la catégorie précédente !");
+            router.replace('/dashboard');
+            return;
+          }
+        }
+      }
+      // ------------------------------------------------
+
       const [pDoc, currentIdx] = await Promise.all([
         getDoc(doc(db, 'users', pUid)),
         readCurrentIndex(coupleKey, myUid, categoryFilter),
@@ -268,7 +334,8 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
         if (pAns.exists()) {
           setPartnerAnswer(await safeDecrypt(pAns.data(), cId));
-          await updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true });
+          await completeUnlimitedQuestion(cId, slotKey, categoryFilter, myUid, partnerUid);
+          updateWalletStreak(cId).catch(console.error);
         }
       }
     } catch (e) {
@@ -283,7 +350,8 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid)).then(async (snap) => {
       if (snap.exists()) {
         setPartnerAnswer(await safeDecrypt(snap.data(), cId));
-        updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true }).catch(() => {});
+        completeUnlimitedQuestion(cId, slotKey, categoryFilter, myUid, partnerUid).catch(() => {});
+        updateWalletStreak(cId).catch(console.error);
       }
     });
   }, [partnerHasAnswered, isSubmitted]);
@@ -340,13 +408,30 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     return ans === 'A' ? question.optionA : question.optionB;
   };
 
+  const getCategoryInfo = (cat: string | undefined) => {
+    switch (cat) {
+      case 'amour': return { colors: ['#EF4444', '#FCA5A5'], icon: <Heart color="white" size={22} />, title: 'AMOUR' };
+      case 'fun': return { colors: ['#F59E0B', '#FCD34D'], icon: <Smile color="white" size={22} />, title: 'FUN' };
+      case 'profond': return { colors: ['#3B82F6', '#93C5FD'], icon: <Brain color="white" size={22} />, title: 'PROFOND' };
+      case 'intime': return { colors: ['#BE185D', '#F472B6'], icon: <Flame color="white" size={22} />, title: 'INTIME' };
+      case 'pile_ou_face': return { colors: ['#0EA5E9', '#7DD3FC'], icon: <Split color="white" size={22} />, title: 'TU PRÉFÈRES' };
+      case 'famille': return { colors: ['#10B981', '#6EE7B7'], icon: <Home color="white" size={22} />, title: 'FAMILLE' };
+      case 'debat': return { colors: ['#8B5CF6', '#C4B5FD'], icon: <MessageCircle color="white" size={22} />, title: 'DÉBAT' };
+      case 'futur': return { colors: ['#6366F1', '#A5B4FC'], icon: <Rocket color="white" size={22} />, title: 'FUTUR' };
+      case 'souvenir': return { colors: ['#14B8A6', '#5EEAD4'], icon: <Camera color="white" size={22} />, title: 'SOUVENIR' };
+      default: return { colors: ['#A855F7', '#D946EF'], icon: <InfinityIcon color="white" size={22} />, title: 'ILLIMITÉ' };
+    }
+  };
+
+  const catInfo = getCategoryInfo(categoryFilter);
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInUp.duration(600).springify()} layout={Layout.springify()} style={styles.card}>
-          <LinearGradient colors={isPofQuestion ? ['#0EA5E9', '#38BDF8'] : ['#A855F7', '#D946EF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
-            {isPofQuestion ? <Split color="white" size={22} /> : <InfinityIcon color="white" size={22} />}
-            <Text style={styles.headerTitle}>{categoryFilter ? categoryFilter.toUpperCase() : 'ILLIMITÉ'}</Text>
+          <LinearGradient colors={catInfo.colors as [string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
+            {catInfo.icon}
+            <Text style={styles.headerTitle}>{catInfo.title}</Text>
             <View style={styles.badge}>
               <Text style={styles.badgeText}>Q.{questionIndex + 1}</Text>
             </View>
@@ -386,10 +471,21 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
                       value={myAnswer}
                       onChangeText={setMyAnswer}
                       multiline
-                      maxLength={500}
+                      maxLength={2000}
+                      returnKeyType="send"
+                      onSubmitEditing={() => handleSubmit()}
+                      onKeyPress={(event) => {
+                        if (event.nativeEvent.key === 'Enter' && !(event.nativeEvent as any).shiftKey) {
+                          event.preventDefault();
+                          handleSubmit();
+                        }
+                      }}
                     />
+                    <Text style={{ textAlign: 'right', fontSize: 12, color: '#A99693', marginTop: -14, marginBottom: 14, marginRight: 8 }}>
+                      {myAnswer.length} / 2000
+                    </Text>
                     <Pressable
-                      style={({ pressed }) => [styles.submitButton, { opacity: pressed || !myAnswer.trim() || savingAnswer ? 0.7 : 1 }]}
+                      style={({ pressed }) => [styles.submitButton, { backgroundColor: catInfo.colors[0], opacity: pressed || !myAnswer.trim() || savingAnswer ? 0.7 : 1 }]}
                       onPress={() => handleSubmit()}
                       disabled={!myAnswer.trim() || savingAnswer}
                     >

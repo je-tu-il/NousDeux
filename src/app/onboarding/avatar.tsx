@@ -60,7 +60,7 @@ export default function AvatarScreen() {
   };
 
   return (
-    <ImageBackground source={require('../../../assets/images/bloomy_warm_background.png')} style={styles.container} resizeMode="cover">
+    <ImageBackground source={require('../../../assets/images/nousdeux_warm_background.png')} style={styles.container} resizeMode="cover">
       <View style={styles.keyboardView}>
         
         {/* Back Button */}

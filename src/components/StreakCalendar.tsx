@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
-import { Flame, ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import { ChevronLeft, ChevronRight, Flame } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { computeStreakCached } from '../lib/economy';
 import { db } from '../lib/firebase';
 
 const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -21,87 +22,65 @@ function todayKey(): string {
   return toKey(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-/** Calcule le streak courant en lisant Firestore consécutivement depuis aujourd'hui. */
-async function computeStreak(cId: string): Promise<number> {
-  const today = new Date();
-  let streak = 0;
-  let offset = 0;
-
-  // Vérifier si aujourd'hui est complété
-  const todaySnap = await getDoc(
-    doc(db, 'couples', cId, 'daily',
-      toKey(today.getFullYear(), today.getMonth(), today.getDate()))
-  );
-  const todayDone = todaySnap.exists() && todaySnap.data().bothAnswered === true;
-
-  if (todayDone) {
-    streak = 1;
-    offset = -1;
-  } else {
-    // Aujourd'hui pas encore fait : le streak vient d'hier
-    offset = -1;
-  }
-
-  // Remonter dans le passé jusqu'à trouver un jour sans bothAnswered
-  while (offset >= -90) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + offset);
-    const key = toKey(d.getFullYear(), d.getMonth(), d.getDate());
-    const snap = await getDoc(doc(db, 'couples', cId, 'daily', key));
-    if (snap.exists() && snap.data().bothAnswered === true) {
-      streak++;
-      offset--;
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-}
-
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
+  currentStreak?: number;
   coupleId: string;
   showFullCalendar?: boolean;
+  compact?: boolean;
+  darkMode?: boolean;
 }
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
-export default function StreakCalendar({ coupleId, showFullCalendar = false }: Props) {
+export default function StreakCalendar({ coupleId, showFullCalendar = false, currentStreak, compact = false, darkMode = false }: Props) {
   const now = new Date();
-  const [streak, setStreak]       = useState<number>(0);
+  const [streak, setStreak] = useState<number>(currentStreak ?? 0);
   const [activeDays, setActive]   = useState<Set<string>>(new Set());
   const [loading, setLoading]     = useState(true);
   const [calMonth, setCalMonth]   = useState(now.getMonth());
   const [calYear, setCalYear]     = useState(now.getFullYear());
+  const hasLoadedCalendar = useRef(false);
   const today = todayKey();
 
-  // ── Chargement ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (currentStreak !== undefined) setStreak(currentStreak);
+  }, [currentStreak]);
+
+  // ── Chargement du mois affiché ─────────────────────────────────────────────
   useEffect(() => {
     if (!coupleId) return;
     let cancelled = false;
 
     const load = async () => {
-      setLoading(true);
+      if (!hasLoadedCalendar.current) setLoading(true);
       try {
-        // 1. Streak (calculé au moment de la lecture)
-        const s = await computeStreak(coupleId);
-
-        // 2. Jours actifs pour le mois calendrier affiché
         const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+        const miniKeys = Array.from({ length: 7 }, (_, index) => {
+          const date = new Date();
+          date.setDate(date.getDate() - index);
+          return toKey(date.getFullYear(), date.getMonth(), date.getDate());
+        });
+        const monthKeys = Array.from({ length: daysInMonth }, (_, i) => toKey(calYear, calMonth, i + 1));
+        const keysToLoad = [...new Set([...monthKeys, ...miniKeys])];
         const active = new Set<string>();
+        // Load actual completed days from DB
         await Promise.all(
-          Array.from({ length: daysInMonth }, (_, i) => i + 1).map(async (day) => {
-            const key = toKey(calYear, calMonth, day);
+          keysToLoad.map(async (key) => {
             const snap = await getDoc(doc(db, 'couples', coupleId, 'daily', key));
-            if (snap.exists() && snap.data().bothAnswered === true) active.add(key);
+            const data = snap.exists() ? snap.data() : null;
+            const completed = data && (data.bothAnswered === true || data.answered === true || data.complete === true);
+            const legacyAnswers = data ? await getDocs(collection(snap.ref, 'answers')) : null;
+            if (completed || (legacyAnswers?.size ?? 0) >= 2) {
+              active.add(key);
+            }
           })
         );
-
+        
         if (!cancelled) {
-          setStreak(s);
           setActive(active);
+          hasLoadedCalendar.current = true;
         }
       } catch (e) {
         console.error('StreakCalendar:', e);
@@ -113,6 +92,11 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false }: P
     load();
     return () => { cancelled = true; };
   }, [coupleId, calMonth, calYear]);
+
+  useEffect(() => {
+    if (currentStreak !== undefined || !coupleId) return;
+    computeStreakCached(coupleId).then(setStreak).catch(() => {});
+  }, [coupleId, currentStreak]);
 
   // ── Streak mini-bar (fenêtre glissante) ─────────────────────────────────────
   const daysToShow = Math.min(Math.max(streak, 1), 7);
@@ -144,44 +128,42 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false }: P
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, darkMode && { backgroundColor: 'rgba(29, 22, 22, 0.92)' }]}>
       {/* ── Compteur streak ── */}
       <View style={styles.streakRow}>
         <Flame color="#FF6B35" size={24} fill="#FF6B35" />
         <Text style={styles.streakNumber}>{streak}</Text>
-        <Text style={styles.streakLabel}>
+        <Text numberOfLines={1} adjustsFontSizeToFit style={styles.streakLabel}>
           {streak === 0
-            ? 'Commencez votre streak !'
+            ? 'Nouveau streak !'
             : streak === 1
-            ? 'jour d\'affilée 🎉'
-            : `jours d'affilée 🔥`}
+            ? 'jour d\'affilée 🚀'
+            : 'jours d\'affilée 🔥'}
         </Text>
       </View>
 
-      {/* ── Mini-bar glissante (seulement si streak > 0) ── */}
-      {streak > 0 && (
-        <View style={styles.miniRow}>
-          {miniDays.map((key) => {
-            const isToday  = key === today;
-            const isActive = activeDays.has(key);
-            const dayNum   = parseInt(key.split('-')[2], 10);
-            const d        = new Date(key + 'T00:00:00');
-            const label    = DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1];
-            return (
-              <View key={key} style={styles.miniDayCol}>
-                <Text style={[styles.miniLabel, isToday && styles.miniLabelToday]}>{label}</Text>
-                <View style={[styles.miniCircle, isActive && styles.miniActive, isToday && !isActive && styles.miniToday]}>
-                  {isActive
-                    ? <Text style={styles.miniCheck}>✓</Text>
-                    : <Text style={[styles.miniNum, isToday && { color: '#FF9A8B', fontWeight: '800' }]}>
-                        {dayNum}
-                      </Text>}
-                </View>
+      {/* ── Mini-bar glissante (toujours visible pour garder la hauteur) ── */}
+      <View style={styles.miniRow}>
+        {miniDays.map((key) => {
+          const isToday  = key === today;
+          const isActive = activeDays.has(key);
+          const dayNum   = parseInt(key.split('-')[2], 10);
+          const d        = new Date(key + 'T00:00:00');
+          const label    = DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1];
+          return (
+            <View key={key} style={styles.miniDayCol}>
+              <Text style={[styles.miniLabel, isToday && styles.miniLabelToday]}>{label}</Text>
+              <View style={[styles.miniCircle, isActive && styles.miniActive, isToday && !isActive && styles.miniToday]}>
+                {isActive
+                  ? <Text style={styles.miniCheck}>✓</Text>
+                  : <Text style={[styles.miniNum, isToday && { color: '#FF9A8B', fontWeight: '800' }]}>
+                      {dayNum}
+                    </Text>}
               </View>
-            );
-          })}
-        </View>
-      )}
+            </View>
+          );
+        })}
+      </View>
 
       {/* ── Calendrier mensuel complet ── */}
       {showFullCalendar && (
@@ -189,11 +171,12 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false }: P
           {/* Navigation mois */}
           <View style={styles.calHeader}>
             <Pressable
+              disabled={calYear === 2026 && calMonth === 0}
               onPress={() => {
                 if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
                 else setCalMonth(m => m - 1);
               }}
-              style={styles.navBtn}
+              style={[styles.navBtn, calYear === 2026 && calMonth === 0 && styles.navBtnDisabled]}
             >
               <ChevronLeft color="#4A3B39" size={20} />
             </Pressable>
@@ -256,7 +239,8 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false }: P
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    flex: 1,
+    backgroundColor: 'rgba(220,215,215,0.84)',
     borderRadius: 20,
     padding: 16,
     marginBottom: 20,
@@ -282,6 +266,7 @@ const styles = StyleSheet.create({
 
   calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 10 },
   navBtn: { padding: 6 },
+  navBtnDisabled: { opacity: 0.35 },
   calMonthTitle: { fontSize: 16, fontWeight: '800', color: '#4A3B39' },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calCell: { width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 3 },

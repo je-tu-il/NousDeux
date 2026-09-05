@@ -1,23 +1,34 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View, Text, TextInput, StyleSheet, ActivityIndicator,
-  Pressable, KeyboardAvoidingView, Platform,
-} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Heart, Unlock, CheckCircle2, Clock } from 'lucide-react-native';
-import Animated, { FadeInUp, FadeIn, Layout } from 'react-native-reanimated';
-
-import { Colors } from '../constants/Colors';
-import { useOnboardingStore } from '../store/onboardingStore';
-import { db } from '../lib/firebase';
+import { CheckCircle2, Clock, Heart, Unlock } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
 import {
-  doc, getDoc, setDoc, onSnapshot,
-  serverTimestamp, updateDoc, runTransaction,
+    ActivityIndicator,
+    KeyboardAvoidingView, Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text, TextInput,
+    useWindowDimensions,
+    View,
+} from 'react-native';
+import Animated, { FadeIn, FadeInUp, Layout } from 'react-native-reanimated';
+
+import {
+    doc, getDoc,
+    onSnapshot,
+    runTransaction,
+    serverTimestamp,
+    setDoc,
+    updateDoc,
 } from 'firebase/firestore';
+import { Colors } from '../constants/Colors';
+import type { Question } from '../data/questions';
 import { getById, getUnseen, QUESTIONS } from '../data/questions';
 import { getScheduledQuestionId } from '../data/scheduledQuestions';
-import type { Question } from '../data/questions';
-import { encryptText, decryptText } from '../lib/crypto';
+import { decryptText, encryptText } from '../lib/crypto';
+import { checkQuests, updateWalletStreak } from '../lib/economy';
+import { db } from '../lib/firebase';
+import { useOnboardingStore } from '../store/onboardingStore';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -75,6 +86,7 @@ async function safeDecrypt(data: Record<string, any>, cId: string): Promise<stri
 
 export default function Daylink() {
   const theme  = Colors.light;
+  const { width: windowWidth } = useWindowDimensions();
   const store  = useOnboardingStore((s) => s);
   const myUid  = store.uid;
   const pseudo = store.pseudo ?? 'Moi';
@@ -174,13 +186,15 @@ export default function Daylink() {
       setIsSubmitted(true);
       isSubmittedRef.current = true;
 
-      if (partnerHasAnswered) {
-        const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
-        if (pAns.exists()) {
-          setPartnerAnswer(await safeDecrypt(pAns.data(), cId));
-          await updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true });
+        if (partnerHasAnswered) {
+          const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
+          if (pAns.exists()) {
+            checkQuests(cId, 'both_active', 1).catch(e => console.error(e));
+            setPartnerAnswer(await safeDecrypt(pAns.data(), cId));
+            await updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true });
+            updateWalletStreak(cId).catch(console.error);
+          }
         }
-      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -194,7 +208,9 @@ export default function Daylink() {
     getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid)).then(async (snap) => {
       if (snap.exists()) {
         setPartnerAnswer(await safeDecrypt(snap.data(), cId));
-        updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true }).catch(() => {});
+        updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true }).then(() => {
+          updateWalletStreak(cId).catch(console.error);
+        }).catch(() => {});
       }
     });
   }, [partnerHasAnswered, isSubmitted]);
@@ -236,7 +252,7 @@ export default function Daylink() {
           <Text style={styles.headerTitle}>Question du Jour</Text>
         </LinearGradient>
 
-        <View style={styles.content}>
+        <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
           <View style={styles.statusRow}>
             <View style={[styles.pill, isSubmitted ? styles.pillDone : styles.pillWaiting]}>
               {isSubmitted
@@ -268,7 +284,19 @@ export default function Daylink() {
                 value={myAnswer}
                 onChangeText={setMyAnswer}
                 multiline
+                maxLength={2000}
+                returnKeyType="send"
+                onSubmitEditing={() => handleSubmit()}
+                onKeyPress={(event) => {
+                  if (Platform.OS === 'web' && event.nativeEvent.key === 'Enter' && !event.nativeEvent.shiftKey) {
+                    event.preventDefault();
+                    handleSubmit();
+                  }
+                }}
               />
+              <Text style={{ textAlign: 'right', fontSize: 12, color: '#A99693', marginTop: -14, marginBottom: 14, marginRight: 8 }}>
+                {myAnswer.length} / 2000
+              </Text>
               <Pressable
                 style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 }]}
                 onPress={handleSubmit}
@@ -308,7 +336,7 @@ export default function Daylink() {
               )}
             </Animated.View>
           )}
-        </View>
+        </ScrollView>
       </Animated.View>
     </KeyboardAvoidingView>
   );
@@ -321,10 +349,12 @@ const styles = StyleSheet.create({
     shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.2, shadowRadius: 20, elevation: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    flexShrink: 1,
+    maxHeight: '100%',
   },
   headerGradient: { padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   headerTitle: { color: 'white', fontSize: 22, fontWeight: '800', letterSpacing: 1 },
-  content: { padding: 24 },
+  content: { padding: 24, flexShrink: 1 },
   statusRow: { flexDirection: 'row', gap: 10, marginBottom: 20, justifyContent: 'center' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   pillDone: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: '#22c55e' },

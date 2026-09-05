@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "bloomy-app",
-    "slug": "bloomy-app",
+    "name": "nousdeux",
+    "slug": "nousdeux",
     "version": "1.0.0",
     "sdkVersion": "56.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "bloomyapp",
+    "scheme": "nousdeuxapp",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
@@ -19,11 +19,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.jetuil.bloomyapp"
+      "package": "com.jetuil.nousdeuxapp"
     },
     "web": {
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "NousDeux"
     },
     "plugins": [
       "expo-router",
@@ -38,7 +39,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-image"
+      "expo-image",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

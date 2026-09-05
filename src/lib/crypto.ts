@@ -8,7 +8,7 @@
  * Compatible : Web (WebCrypto API) + React Native ≥ 0.72 (Hermes supporte WebCrypto).
  */
 
-const SALT = 'bloomy-couple-salt-v1';
+const SALT = 'nousdeux-couple-salt-v2';
 const ITERATIONS = 100_000;
 
 // Cache en mémoire pour éviter de ré-dériver la clé à chaque appel
@@ -59,7 +59,7 @@ export async function encryptText(text: string, coupleId: string): Promise<Encry
   const enc = new TextEncoder();
 
   const ciphertextBuf = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     key,
     enc.encode(text)
   );
@@ -77,7 +77,7 @@ export async function decryptText(payload: EncryptedPayload, coupleId: string): 
   const ciphertext = base64ToBuf(payload.ciphertext);
 
   const plaintextBuf = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     key,
     ciphertext
   );
@@ -101,21 +101,3 @@ function base64ToBuf(b64: string): Uint8Array {
   return buf;
 }
 
-// ── Compat legacy ─────────────────────────────────────────────────────────────
-// Garde les anciens exports pour ne pas casser d'éventuels imports existants.
-export interface EncryptedPayloadLegacy {
-  ciphertext: string;
-  iv: string;
-  authTag: string;
-}
-
-/** @deprecated Utilise encryptText / decryptText à la place */
-export async function encryptPayload(payload: string, partnerPublicKeyPem: string): Promise<EncryptedPayloadLegacy> {
-  const result = await encryptText(payload, partnerPublicKeyPem);
-  return { ...result, authTag: '' };
-}
-
-/** @deprecated Utilise encryptText / decryptText à la place */
-export async function decryptPayload(encrypted: EncryptedPayloadLegacy, partnerPublicKeyPem: string): Promise<string> {
-  return decryptText({ ciphertext: encrypted.ciphertext, iv: encrypted.iv }, partnerPublicKeyPem);
-}

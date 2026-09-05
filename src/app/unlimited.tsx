@@ -1,19 +1,24 @@
-import React from 'react';
-import { StyleSheet, ImageBackground, View, Platform } from 'react-native';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
+import { ImageBackground, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import UnlimitedQuestions from '@/components/UnlimitedQuestions';
 import { Colors } from '@/constants/Colors';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
+import { useOnboardingStore } from '@/store/onboardingStore';
 
 export default function UnlimitedScreen() {
   const { category } = useLocalSearchParams<{ category?: string }>();
+  const store = useOnboardingStore();
+  const { width: windowWidth } = useWindowDimensions();
+  const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));
   
   return (
     <ImageBackground
-      source={require('../../assets/images/bloomy_warm_background.png')}
+      source={bgSource}
       style={styles.container}
       resizeMode="cover"
+      imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}
     >
       <View style={styles.safeArea}>
         <View style={styles.headerRow}>
@@ -29,7 +34,7 @@ export default function UnlimitedScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', overflow: 'hidden' },
+  container: { flex: 1, width: '100%', height: '100%', minHeight: Platform.OS === 'web' ? '100vh' : '100%', overflow: 'hidden', backgroundColor: 'transparent' },
   safeArea: {
     flex: 1,
     padding: 20,

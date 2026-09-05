@@ -1,15 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ImageBackground, Platform, ActivityIndicator } from 'react-native';
-import { Link } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { useOnboardingStore } from '@/store/onboardingStore';
 import StreakCalendar from '@/components/StreakCalendar';
 import { Colors } from '@/constants/Colors';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
+import { db } from '@/lib/firebase';
+import { useOnboardingStore } from '@/store/onboardingStore';
+import { Link } from 'expo-router';
+import { doc, getDoc } from 'firebase/firestore';
+import { ArrowLeft } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, ImageBackground, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 export default function CalendarScreen() {
   const theme  = Colors.light;
+  const { width: windowWidth } = useWindowDimensions();
   const myUid  = useOnboardingStore((s) => s.uid);
   const [coupleId, setCoupleId] = useState<string | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -27,11 +29,16 @@ export default function CalendarScreen() {
     init();
   }, [myUid]);
 
+  const store = useOnboardingStore();
+  const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));
+  const backgroundResizeMode = windowWidth < 600 ? 'contain' : 'cover';
+
   return (
     <ImageBackground
-      source={require('../../assets/images/romantic_calendar_bg.png')}
+      source={bgSource}
       style={styles.container}
-      resizeMode="cover"
+      resizeMode={backgroundResizeMode}
+      imageStyle={{ objectPosition: windowWidth < 600 ? 'center top' : 'center' } as any}
     >
       <View style={styles.safeArea}>
         {/* En-tête */}

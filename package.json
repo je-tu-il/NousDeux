@@ -1,8 +1,9 @@
 {
-  "name": "bloomy-app",
+  "name": "nousdeux",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@expo/ui": "~56.0.22",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-picker/picker": "2.11.4",
@@ -16,6 +17,7 @@
     "expo-image-picker": "~56.0.21",
     "expo-linear-gradient": "~56.0.4",
     "expo-linking": "~56.0.15",
+    "expo-notifications": "~56.0.25",
     "expo-router": "~56.2.15",
     "expo-secure-store": "~56.0.4",
     "expo-splash-screen": "~56.0.10",

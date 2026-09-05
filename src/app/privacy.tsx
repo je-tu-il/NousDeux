@@ -4,10 +4,22 @@ import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 
+const styles = StyleSheet.create({
+  container: { flex: 1, width: '100%', backgroundColor: '#FFF5F2' },
+  scroll: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 20 : 50, width: '100%', maxWidth: 600, alignSelf: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
+  pageTitle: { fontSize: 18, fontWeight: '800', color: '#4A3B39', flex: 1, textAlign: 'center' },
+  lastUpdated: { fontSize: 12, color: '#A99693', marginBottom: 20, fontStyle: 'italic' },
+  card: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.08, shadowRadius: 15, elevation: 5 },
+  section: { marginBottom: 24 },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#4A3B39', marginBottom: 8 },
+  sectionBody: { fontSize: 14, color: '#5a4a48', lineHeight: 22 },
+});
 export default function PrivacyScreen() {
   return (
     <ImageBackground
-      source={require('../../assets/images/bloomy_warm_background.png')}
+      source={require('../../assets/images/settings_bg.png')}
       style={styles.container}
       resizeMode="cover"
     >
@@ -25,9 +37,9 @@ export default function PrivacyScreen() {
           <Text style={styles.lastUpdated}>Dernière mise à jour : 6 août 2026</Text>
 
           <Section title="1. Qui sommes-nous ?">
-            Bloomy est une application permettant à deux partenaires de répondre ensemble à des questions quotidiennes.{'\n\n'}
-            Responsable du traitement : Bloomy (projet personnel).{'\n'}
-            Contact : bloomy.app.contact@gmail.com
+            NousDeux est une application permettant à deux partenaires de répondre ensemble à des questions quotidiennes.{'\n\n'}
+            Responsable du traitement : NousDeux (projet personnel).{'\n'}
+            Contact : nousdeux.app.contact@gmail.com
           </Section>
 
           <Section title="2. Données collectées">
@@ -35,7 +47,7 @@ export default function PrivacyScreen() {
             • <B>Données d'identification Google</B> : adresse e-mail, UID Firebase (fourni automatiquement lors de la connexion via Google).{'\n\n'}
             • <B>Profil utilisateur</B> : pseudo choisi, âge, photo de profil (optionnelle, encodée en base64 et stockée dans Firebase).{'\n\n'}
             • <B>Données de couple</B> : date d'anniversaire du couple, identifiant du couple (anonyme), code de synchronisation.{'\n\n'}
-            • <B>Réponses aux questions</B> : vos réponses sont <B>chiffrées de bout en bout</B> (AES-256-GCM) avant d'être envoyées sur nos serveurs. Ni Bloomy, ni Firebase, ni aucun administrateur ne peut les lire.{'\n\n'}
+            • <B>Réponses aux questions</B> : vos réponses sont <B>chiffrées de bout en bout</B> (AES-256-GCM) avant d'être envoyées sur nos serveurs. Ni NousDeux, ni Firebase, ni aucun administrateur ne peut les lire.{'\n\n'}
             • <B>Données de progression</B> : index de question atteint, identifiants de questions vues.
           </Section>
 
@@ -49,7 +61,7 @@ export default function PrivacyScreen() {
 
           <Section title="4. Hébergement & transfert hors UE">
             Vos données sont hébergées sur <B>Firebase (Google LLC)</B>, dont les serveurs sont situés aux États-Unis. Google LLC est certifié dans le cadre du mécanisme de transfert UE–États-Unis (Data Privacy Framework) et offre des garanties adéquates au sens du RGPD.{'\n\n'}
-            En utilisant Bloomy, vous acceptez ce transfert.
+            En utilisant NousDeux, vous acceptez ce transfert.
           </Section>
 
           <Section title="5. Durée de conservation">
@@ -64,7 +76,7 @@ export default function PrivacyScreen() {
             • <B>Droit à l'effacement</B> : vous pouvez supprimer votre compte et toutes vos données via Paramètres → Zone Danger.{'\n\n'}
             • <B>Droit à la portabilité</B> : contactez-nous à l'adresse ci-dessus.{'\n\n'}
             • <B>Droit d'opposition</B> : vous pouvez cesser d'utiliser l'application à tout moment.{'\n\n'}
-            Pour exercer vos droits, contactez : <B>bloomy.app.contact@gmail.com</B>
+            Pour exercer vos droits, contactez : <B>nousdeux.app.contact@gmail.com</B>
           </Section>
 
           <Section title="7. Sécurité">
@@ -73,7 +85,7 @@ export default function PrivacyScreen() {
           </Section>
 
           <Section title="8. Mineurs">
-            Bloomy est destinée aux personnes âgées d'au moins 16 ans. Si vous avez connaissance qu'un mineur de moins de 16 ans utilise l'application, veuillez nous contacter.
+            NousDeux est destinée aux personnes âgées d'au moins 16 ans. Si vous avez connaissance qu'un mineur de moins de 16 ans utilise l'application, veuillez nous contacter.
           </Section>
 
           <Section title="9. Modifications">
@@ -81,7 +93,7 @@ export default function PrivacyScreen() {
           </Section>
 
           <Section title="10. Contact & réclamation">
-            Pour toute question : <B>bloomy.app.contact@gmail.com</B>{'\n\n'}
+            Pour toute question : <B>nousdeux.app.contact@gmail.com</B>{'\n\n'}
             Vous avez également le droit d'introduire une réclamation auprès de la <B>CNIL</B> (Commission Nationale de l'Informatique et des Libertés) : www.cnil.fr
           </Section>
         </Animated.View>
@@ -102,16 +114,3 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function B({ children }: { children: React.ReactNode }) {
   return <Text style={{ fontWeight: '700' }}>{children}</Text>;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%' },
-  scroll: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 20 : 50, width: '100%', maxWidth: 600, alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
-  pageTitle: { fontSize: 18, fontWeight: '800', color: '#4A3B39', flex: 1, textAlign: 'center' },
-  lastUpdated: { fontSize: 12, color: '#A99693', marginBottom: 20, fontStyle: 'italic' },
-  card: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.08, shadowRadius: 15, elevation: 5 },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#4A3B39', marginBottom: 8 },
-  sectionBody: { fontSize: 14, color: '#5a4a48', lineHeight: 22 },
-});

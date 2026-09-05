@@ -1,0 +1,135 @@
+</ScrollView>
+
+      {/* ── Modal Mon Profil ───────────────────────────────────────────────── */}
+      <Modal visible={showMyProfile} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowMyProfile(false)}>
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.modalContent}>
+            <Pressable style={styles.closeBtn} onPress={() => setShowMyProfile(false)}>
+              <X color="#A99693" size={24} />
+            </Pressable>
+
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              {store.avatar ? (
+                <Image source={{ uri: store.avatar }} style={styles.modalAvatar} />
+              ) : (
+                <View style={[styles.modalAvatar, { backgroundColor: theme.tint, justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 36 }}>{store.pseudo?.charAt(0) || 'M'}</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.modalPseudo}>{store.pseudo}</Text>
+            <Text style={styles.modalAge}>{store.age} ans</Text>
+
+            {partner && (
+              <View style={styles.modalPartnerBox}>
+                <HeartHandshake color={theme.gradientEnd} size={30} style={{ alignSelf: 'center', marginBottom: 10 }} />
+                <Text style={styles.modalPartnerText}>En couple avec <Text style={{ fontWeight: 'bold' }}>{partner.pseudo}</Text></Text>
+                <Text style={styles.modalDateText}>Depuis le {formattedDate}</Text>
+              </View>
+            )}
+          </Animated.View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Modal Profil Partenaire ────────────────────────────────────────── */}
+      <Modal visible={showPartnerProfile} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPartnerProfile(false)}>
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.modalContent}>
+            <Pressable style={styles.closeBtn} onPress={() => setShowPartnerProfile(false)}>
+              <X color="#A99693" size={24} />
+            </Pressable>
+
+            {partner && (
+              <>
+                <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                  {partner.avatarUrl ? (
+                    <Image source={{ uri: partner.avatarUrl }} style={styles.modalAvatar} />
+                  ) : (
+                    <View style={[styles.modalAvatar, { backgroundColor: theme.gradientEnd, justifyContent: 'center', alignItems: 'center' }]}>
+                      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 36 }}>{partner.pseudo?.charAt(0) || 'P'}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.modalPseudo}>{partner.pseudo}</Text>
+                {partner.age && <Text style={styles.modalAge}>{partner.age} ans</Text>}
+
+                <View style={styles.modalPartnerBox}>
+                  <HeartHandshake color={theme.tint} size={30} style={{ alignSelf: 'center', marginBottom: 10 }} />
+                  <Text style={styles.modalPartnerText}>Ensemble depuis le</Text>
+                  <Text style={[styles.modalDateText, { fontSize: 16, fontWeight: '700', color: theme.tint, marginTop: 4 }]}>
+                    {formattedDate} ❤️
+                  </Text>
+                </View>
+              </>
+            )}
+          </Animated.View>
+        </Pressable>
+      </Modal>
+      {/* Modal d'Alerte Custom */}
+      <Modal visible={!!alertMessage} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 320 }]}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4A3B39', textAlign: 'center', marginBottom: 15 }}>
+              Oops !
+            </Text>
+            <Text style={{ fontSize: 15, color: '#4A3B39', textAlign: 'center', marginBottom: 20 }}>
+              {alertMessage}
+            </Text>
+            <Pressable 
+              style={{ backgroundColor: '#FF6A88', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, alignSelf: 'center' }} 
+              onPress={() => setAlertMessage(null)}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>J'ai compris</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+            </ScrollView>
+      </ImageBackground>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  headerBanner: { paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 60 : 30, paddingBottom: 30, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, marginBottom: 20 },
+  container: { flex: 1, width: '100%', overflow: 'hidden' },
+  safeArea: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 40 : 60, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 },
+  userAvatar: { width: 70, height: 70, borderRadius: 35, borderWidth: 3, borderColor: 'white', overflow: 'hidden' },
+  welcome: { fontSize: 28, fontWeight: '900', marginBottom: 6 },
+  streak: { fontSize: 16, fontWeight: 'bold' },
+  partnerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start' },
+  partnerAvatar: { width: 28, height: 28, borderRadius: 14, marginRight: 8, overflow: 'hidden' },
+  partnerText: { fontSize: 14, fontWeight: '700', color: '#4A3B39' },
+  grid: { flex: 1, gap: 20 },
+  mainCard: { padding: 24, borderRadius: 24, borderWidth: 1, alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5 },
+  iconWrapper: { padding: 20, borderRadius: 24, marginBottom: 16, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
+  cardTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
+  cardDesc: { fontSize: 16, opacity: 0.7 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  halfCardWrapper: { flex: 1 },
+  smallCard: { flexDirection: 'row', padding: 16, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 12, height: 80, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  smallCardTitle: { fontSize: 16, fontWeight: 'bold' },
+  lockText: { fontSize: 13, fontWeight: 'bold', opacity: 0.8 },
+  
+  sectionHeader: { marginTop: 10, marginBottom: 15, paddingHorizontal: 5 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#4A3B39' },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
+  categoryCardWrapper: { width: '48%', marginBottom: 12 },
+  categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5 },
+  categoryCardTitle: { fontSize: 15, fontWeight: '700', color: '#4A3B39' },
+  settingsButton: { padding: 10 },
+  // Modaux
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { width: '100%', maxWidth: 400, backgroundColor: '#FFF5F2', padding: 30, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10, position: 'relative' },
+  closeBtn: { position: 'absolute', top: 10, right: 10, padding: 15, zIndex: 10 },
+  modalAvatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: 'white', overflow: 'hidden' },
+  modalPseudo: { fontSize: 28, fontWeight: '900', color: '#4A3B39', textAlign: 'center', marginBottom: 5 },
+  modalAge: { fontSize: 16, color: '#A99693', textAlign: 'center', marginBottom: 30, fontWeight: 'bold' },
+  modalPartnerBox: { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 20, padding: 20, alignItems: 'center' },
+  modalPartnerText: { fontSize: 18, color: '#4A3B39', textAlign: 'center', marginBottom: 5 },
+  modalDateText: { fontSize: 14, color: '#A99693', textAlign: 'center', fontStyle: 'italic' },
+});

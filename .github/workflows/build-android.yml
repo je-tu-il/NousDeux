@@ -24,11 +24,10 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: bloomy-app/package-lock.json
+          cache-dependency-path: package-lock.json
 
       # ── 3. Installer les dépendances ───────────────────────────────────────
       - name: Install dependencies
-        working-directory: bloomy-app
         run: npm ci
 
       # ── 4. Installer EAS CLI ───────────────────────────────────────────────
@@ -39,7 +38,6 @@ jobs:
       # Le profil "preview" dans eas.json produit un APK (buildType: apk)
       # Le build tourne sur les serveurs d'Expo — pas besoin d'Android SDK local
       - name: Build Android APK (EAS)
-        working-directory: bloomy-app
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
@@ -52,7 +50,7 @@ jobs:
       # ── NOTE ──────────────────────────────────────────────────────────────
       # Le build tourne en arrière-plan sur les serveurs Expo.
       # Une fois terminé, le lien de téléchargement de l'APK est disponible sur :
-      #   https://expo.dev/accounts/[ton-compte]/projects/bloomy-app/builds
+      #   https://expo.dev/accounts/[ton-compte]/projects/nousdeux/builds
       #
       # Si tu veux attendre la fin du build et récupérer l'APK ici :
       # remplace --no-wait par --wait et ajoute une étape "eas build:download"

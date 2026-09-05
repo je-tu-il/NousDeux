@@ -1,25 +1,66 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, Image, Modal, ScrollView } from 'react-native';
-import { Link, router } from 'expo-router';
-import { Colors } from '@/constants/Colors';
-import { CalendarHeart, MessageCircleHeart, Trophy, Settings, X, HeartHandshake, Infinity as InfinityIcon, Split, Heart, Smile, Brain, Flame, Home, MessageCircle, Rocket, Camera, Star, Coffee } from 'lucide-react-native';
-import Animated, { FadeInUp, FadeInDown, withRepeat, withSequence, withTiming, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
-import { useOnboardingStore } from '@/store/onboardingStore';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import CoinWallet from '@/components/CoinWallet';
+import DailyClaim from '@/components/DailyClaim';
+import PixelAvatar from '@/components/PixelAvatar';
 import StreakCalendar from '@/components/StreakCalendar';
+import { Colors } from '@/constants/Colors';
+import { Cosmetic, COSMETICS, getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
+import { cacheWallet, computeStreakCached, getCachedWallet, getUserProfile, getWallet, invalidateStreakCache, syncUnlimitedStats, updateWalletStreak, UserProfile } from '@/lib/economy';
+import { db } from '@/lib/firebase';
+import { useOnboardingStore } from '@/store/onboardingStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Link, router } from 'expo-router';
+import { collection, doc, getDocs, onSnapshot } from 'firebase/firestore';
+import { Brain, CalendarHeart, Camera, Coffee, Flame, Heart, HeartHandshake, Home, Infinity as InfinityIcon, Lock, MessageCircle, Rocket, Settings, Smile, Split, Star, Trophy, X } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string; coupleId?: string };
 
 export default function DashboardScreen() {
-  const theme = Colors.light;
   const store = useOnboardingStore((state) => state);
+  const { width: windowWidth } = useWindowDimensions();
+  
+  const theme = store.isDarkMode ? Colors.dark : Colors.light;
+  const styles = getStyles(theme);
+  const background = getCosmeticById(store.selectedBackground);
+  const backgroundSource = getCosmeticImage(background, store.isDarkMode) || (store.isDarkMode
+    ? require('../../assets/images/nousdeux_dark_background.png')
+    : require('../../assets/images/nousdeux_warm_background.png'));
+  const backgroundResizeMode = 'cover';
+
+  const [unlockedCosmetic, setUnlockedCosmetic] = useState<Cosmetic | null>(null);
   const [partner, setPartner] = useState<PartnerData | null>(null);
   const [partnerLeft, setPartnerLeft] = useState(false);
   const [showMyProfile, setShowMyProfile] = useState(false);
   const [showPartnerProfile, setShowPartnerProfile] = useState(false);
-  // isLoading bloque les redirects jusqu'à la réponse Firebase (évite le flash)
+  const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
+  const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
+  const [unlockedItems, setUnlockedItems] = useState<Cosmetic[]>([]);
+  const [wallet, setWallet] = useState<any>(null);
+  const [partnerAnsweredCategories, setPartnerAnsweredCategories] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const checkStreakUnlock = async () => {
+      if (!wallet?.streak) return;
+      try {
+        const lastSeenStr = await AsyncStorage.getItem('last_seen_streak_unlock');
+        const lastSeen = lastSeenStr ? parseInt(lastSeenStr) : 0;
+        if (wallet.streak > lastSeen) {
+          const newUnlocks = COSMETICS.filter(c => c.unlock.type === 'streak' && c.unlock.days === wallet.streak);
+          if (newUnlocks.length > 0) {
+            setUnlockedItems(newUnlocks);
+            await AsyncStorage.setItem('last_seen_streak_unlock', wallet.streak.toString());
+          }
+        }
+      } catch(e) {}
+    };
+    checkStreakUnlock();
+  }, [wallet?.streak]);
+
   const [isLoading, setIsLoading] = useState(true);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const pulseAnim = useSharedValue(1);
 
   useEffect(() => {
@@ -34,6 +75,7 @@ export default function DashboardScreen() {
       router.replace('/onboarding/login');
       return;
     }
+    let partnerUnsub: any = null;
 
     const unsub = onSnapshot(doc(db, 'users', store.uid), async (docSnap) => {
       if (docSnap.exists()) {
@@ -50,141 +92,387 @@ export default function DashboardScreen() {
           return;
         }
 
-        // Utiliser le cache du store pour éviter un getDoc inutile
-        const cachedPartnerUid = store.partnerUid;
-        const cachedPseudo = store.partnerPseudo;
-        const cachedAvatar = store.partnerAvatar;
-
-        if (cachedPartnerUid === data.linkedTo && cachedPseudo) {
-          setPartner({
-            pseudo: cachedPseudo,
-            avatarUrl: cachedAvatar ?? undefined,
-            coupleDate: data.coupleDate,
-            coupleId: [store.uid!, data.linkedTo].sort().join('_'),
+        // We set up a realtime listener for the partner document
+        if (!partnerUnsub) {
+          partnerUnsub = onSnapshot(doc(db, 'users', data.linkedTo), (pSnap) => {
+            if (pSnap.exists()) {
+              const pData = pSnap.data();
+              if (pData.linkedTo === store.uid) {
+                store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
+                setPartner({
+                  pseudo: pData.pseudo,
+                  avatarUrl: pData.avatarUrl,
+                  coupleDate: data.coupleDate,
+                  age: pData.age,
+                  coupleId: [store.uid!, data.linkedTo].sort().join('_'),
+                });
+                setPartnerLeft(false);
+              } else {
+                setPartner(null);
+                setPartnerLeft(true);
+              }
+            } else {
+              setPartner(null);
+              setPartnerLeft(true);
+            }
+            setIsLoading(false);
           });
-          setPartnerLeft(false);
-          setIsLoading(false);
-          return;
-        }
-
-        // Cache absent ou périmé → fetch et mise à jour du cache
-        const partnerDoc = await getDoc(doc(db, 'users', data.linkedTo));
-        if (partnerDoc.exists()) {
-          const pData = partnerDoc.data();
-          if (pData.linkedTo === store.uid) {
-            store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
-            setPartner({
-              pseudo: pData.pseudo,
-              avatarUrl: pData.avatarUrl,
-              coupleDate: data.coupleDate,
-              age: pData.age,
-              coupleId: [store.uid!, data.linkedTo].sort().join('_'),
-            });
-            setPartnerLeft(false);
-          } else {
-            setPartner(null);
-            setPartnerLeft(true);
-          }
-        } else {
-          setPartner(null);
-          setPartnerLeft(true);
         }
       } else {
-        setPartner(null);
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
-    return () => unsub();
+    return () => {
+      unsub();
+      if (partnerUnsub) partnerUnsub();
+    };
   }, [store.uid]);
+
+  // Profiles are loaded when the account or partner changes, not on every focus.
+  useEffect(() => {
+    if (store.uid) {
+      getUserProfile(store.uid).then(p => {
+        if (p) {
+          setMyProfile(p);
+          store.setSelectedCosmetics(p.selectedBackground, p.selectedBorder, p.selectedTag);
+        }
+      });
+    }
+    if (partner?.coupleId && store.uid) {
+      const partnerId = partner.coupleId.replace(store.uid, '').replace('_', '');
+      getUserProfile(partnerId).then(p => { if (p) setPartnerProfile(p); });
+    }
+  }, [store.uid, partner?.coupleId]);
+
+  useEffect(() => {
+    if (!partner?.coupleId || !store.uid) return;
+    const loadPartnerAnswers = async () => {
+      const partnerId = partner.coupleId!.replace(store.uid!, '').replace('_', '');
+      const dailySnap = await getDocs(collection(db, 'couples', partner.coupleId!, 'daily'));
+      const answeredCategories = new Set<string>();
+      await Promise.all(dailySnap.docs.map(async (dailyDoc) => {
+        const category = dailyDoc.data().category as string | undefined;
+        if (!category || category === 'all') return;
+        const answerSnap = await getDocs(collection(db, 'couples', partner.coupleId!, 'daily', dailyDoc.id, 'answers'));
+        const partnerAnswered = answerSnap.docs.some(answer => answer.id === partnerId);
+        const myAnswered = answerSnap.docs.some(answer => answer.id === store.uid);
+        if (partnerAnswered && !myAnswered) answeredCategories.add(category);
+      }));
+      setPartnerAnsweredCategories(answeredCategories);
+    };
+    const answerListeners: Array<() => void> = [];
+    const dailyQuery = collection(db, 'couples', partner.coupleId!, 'daily');
+    const unsubscribeDaily = onSnapshot(dailyQuery, (dailySnapshot) => {
+      answerListeners.forEach(unsubscribe => unsubscribe());
+      answerListeners.length = 0;
+      invalidateStreakCache(partner.coupleId!);
+      dailySnapshot.docs.forEach(dailyDoc => {
+        if (dailyDoc.data().category && dailyDoc.data().category !== 'all') {
+          answerListeners.push(onSnapshot(
+            collection(db, 'couples', partner.coupleId!, 'daily', dailyDoc.id, 'answers'),
+            () => {
+              invalidateStreakCache(partner.coupleId!);
+              computeStreakCached(partner.coupleId!, true).then((streak) => {
+                setWallet(current => current ? { ...current, streak } : current);
+              }).catch(() => {});
+              loadPartnerAnswers().catch(() => setPartnerAnsweredCategories(new Set()));
+            },
+          ));
+        }
+      });
+      loadPartnerAnswers().catch(() => setPartnerAnsweredCategories(new Set()));
+      computeStreakCached(partner.coupleId!, true).then((streak) => {
+        setWallet(current => current ? { ...current, streak } : current);
+      }).catch(() => {});
+    });
+    return () => {
+      unsubscribeDaily();
+      answerListeners.forEach(unsubscribe => unsubscribe());
+    };
+  }, [partner?.coupleId, store.uid]);
+
+  // Notification de déblocage par série
+  useEffect(() => {
+    if (!wallet?.streak) return;
+    const checkUnlocks = async () => {
+      const lastSeenStr = await AsyncStorage.getItem('last_seen_streak');
+      const lastSeen = lastSeenStr ? parseInt(lastSeenStr) : 0;
+      if (wallet.streak > lastSeen) {
+        // Trouver s'il y a un cosmétique pour cette série exacte
+        const unlocked = COSMETICS.find(c => c.unlock.type === 'streak' && (c.unlock as any).days === wallet.streak);
+        if (unlocked) {
+          setUnlockedCosmetic(unlocked);
+        }
+        await AsyncStorage.setItem('last_seen_streak', wallet.streak.toString());
+      }
+    };
+    checkUnlocks();
+  }, [wallet?.streak]);
+
+  // Ecoute du Wallet en temps réel + correction streak
+  useEffect(() => {
+    if (!partner?.coupleId) return;
+    syncUnlimitedStats(partner.coupleId).then((stats) => {
+      setWallet((current) => current ? { ...current, unlimitedStats: stats } : current);
+    }).catch(() => {});
+    const cachedWallet = getCachedWallet(partner.coupleId);
+    if (cachedWallet) setWallet(cachedWallet);
+    const walletRef = doc(db, `couples/${partner.coupleId}/economy/wallet`);
+    const unsub = onSnapshot(walletRef, async (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const calculatedStreak = await computeStreakCached(partner.coupleId);
+        const nextWallet = { ...(data as any), streak: calculatedStreak };
+        cacheWallet(partner.coupleId!, nextWallet);
+        setWallet(nextWallet);
+        if (data.streak !== calculatedStreak) updateWalletStreak(partner.coupleId).catch(console.error);
+      } else {
+        const sharedWallet = await getWallet(partner.coupleId);
+        cacheWallet(partner.coupleId!, sharedWallet);
+        setWallet(sharedWallet);
+      }
+    });
+    return () => unsub();
+  }, [partner?.coupleId]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseAnim.value }],
   }));
 
+  
+  const getDaysSince = (dateString?: string) => {
+    if (!dateString) return '0';
+    const diff = new Date().getTime() - new Date(dateString).getTime();
+    return Math.floor(diff / (1000 * 3600 * 24)).toString();
+  };
+  
   const formattedDate = partner?.coupleDate
     ? new Date(partner.coupleDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
     : 'Date non définie';
 
   if (isLoading) {
     return (
-      <ImageBackground source={require('../../assets/images/romantic_calendar_bg.png')} style={styles.container} resizeMode="cover">
-        <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]} />
+      <ImageBackground source={backgroundSource} style={styles.container} resizeMode={backgroundResizeMode} imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
+        <View style={[styles.safeArea, { overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }]}> 
+          <ActivityIndicator color={theme.tint} size="large" />
+          <Text style={{ color: theme.text, marginTop: 14 }}>Chargement du Dashboard...</Text>
+        </View>
+        
+        {/* Streak Unlock Popup */}
+      <Modal visible={unlockedItems.length > 0} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={{ fontSize: 24, textAlign: 'center', marginBottom: 10 }}>🎯</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 10 }}>Nouveauté Débloquée !</Text>
+            <Text style={{ fontSize: 14, color: theme.tabIconDefault, textAlign: 'center', marginBottom: 20 }}>Ton streak de {wallet?.streak} jours t'a permis de débloquer :</Text>
+            
+            {unlockedItems.map(item => (
+              <View key={item.id} style={{ alignItems: 'center', marginBottom: 15, padding: 10, backgroundColor: 'rgba(255,154,139,0.1)', borderRadius: 16, width: '100%' }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FF6A88' }}>{item.emoji ? item.emoji + ' ' : ''}{item.name}</Text>
+                <Text style={{ fontSize: 12, color: theme.tabIconDefault }}>{item.description}</Text>
+              </View>
+            ))}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, width: '100%' }}>
+              <Pressable style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#F5F5F5', alignItems: 'center' }} onPress={() => setUnlockedItems([])}>
+                <Text style={{ color: theme.text, fontWeight: 'bold' }}>Fermer</Text>
+              </Pressable>
+              <Pressable style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#FF6A88', alignItems: 'center' }} onPress={() => { setUnlockedItems([]); router.push('/shop'); }}>
+                <Text style={{ color: 'white', fontWeight: 'bold' }}>Voir boutique</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+  
       </ImageBackground>
     );
   }
 
+  const renderAvatar = (avatarUrl: string | null | undefined, pseudo: string, isPartner: boolean, profile: UserProfile | null) => {
+    const streak = wallet?.streak || 0;
+    const isUnlocked = (c: any) => !c || c.unlock.type !== 'streak' || streak >= c.unlock.days;
+    let cosmeticBg = profile?.selectedBackground ? getCosmeticById(profile.selectedBackground) : null;
+    let cosmeticBorder = profile?.selectedBorder ? getCosmeticById(profile.selectedBorder) : null;
+    if (!isUnlocked(cosmeticBg)) cosmeticBg = null;
+    if (!isUnlocked(cosmeticBorder)) cosmeticBorder = null;
+
+
+    const fallbackBorderColor = cosmeticBorder && !cosmeticBorder.image 
+      ? parseGradientColors(cosmeticBorder.preview || 'none')[0] 
+      : 'white';
+
+    const baseStyle = isPartner ? styles.partnerAvatar : styles.userAvatar;
+    const avatarWidth = isPartner ? 28 : 70;
+    
+    // Si c'est une bordure image, pas de bordure CSS
+    const borderStyle = cosmeticBorder?.image 
+      ? { borderWidth: 0 } 
+      : { borderWidth: 3, borderColor: fallbackBorderColor };
+
+    const borderImageSize = avatarWidth * 2.0;
+    const borderOffset = - (borderImageSize - avatarWidth) / 2;
+
+    const innerAvatar = avatarUrl ? (
+      <Image source={{ uri: avatarUrl }} style={[baseStyle, { zIndex: 1, position: 'relative' }, borderStyle]} />
+    ) : (
+      <View style={[baseStyle, { backgroundColor: isPartner ? theme.gradientEnd : theme.tint, justifyContent: 'center', alignItems: 'center', zIndex: 1, position: 'relative' }, borderStyle]}>
+        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: isPartner ? 12 : 24 }}>{pseudo.charAt(0) || (isPartner ? 'P' : 'M')}</Text>
+      </View>
+    );
+
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ position: 'relative', marginRight: isPartner ? 14 : -5 }}>
+          
+          {/* L'avatar de base (photo, PixelAvatar ou initiale) */}
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={[baseStyle, { zIndex: 1, position: 'relative' }, borderStyle]} />
+          ) : profile?.avatar ? (
+             <View style={[baseStyle, borderStyle, { overflow: 'hidden', position: 'relative', zIndex: 1, backgroundColor: isPartner ? '#FF9A8B' : '#FF6A88', justifyContent: 'center', alignItems: 'center' }]}>
+               <PixelAvatar config={profile.avatar} size={avatarWidth} showShadow={false} />
+             </View>
+          ) : innerAvatar}
+
+          {/* Bordure image superposée */}
+          {cosmeticBorder?.image && (
+            <View pointerEvents="none" style={{ position: 'absolute', top: borderOffset, left: borderOffset, width: borderImageSize, height: borderImageSize, zIndex: 2 }}>
+              <Image 
+                source={cosmeticBorder.image} 
+                style={{ width: '100%', height: '100%' }} 
+              />
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+
+
   return (
-    <ImageBackground source={require('../../assets/images/romantic_calendar_bg.png')} style={styles.container} resizeMode="cover">
-      <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 40 }}>
-
-        {/* Header */}
-        <Animated.View entering={FadeInUp.duration(600)}>
-          <View style={styles.header}>
-
-            {/* Mon avatar + nom → ouvre mon profil */}
-            <Pressable style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => setShowMyProfile(true)}>
-              {store.avatar ? (
-                <Image source={{ uri: store.avatar }} style={styles.userAvatar} />
-              ) : (
-                <View style={[styles.userAvatar, { backgroundColor: theme.tint, justifyContent: 'center', alignItems: 'center' }]}>
-                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 24 }}>{store.pseudo?.charAt(0) || 'M'}</Text>
-                </View>
-              )}
+    <ImageBackground source={backgroundSource} style={styles.container} resizeMode={backgroundResizeMode} imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
+      <View style={[styles.safeArea, { overflow: 'visible', backgroundColor: 'transparent' }]}> 
+        <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>{/* NOUVEAU HEADER : LinearGradient Mon Profil + Wallet */}
+        <LinearGradient
+          colors={[theme.gradientStart, theme.gradientEnd]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={styles.headerBanner}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            
+            {/* Mon Profil */}
+            <Pressable
+              style={[styles.partnerBadge, { flex: 1, backgroundColor: 'transparent', shadowOpacity: 0, elevation: 0, padding: 0 }]}
+              onPress={() => setShowMyProfile(true)}
+            >
+              {renderAvatar(store.avatar, store.pseudo || 'Moi', false, myProfile)}
               <View style={{ marginLeft: 15, flex: 1 }}>
-                <Text style={[styles.welcome, { color: theme.text }]} numberOfLines={1}>Bonjour {store.pseudo} !</Text>
-
-                {partner ? (
-                  // Badge partenaire cliquable → ouvre son profil
-                  <Pressable
-                    style={styles.partnerBadge}
-                    onPress={(e) => {
-                      e.stopPropagation?.();
-                      setShowPartnerProfile(true);
-                    }}
-                  >
-                    {partner.avatarUrl ? (
-                      <Image source={{ uri: partner.avatarUrl }} style={styles.partnerAvatar} />
-                    ) : (
-                      <View style={[styles.partnerAvatar, { backgroundColor: theme.gradientEnd, justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>{partner.pseudo?.charAt(0) || 'P'}</Text>
-                      </View>
-                    )}
-                    <Text style={styles.partnerText} numberOfLines={1}>En couple avec {partner.pseudo} 💕</Text>
-                  </Pressable>
-                ) : partnerLeft ? (
-                  <View style={styles.partnerBadge}>
-                    <Text style={[styles.partnerText, { color: '#FF3B30', fontStyle: 'italic' }]} numberOfLines={1}>Ton partenaire t'a quitté 💔</Text>
-                  </View>
-                ) : (
-                  <Text style={[styles.streak, { color: theme.gradientEnd }]}>Prêt à jouer ?</Text>
+                <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }} numberOfLines={1}>{store.pseudo}</Text>
+                {myProfile?.selectedTag && getCosmeticById(myProfile.selectedTag) && (
+                  <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 }} numberOfLines={1}>
+                    {getCosmeticById(myProfile.selectedTag)?.emoji} {getCosmeticById(myProfile.selectedTag)?.name}
+                  </Text>
                 )}
               </View>
             </Pressable>
 
-            <Link href="/settings" asChild>
-              <Pressable style={styles.settingsButton}>
-                <Settings color={theme.icon} size={28} />
-              </Pressable>
-            </Link>
+            {/* Wallet */}
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 20 }}>
+              <CoinWallet petals={wallet?.petals ?? 0} size="small" theme="white" />
+            </View>
           </View>
-        </Animated.View>
+        </LinearGradient>
 
-        {/* Streak + calendrier — cliquable pour ouvrir le calendrier complet */}
-        {partner?.coupleId && (
-          <Animated.View entering={FadeInUp.delay(100).duration(400)}>
-            <Link href="/calendar" asChild>
-              <Pressable>
-                <StreakCalendar coupleId={partner.coupleId} />
-              </Pressable>
-            </Link>
-          </Animated.View>
-        )}
+        {/* --- LIGNE EN COUPLE + REGLAGES --- */}
+        <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 20, gap: 12 }}>
+          {/* BLOC 1: EN COUPLE AVEC (Plus large, flex: 2) */}
+          <Pressable 
+            style={{ flex: 2, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+            onPress={() => setShowPartnerProfile(true)}
+          >
+            {renderAvatar(partner?.avatarUrl, partner?.pseudo || '?', true, partnerProfile)}
+            <View style={{ marginLeft: 10, flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>En couple avec</Text>
+              <Text style={{ color: '#FF6A88', fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner?.pseudo}</Text>
+              {partnerProfile?.selectedTag && getCosmeticById(partnerProfile.selectedTag) && (
+                <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 106, 136, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 106, 136, 0.3)' }}>
+                  <Text style={{ fontSize: 13, color: '#FF6A88', fontWeight: '800' }} numberOfLines={1}>
+                    {getCosmeticById(partnerProfile.selectedTag)?.emoji} {getCosmeticById(partnerProfile.selectedTag)?.name}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </Pressable>
+
+          {/* BLOC 2: REGLAGES (Moins large, flex: 1) */}
+          <Pressable 
+            style={{ flex: 1, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+            onPress={() => router.push('/settings')}
+          >
+            <Settings color="#FF6A88" size={32} />
+            <Text style={{ color: theme.text, fontSize: 12, marginTop: 6, fontWeight: '700' }}>Réglages</Text>
+          </Pressable>
+        </View>
+
+        {/* --- WIDGETS LIGNE --- */}
+        <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 20, gap: 12 }}>
+          {/* ROULETTE */}
+          {partner?.coupleId && store.uid && (
+            <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1 }}>
+              <DailyClaim 
+                compact={true}
+                coupleId={partner.coupleId} 
+                myUid={store.uid} 
+                wallet={wallet}
+                onClaimed={(newW) => {
+                  cacheWallet(partner.coupleId!, newW);
+                  setWallet(newW);
+                }} 
+              />
+            </Animated.View>
+          )}
+
+          {/* STREAK */}
+          {partner?.coupleId && (
+            <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ flex: 1.2 }}>
+              <Link href="/calendar" asChild>
+                <Pressable style={{ flex: 1 }}>
+                  <StreakCalendar coupleId={partner.coupleId} compact={true} currentStreak={wallet?.streak} darkMode={store.isDarkMode} />
+                </Pressable>
+              </Link>
+            </Animated.View>
+          )}
+        </View>
 
         {/* Main Grid */}
         <View style={styles.grid}>
+          {/* Quêtes & Boutique (Haut) */}
+          <View style={styles.row}>
+            <Animated.View entering={FadeInUp.delay(120).duration(400)} style={styles.halfCardWrapper}>
+              <Link href="/quests" style={[styles.smallCard, { backgroundColor: store.isDarkMode ? 'rgba(28,18,5,0.88)' : 'rgba(255,247,237,0.85)', borderColor: 'rgba(234,179,8,0.3)' }]}>
+                <Trophy color="#B45309" size={28} />
+                <View>
+                  <Text style={[styles.smallCardTitle, { color: theme.text }]}>Quêtes</Text>
+                  <Text style={{ fontSize: 12, color: '#B45309', fontWeight: 'bold' }}>Récompenses</Text>
+                </View>
+              </Link>
+            </Animated.View>
+
+            <Animated.View entering={FadeInUp.delay(140).duration(400)} style={styles.halfCardWrapper}>
+              <Link href="/shop" style={[styles.smallCard, { backgroundColor: store.isDarkMode ? 'rgba(28,10,20,0.88)' : 'rgba(253,242,248,0.85)', borderColor: 'rgba(236,72,153,0.3)' }]}>
+                <Star color="#BE185D" size={28} />
+                <View>
+                  <Text style={[styles.smallCardTitle, { color: theme.text }]}>Boutique</Text>
+                  <Text style={{ fontSize: 12, color: '#BE185D', fontWeight: 'bold' }}>Cosmétiques</Text>
+                </View>
+              </Link>
+            </Animated.View>
+          </View>
+
           <Animated.View entering={FadeInUp.delay(150).duration(400)}>
-            <Link href="/daylink" style={[styles.mainCard, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
+            <Link href="/daylink" style={[styles.mainCard, { backgroundColor: store.isDarkMode ? 'rgba(5,22,20,0.88)' : 'rgba(240,253,250,0.85)', borderColor: 'rgba(20,184,166,0.3)' }]}>
               <Animated.View style={[styles.iconWrapper, { backgroundColor: theme.tint }, pulseStyle]}>
                 <CalendarHeart color="white" size={32} />
               </Animated.View>
@@ -195,13 +483,16 @@ export default function DashboardScreen() {
 
           {/* Questions Illimitées */}
           <Animated.View entering={FadeInUp.delay(220).duration(400)}>
-            <Link href="/unlimited" style={[styles.mainCard, { backgroundColor: 'rgba(168,85,247,0.08)', borderColor: 'rgba(168,85,247,0.25)' }]}>
+            <Pressable 
+              style={[styles.mainCard, { backgroundColor: store.isDarkMode ? 'rgba(20,8,30,0.88)' : 'rgba(250,245,255,0.85)', borderColor: 'rgba(168,85,247,0.3)' }]}
+              onPress={() => router.push('/unlimited' as any)}
+            >
               <View style={[styles.iconWrapper, { backgroundColor: '#A855F7' }]}>
                 <InfinityIcon color="white" size={32} />
               </View>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Questions Illimitées</Text>
-              <Text style={[styles.cardDesc, { color: theme.text }]}>Répondez à autant de questions que vous voulez 💫</Text>
-            </Link>
+              <Text style={[styles.cardDesc, { color: theme.text }]}>Répondez à autant de questions que vous voulez 💬</Text>
+            </Pressable>
           </Animated.View>
 
           {/* Titre Thèmes */}
@@ -211,46 +502,70 @@ export default function DashboardScreen() {
 
           <View style={styles.categoryGrid}>
             {[
-              { id: 'amour', title: 'Amour', icon: <Heart color="#EF4444" size={24} />, bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.3)' },
-              { id: 'fun', title: 'Fun', icon: <Smile color="#F59E0B" size={24} />, bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' },
-              { id: 'profond', title: 'Profond', icon: <Brain color="#3B82F6" size={24} />, bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.3)' },
-              { id: 'intime', title: 'Intime', icon: <Flame color="#EC4899" size={24} />, bg: 'rgba(236,72,153,0.1)', border: 'rgba(236,72,153,0.3)' },
-              { id: 'pile_ou_face', title: 'Tu préfères', icon: <Split color="#0EA5E9" size={24} />, bg: 'rgba(14,165,233,0.1)', border: 'rgba(14,165,233,0.3)' },
-              { id: 'famille', title: 'Famille', icon: <Home color="#10B981" size={24} />, bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.3)' },
-              { id: 'debat', title: 'Débat', icon: <MessageCircle color="#8B5CF6" size={24} />, bg: 'rgba(139,92,246,0.1)', border: 'rgba(139,92,246,0.3)' },
-              { id: 'futur', title: 'Futur', icon: <Rocket color="#6366F1" size={24} />, bg: 'rgba(99,102,241,0.1)', border: 'rgba(99,102,241,0.3)' },
-              { id: 'souvenir', title: 'Souvenir', icon: <Camera color="#14B8A6" size={24} />, bg: 'rgba(20,184,166,0.1)', border: 'rgba(20,184,166,0.3)' },
-              { id: 'reve', title: 'Rêve', icon: <Star color="#FCD34D" size={24} />, bg: 'rgba(252,211,77,0.1)', border: 'rgba(252,211,77,0.3)' },
-              { id: 'quotidien', title: 'Quotidien', icon: <Coffee color="#A8A29E" size={24} />, bg: 'rgba(168,162,158,0.1)', border: 'rgba(168,162,158,0.3)' },
-              { id: 'defi', title: 'Défi', icon: <Trophy color="#F97316" size={24} />, bg: 'rgba(249,115,22,0.1)', border: 'rgba(249,115,22,0.3)' },
-            ].map((cat, index) => (
-              <Animated.View key={cat.id} entering={FadeInUp.delay(300 + index * 25).duration(350)} style={styles.categoryCardWrapper}>
-                <Link href={`/unlimited?category=${cat.id}`} style={[styles.categoryCard, { backgroundColor: cat.bg, borderColor: cat.border }]}>
-                  {cat.icon}
-                  <Text style={styles.categoryCardTitle}>{cat.title}</Text>
-                </Link>
-              </Animated.View>
-            ))}
+              { id: 'amour', title: 'Amour', icon: <Heart color="#EF4444" size={24} />, bg: 'rgba(239,68,68,0.25)', bgDark: 'rgba(239,68,68,0.45)', border: 'rgba(239,68,68,0.5)', requires: null, rarity: 'Commun' },
+              { id: 'fun', title: 'Fun', icon: <Smile color="#F59E0B" size={24} />, bg: 'rgba(245,158,11,0.25)', bgDark: 'rgba(245,158,11,0.45)', border: 'rgba(245,158,11,0.5)', requires: 'amour', rarity: 'Commun' },
+              { id: 'profond', title: 'Profond', icon: <Brain color="#3B82F6" size={24} />, bg: 'rgba(59,130,246,0.25)', bgDark: 'rgba(59,130,246,0.45)', border: 'rgba(59,130,246,0.5)', requires: 'fun', rarity: 'Commun' },
+              { id: 'intime', title: 'Intime', icon: <Flame color="#BE185D" size={24} />, bg: 'rgba(236,72,153,0.25)', bgDark: 'rgba(236,72,153,0.45)', border: 'rgba(236,72,153,0.5)', requires: 'profond', rarity: 'Rare' },
+              { id: 'pile_ou_face', title: 'Tu préfères', icon: <Split color="#0EA5E9" size={24} />, bg: 'rgba(14,165,233,0.25)', bgDark: 'rgba(14,165,233,0.45)', border: 'rgba(14,165,233,0.5)', requires: 'intime', rarity: 'Rare' },
+              { id: 'famille', title: 'Famille', icon: <Home color="#10B981" size={24} />, bg: 'rgba(16,185,129,0.25)', bgDark: 'rgba(16,185,129,0.45)', border: 'rgba(16,185,129,0.5)', requires: 'pile_ou_face', rarity: 'Rare' },
+              { id: 'debat', title: 'Débat', icon: <MessageCircle color="#8B5CF6" size={24} />, bg: 'rgba(139,92,246,0.25)', bgDark: 'rgba(139,92,246,0.45)', border: 'rgba(139,92,246,0.5)', requires: 'famille', rarity: 'Rare' },
+              { id: 'futur', title: 'Futur', icon: <Rocket color="#6366F1" size={24} />, bg: 'rgba(99,102,241,0.25)', bgDark: 'rgba(99,102,241,0.45)', border: 'rgba(99,102,241,0.5)', requires: 'debat', rarity: 'Épique' },
+              { id: 'souvenir', title: 'Souvenir', icon: <Camera color="#14B8A6" size={24} />, bg: 'rgba(20,184,166,0.25)', bgDark: 'rgba(20,184,166,0.45)', border: 'rgba(20,184,166,0.5)', requires: 'futur', rarity: 'Épique' },
+              { id: 'reve', title: 'Rêve', icon: <Star color="#FCD34D" size={24} />, bg: 'rgba(252,211,77,0.25)', bgDark: 'rgba(252,211,77,0.45)', border: 'rgba(252,211,77,0.5)', requires: 'souvenir', rarity: 'Légendaire' },
+              { id: 'quotidien', title: 'Quotidien', icon: <Coffee color="#A8A29E" size={24} />, bg: 'rgba(168,162,158,0.25)', bgDark: 'rgba(168,162,158,0.45)', border: 'rgba(168,162,158,0.5)', requires: 'reve', rarity: 'Légendaire' },
+              { id: 'defi', title: 'Défi', icon: <Trophy color="#F97316" size={24} />, bg: 'rgba(249,115,22,0.25)', bgDark: 'rgba(249,115,22,0.45)', border: 'rgba(249,115,22,0.5)', requires: 'quotidien', rarity: 'Légendaire' },
+            ].map((cat, index) => {
+              // Vérifier si la catégorie requise a atteint 10 questions
+              const reqCount = cat.requires ? ((wallet as any)?.unlimitedStats?.[cat.requires] || 0) : 10;
+              const isLocked = cat.requires !== null && reqCount < 10;
+              const cardBg = store.isDarkMode
+                ? cat.bgDark.replace(/0\.45\)/, '0.72)')
+                : cat.bg.replace(/0\.25\)/, '0.52)');
+              
+              return (
+                <Animated.View key={cat.id} entering={FadeInUp.delay(300 + index * 25).duration(350)} style={styles.categoryCardWrapper}>
+                  {isLocked ? (
+                    <Pressable 
+                      style={[styles.categoryCard, { backgroundColor: store.isDarkMode ? 'rgba(38,28,27,0.88)' : '#F3F4F6', borderColor: store.isDarkMode ? 'rgba(80,60,58,0.6)' : '#E5E7EB' }]}
+                      onPress={() => setAlertMessage(`Il faut répondre à 10 questions de la catégorie "${cat.requires}" pour débloquer ce thème !`)}
+                    >
+                      <View style={{ opacity: 0.4, alignItems: 'center' }}>
+                        {cat.icon}
+                        <Text style={styles.categoryCardTitle}>{cat.title}</Text>
+                      </View>
+                      <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: store.isDarkMode ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.6)', borderRadius: 20 }}>
+                        <Lock color={store.isDarkMode ? '#80716F' : '#9CA3AF'} size={28} />
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: store.isDarkMode ? '#80716F' : '#6B7280', marginTop: 4 }}>{reqCount}/10</Text>
+                      </View>
+                    </Pressable>
+                  ) : (
+                    <Link href={`/unlimited?category=${cat.id}`} style={[styles.categoryCard, { backgroundColor: cardBg, borderColor: cat.border }]}>
+                      <View style={{ position: 'absolute', top: -8, right: -8, backgroundColor: cat.rarity === 'Légendaire' ? '#F59E0B' : cat.rarity === 'Épique' ? '#8B5CF6' : cat.rarity === 'Rare' ? '#3B82F6' : '#9CA3AF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, zIndex: 10, transform: [{ scale: 0.8 }] }}>
+                        <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{cat.rarity}</Text>
+                      </View>
+                      {cat.icon}
+                      {partnerAnsweredCategories.has(cat.id) && <View style={styles.partnerAnswerDot} />}
+                      <Text style={styles.categoryCardTitle}>{cat.title}</Text>
+                    </Link>
+                  )}
+                </Animated.View>
+              );
+            })}
           </View>
-        </View>
-      </ScrollView>
 
-      {/* ── Modal Mon Profil ───────────────────────────────────────────────── */}
+        </View>
+        </ScrollView>
+
+      {/* â”€â”€ Modal Mon Profil â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Modal visible={showMyProfile} transparent animationType="fade">
         <Pressable style={styles.modalOverlay} onPress={() => setShowMyProfile(false)}>
           <Animated.View entering={FadeInDown.duration(300)} style={styles.modalContent}>
             <Pressable style={styles.closeBtn} onPress={() => setShowMyProfile(false)}>
-              <X color="#A99693" size={24} />
+              <X color={theme.tabIconDefault} size={24} />
             </Pressable>
 
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
-              {store.avatar ? (
-                <Image source={{ uri: store.avatar }} style={styles.modalAvatar} />
-              ) : (
-                <View style={[styles.modalAvatar, { backgroundColor: theme.tint, justifyContent: 'center', alignItems: 'center' }]}>
-                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 36 }}>{store.pseudo?.charAt(0) || 'M'}</Text>
-                </View>
-              )}
+            <View style={{ alignItems: 'center', marginBottom: 20, transform: [{ scale: 1.5 }], marginTop: 10 }}>
+              {renderAvatar(store.avatar, store.pseudo || 'Moi', false, myProfile)}
             </View>
 
             <Text style={styles.modalPseudo}>{store.pseudo}</Text>
@@ -267,34 +582,34 @@ export default function DashboardScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── Modal Profil Partenaire ────────────────────────────────────────── */}
+      {/* â”€â”€ Modal Profil Partenaire â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Modal visible={showPartnerProfile} transparent animationType="fade">
         <Pressable style={styles.modalOverlay} onPress={() => setShowPartnerProfile(false)}>
           <Animated.View entering={FadeInDown.duration(300)} style={styles.modalContent}>
             <Pressable style={styles.closeBtn} onPress={() => setShowPartnerProfile(false)}>
-              <X color="#A99693" size={24} />
+              <X color={theme.tabIconDefault} size={24} />
             </Pressable>
 
             {partner && (
               <>
-                <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                  {partner.avatarUrl ? (
-                    <Image source={{ uri: partner.avatarUrl }} style={styles.modalAvatar} />
-                  ) : (
-                    <View style={[styles.modalAvatar, { backgroundColor: theme.gradientEnd, justifyContent: 'center', alignItems: 'center' }]}>
-                      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 36 }}>{partner.pseudo?.charAt(0) || 'P'}</Text>
-                    </View>
-                  )}
+                <View style={{ alignItems: 'center', marginBottom: 20, transform: [{ scale: 1.5 }], marginTop: 10 }}>
+                  {renderAvatar(partner.avatarUrl, partner.pseudo || 'P', false, partnerProfile)}
                 </View>
 
                 <Text style={styles.modalPseudo}>{partner.pseudo}</Text>
+                {partnerProfile?.selectedTag && getCosmeticById(partnerProfile.selectedTag) && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,106,136,0.1)', alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 16, marginRight: 6 }}>{getCosmeticById(partnerProfile.selectedTag)?.emoji}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#FF6A88' }}>{getCosmeticById(partnerProfile.selectedTag)?.name}</Text>
+                  </View>
+                )}
                 {partner.age && <Text style={styles.modalAge}>{partner.age} ans</Text>}
 
                 <View style={styles.modalPartnerBox}>
                   <HeartHandshake color={theme.tint} size={30} style={{ alignSelf: 'center', marginBottom: 10 }} />
                   <Text style={styles.modalPartnerText}>Ensemble depuis le</Text>
                   <Text style={[styles.modalDateText, { fontSize: 16, fontWeight: '700', color: theme.tint, marginTop: 4 }]}>
-                    {formattedDate} ❤️
+                    {formattedDate} {'\u2764\uFE0F'}
                   </Text>
                 </View>
               </>
@@ -302,46 +617,134 @@ export default function DashboardScreen() {
           </Animated.View>
         </Pressable>
       </Modal>
+      {/* Modal d'Alerte Custom */}
+      <Modal visible={!!alertMessage} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 320 }]}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 15 }}>
+              Oops !
+            </Text>
+            <Text style={{ fontSize: 15, color: theme.text, textAlign: 'center', marginBottom: 20 }}>
+              {alertMessage}
+            </Text>
+            <Pressable 
+              style={{ backgroundColor: '#FF6A88', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, alignSelf: 'center' }} 
+              onPress={() => setAlertMessage(null)}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>J'ai compris</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de nouveau cosmétique de série */}
+      <Modal visible={!!unlockedCosmetic} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 320, alignItems: 'center' }]}>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: theme.text, textAlign: 'center', marginBottom: 10 }}>Nouveau Cosmétique !</Text>
+            <Text style={{ fontSize: 16, color: theme.text, opacity: 0.8, textAlign: 'center', marginBottom: 20 }}>Ta série de {wallet?.streak} jours a débloqué :</Text>
+            
+            <View style={{ width: 120, height: 120, borderRadius: 24, overflow: 'hidden', marginBottom: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: theme.tint }}>
+              {unlockedCosmetic?.type === 'background' ? (
+                 unlockedCosmetic.image ? <ImageBackground source={unlockedCosmetic.image} style={{ width: '100%', height: '100%' }} /> : <LinearGradient colors={parseGradientColors(unlockedCosmetic.preview) as [string, string]} style={{ width: '100%', height: '100%' }} />
+              ) : unlockedCosmetic?.type === 'border' ? (
+                 unlockedCosmetic.image ? <Image source={unlockedCosmetic.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" /> : <View style={{ width: '70%', height: '70%', borderWidth: 5, borderRadius: 18, borderStyle: 'dashed', borderColor: parseGradientColors(unlockedCosmetic.preview)[0] }} />
+              ) : (
+                 <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' }}>
+                   <Text style={{ fontSize: 30 }}>{unlockedCosmetic?.emoji}</Text>
+                   <Text style={{ fontSize: 12, color: theme.text, marginTop: 5 }}>{unlockedCosmetic?.name}</Text>
+                 </View>
+              )}
+            </View>
+
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.tint, marginBottom: 25 }}>{unlockedCosmetic?.name}</Text>
+
+            <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+              <Pressable onPress={() => setUnlockedCosmetic(null)} style={{ flex: 1, paddingVertical: 14, backgroundColor: theme.glassBackground, borderRadius: 20, alignItems: 'center' }}>
+                <Text style={{ color: theme.text, fontWeight: 'bold' }}>Fermer</Text>
+              </Pressable>
+              <Pressable onPress={() => { setUnlockedCosmetic(null); router.push('/shop' as any); }} style={{ flex: 1, paddingVertical: 14, backgroundColor: theme.tint, borderRadius: 20, alignItems: 'center' }}>
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>Voir Boutique</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      </View>
     </ImageBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', overflow: 'hidden' },
-  safeArea: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 40 : 60, width: '100%', maxWidth: 500, alignSelf: 'center' },
+const getStyles = (theme: any) => StyleSheet.create({
+  headerBanner: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 20, borderRadius: 30, marginBottom: 20 },
+  container: { flex: 1, width: '100%', height: '100%', minHeight: Platform.OS === 'web' ? '100vh' : '100%', overflow: 'hidden', backgroundColor: 'transparent' },
+  safeArea: { flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  scrollContent: { padding: 20, paddingTop: Platform.OS === 'web' ? 40 : 60, paddingBottom: 100 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 },
-  userAvatar: { width: 70, height: 70, borderRadius: 35, borderWidth: 3, borderColor: 'white', overflow: 'hidden' },
+  userAvatar: { width: 70, height: 70, borderRadius: 4, borderWidth: 3, borderColor: 'white', overflow: 'hidden' },
   welcome: { fontSize: 28, fontWeight: '900', marginBottom: 6 },
   streak: { fontSize: 16, fontWeight: 'bold' },
-  partnerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start' },
-  partnerAvatar: { width: 28, height: 28, borderRadius: 14, marginRight: 8, overflow: 'hidden' },
-  partnerText: { fontSize: 14, fontWeight: '700', color: '#4A3B39' },
+  partnerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.glassBackground, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start' },
+  partnerAvatar: { width: 28, height: 28, borderRadius: 4, marginRight: 8, overflow: 'hidden' },
+  partnerText: { fontSize: 14, fontWeight: '700', color: theme.text },
   grid: { flex: 1, gap: 20 },
   mainCard: { padding: 24, borderRadius: 24, borderWidth: 1, alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5 },
   iconWrapper: { padding: 20, borderRadius: 24, marginBottom: 16, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
   cardTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
   cardDesc: { fontSize: 16, opacity: 0.7 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   halfCardWrapper: { flex: 1 },
-  smallCard: { padding: 20, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 8, height: 130, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
-  smallCardTitle: { fontSize: 16, fontWeight: 'bold', marginTop: 5 },
+  smallCard: { flexDirection: 'row', padding: 16, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 12, height: 80, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  smallCardTitle: { fontSize: 16, fontWeight: 'bold' },
   lockText: { fontSize: 13, fontWeight: 'bold', opacity: 0.8 },
   
   sectionHeader: { marginTop: 10, marginBottom: 15, paddingHorizontal: 5 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#4A3B39' },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
   categoryCardWrapper: { width: '48%', marginBottom: 12 },
   categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5 },
-  categoryCardTitle: { fontSize: 15, fontWeight: '700', color: '#4A3B39' },
+  categoryCardTitle: { fontSize: 15, fontWeight: '700', color: theme.text },
+  partnerAnswerDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#16A34A', borderWidth: 3, borderColor: '#FFFFFF', position: 'absolute', top: 5, right: 5, shadowColor: '#16A34A', shadowOpacity: 0.55, shadowRadius: 5, elevation: 5 },
   settingsButton: { padding: 10 },
   // Modaux
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { width: '100%', maxWidth: 400, backgroundColor: '#FFF5F2', padding: 30, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10, position: 'relative' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { width: '100%', maxWidth: 400, backgroundColor: theme.card, padding: 30, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10, position: 'relative' },
   closeBtn: { position: 'absolute', top: 10, right: 10, padding: 15, zIndex: 10 },
-  modalAvatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: 'white', overflow: 'hidden' },
-  modalPseudo: { fontSize: 28, fontWeight: '900', color: '#4A3B39', textAlign: 'center', marginBottom: 5 },
-  modalAge: { fontSize: 16, color: '#A99693', textAlign: 'center', marginBottom: 30, fontWeight: 'bold' },
-  modalPartnerBox: { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 20, padding: 20, alignItems: 'center' },
-  modalPartnerText: { fontSize: 18, color: '#4A3B39', textAlign: 'center', marginBottom: 5 },
-  modalDateText: { fontSize: 14, color: '#A99693', textAlign: 'center', fontStyle: 'italic' },
+  modalAvatar: { width: 120, height: 120, borderRadius: 28, borderWidth: 4, borderColor: 'white', overflow: 'hidden' },
+  modalPseudo: { fontSize: 28, fontWeight: '900', color: theme.text, textAlign: 'center', marginBottom: 5 },
+  modalAge: {
+    fontSize: 16,
+    color: theme.tabIconDefault,
+    textAlign: 'center',
+    marginBottom: 30,
+    fontWeight: 'bold',
+  },
+  modalPartnerBox: {
+    backgroundColor: theme.glassBackground,
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+  },
+  modalPartnerText: {
+    fontSize: 18,
+    color: theme.text,
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  modalDateText: {
+    fontSize: 14,
+    color: theme.tabIconDefault,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
 });
+
+
+
+
+
+
+
+
+

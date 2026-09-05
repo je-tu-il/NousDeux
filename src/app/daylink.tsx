@@ -1,17 +1,24 @@
-import React from 'react';
-import { StyleSheet, ImageBackground, View, Platform } from 'react-native';
 import { Link } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
+import { ImageBackground, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import DaylinkComponent from '@/components/Daylink';
 import { Colors } from '@/constants/Colors';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
+import { useOnboardingStore } from '@/store/onboardingStore';
 
 export default function DaylinkScreen() {
+  const store = useOnboardingStore();
+  const { width: windowWidth } = useWindowDimensions();
+  const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));
+
   return (
     <ImageBackground 
-      source={require('../../assets/images/bloomy_warm_background.png')} 
+      source={bgSource} 
       style={styles.container}
       resizeMode="cover"
+      imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}
+      imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}
     >
       <View style={styles.safeArea}>
         {/* Header avec Bouton Retour */}
@@ -32,6 +39,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: '100%',
+    height: '100%',
+    backgroundColor: 'transparent',
+    minHeight: Platform.OS === 'web' ? '100vh' : '100%',
     overflow: 'hidden',
   },
   safeArea: {

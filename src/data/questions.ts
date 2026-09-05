@@ -1,5 +1,5 @@
 /**
- * Base de données des questions Bloomy
+ * Base de données des questions NousDeux
  *
  * Comment ajouter une question :
  *   1. Copie une ligne existante
@@ -45,7 +45,7 @@ export interface Question {
   category: QuestionCategory;
 }
 
-export const QUESTIONS: Question[] = [
+export const QUESTIONS = ([
 { id: "q_gen_amour_001", text: "Quel est le tout premier détail physique qui t'a attiré chez moi ?", category: "amour" },
 { id: "q_gen_amour_002", text: "À quel moment précis as-tu su que tu étais en train de tomber amoureux/amoureuse de moi ?", category: "amour" },
 { id: "q_gen_amour_003", text: "Quelle est ma tenue dans laquelle tu me trouves le plus irrésistible ?", category: "amour" },
@@ -3346,7 +3346,7 @@ export const QUESTIONS: Question[] = [
 { id: "q_gen_souvenir_298", text: "Tu te souviens de ce moment suspendu où l'on a su que notre relation était unique ?", category: "souvenir" },
 { id: "q_gen_souvenir_299", text: "Te rappelles-tu de l'instant précis où tu as eu envie de construire ton avenir avec moi ?", category: "souvenir" },
 { id: "q_gen_souvenir_300", text: "Si tu devais résumer tous nos souvenirs en un seul moment, te souviens-tu duquel tu choisirais ?", category: "souvenir" },
-];
+]) as Question[];
 
 // ─── Utilitaires ───────────────────────────────────────────────────────────────
 

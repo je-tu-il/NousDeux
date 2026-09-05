@@ -42,7 +42,7 @@ export default function AgeScreen() {
   const ageOptions = Array.from({ length: 88 }, (_, i) => String(i + 13));
 
   return (
-    <ImageBackground source={require('../../../assets/images/bloomy_warm_background.png')} style={styles.container} resizeMode="cover">
+    <ImageBackground source={require('../../../assets/images/nousdeux_warm_background.png')} style={styles.container} resizeMode="cover">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
         
         {/* Back Button */}
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: '800', marginBottom: 10, textAlign: 'center' },
   subtitle: { fontSize: 16, opacity: 0.7, textAlign: 'center', marginBottom: 40 },
   pickerContainer: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 20, overflow: 'hidden', borderWidth: 2, borderColor: '#FF9A8B', height: 200, justifyContent: 'center', zIndex: 100, elevation: 10 },
-  picker: { width: 150, height: 200, alignSelf: 'center', backgroundColor: 'transparent', border: 'none', zIndex: 100 },
+  picker: { width: 150, height: 200, alignSelf: 'center', backgroundColor: 'transparent', borderWidth: 0, zIndex: 100 },
   footer: { alignItems: 'center', paddingBottom: Platform.OS === 'web' ? 40 : 60 },
   nextButton: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 15, elevation: 10 },
 });

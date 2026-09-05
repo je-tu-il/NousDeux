@@ -24,11 +24,10 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: bloomy-app/package-lock.json
+          cache-dependency-path: package-lock.json
 
       # ── 3. Installer les dépendances ───────────────────────────────────────
       - name: Install dependencies
-        working-directory: bloomy-app
         run: npm ci
 
       # ── 4. Installer EAS CLI ───────────────────────────────────────────────
@@ -40,7 +39,6 @@ jobs:
       # Sans compte Apple Developer, EAS utilisera un certificat de dev ad-hoc
       # que tu pourras installer manuellement via AltStore, Sideloadly, etc.
       - name: Build iOS IPA (EAS)
-        working-directory: bloomy-app
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
@@ -59,4 +57,4 @@ jobs:
       #       • ou EAS sur appareil (nécessite Expo Go enregistré)
       #
       # Le build et le lien de téléchargement sont disponibles sur :
-      #   https://expo.dev/accounts/[ton-compte]/projects/bloomy-app/builds
+      #   https://expo.dev/accounts/[ton-compte]/projects/nousdeux/builds

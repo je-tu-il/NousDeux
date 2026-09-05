@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ImageBackground } from 'react-native';
 import { Colors } from '@/constants/Colors';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
+import { useOnboardingStore } from '@/store/onboardingStore';
 import { LinearGradient } from 'expo-linear-gradient';
-import { HeartHandshake } from 'lucide-react-native';
-import Animated, { FadeInUp } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import { HeartHandshake } from 'lucide-react-native';
+import { useState } from 'react';
+import { ActivityIndicator, ImageBackground, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 
 export default function PairingScreen() {
   const [code, setCode] = useState("");
   const [myCode, setMyCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const theme = Colors.light;
+  const store = useOnboardingStore(state => state);
+  const { width: windowWidth } = useWindowDimensions();
+  const theme = store.isDarkMode ? Colors.dark : Colors.light;
+  const styles = getStyles(theme);
 
   const handleGenerateCode = async () => {
     setLoading(true);
@@ -37,13 +42,13 @@ export default function PairingScreen() {
   };
 
   return (
-    <ImageBackground source={require('../../assets/images/bloomy_warm_background.png')} style={styles.container} resizeMode="cover">
+    <ImageBackground source={getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'))} style={styles.container} resizeMode="cover">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
         <Animated.View entering={FadeInUp.duration(800).springify()} style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
           
           <LinearGradient colors={[theme.gradientStart, theme.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
             <HeartHandshake color="white" size={28} />
-            <Text style={styles.headerTitle}>Connexion Bloomy</Text>
+            <Text style={styles.headerTitle}>Connexion NousDeux</Text>
           </LinearGradient>
 
           <View style={styles.content}>
@@ -75,7 +80,7 @@ export default function PairingScreen() {
               <TextInput 
                 style={[styles.input, { color: theme.text, borderColor: theme.cardBorder, backgroundColor: 'rgba(255,255,255,0.6)' }]} 
                 placeholder="Ex: A1B2C3"
-                placeholderTextColor="#A99693"
+                placeholderTextColor={theme.tabIconDefault}
                 value={code}
                 onChangeText={(t) => setCode(t.toUpperCase())}
                 maxLength={6}
@@ -92,7 +97,7 @@ export default function PairingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
   keyboardView: { flex: 1, justifyContent: 'center', padding: 20, width: '100%', maxWidth: 500, alignSelf: 'center' },
   card: { borderRadius: 24, borderWidth: 1, overflow: 'hidden', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10, backgroundColor: 'rgba(255, 255, 255, 0.8)' },
@@ -113,3 +118,7 @@ const styles = StyleSheet.create({
   button: { padding: 18, borderRadius: 16, alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
   buttonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 });
+
+
+
+
