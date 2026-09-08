@@ -37,8 +37,8 @@ export default function CalendarScreen() {
     <ImageBackground
       source={bgSource}
       style={styles.container}
-      resizeMode={backgroundResizeMode}
-      imageStyle={{ objectPosition: windowWidth < 600 ? 'center top' : 'center' } as any}
+      resizeMode="cover"
+      imageStyle={{ objectPosition: 'center top' } as any}
     >
       <View style={styles.safeArea}>
         {/* En-tête */}
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, width: '100%' },
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'web' ? 30 : 60,
+    paddingTop: Platform.OS === 'web' ? 18 : 44,
     paddingHorizontal: 20,
     paddingBottom: 20,
     width: '100%',

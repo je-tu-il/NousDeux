@@ -47,7 +47,9 @@ import { useOnboardingStore } from '../store/onboardingStore';
 
 /** Prix d'un cosmetic (0 si gratuit/streak/quête) */
 function getPrice(unlock: UnlockCondition): number {
-  if (unlock.type === 'purchase') return (unlock as any).price ?? 0;
+  // Les gains de la roulette permettent plusieurs achats par jour : réserver
+  // les cosmétiques à une progression de plusieurs jours.
+  if (unlock.type === 'purchase') return Math.round(((unlock as any).price ?? 0) * 5);
   return 0;
 }
 

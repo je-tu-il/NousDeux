@@ -5,14 +5,14 @@ import StreakCalendar from '@/components/StreakCalendar';
 import { Colors } from '@/constants/Colors';
 import { Cosmetic, COSMETICS, getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
 import { cacheWallet, computeStreakCached, getCachedWallet, getUserProfile, getWallet, invalidateStreakCache, syncUnlimitedStats, updateWalletStreak, UserProfile } from '@/lib/economy';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link, router } from 'expo-router';
+import { Link, router, useSegments } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot } from 'firebase/firestore';
 import { Brain, CalendarHeart, Camera, Coffee, Flame, Heart, HeartHandshake, Home, Infinity as InfinityIcon, Lock, MessageCircle, Rocket, Settings, Smile, Split, Star, Trophy, X } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
@@ -21,9 +21,19 @@ type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; ag
 export default function DashboardScreen() {
   const store = useOnboardingStore((state) => state);
   const { width: windowWidth } = useWindowDimensions();
+  const segments = useSegments();
+  const redirectGuardRef = useRef<string | null>(null);
+
+  const redirectToSetup = (route: '/onboarding/sync' | '/onboarding/date') => {
+    const current = segments[segments.length - 1];
+    if (current === 'sync' || current === 'date') return;
+    if (redirectGuardRef.current === route) return;
+    redirectGuardRef.current = route;
+    router.replace(route);
+  };
   
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
-  const styles = getStyles(theme);
+  const styles: any = getStyles(theme);
   const background = getCosmeticById(store.selectedBackground);
   const backgroundSource = getCosmeticImage(background, store.isDarkMode) || (store.isDarkMode
     ? require('../../assets/images/nousdeux_dark_background.png')
@@ -31,7 +41,15 @@ export default function DashboardScreen() {
   const backgroundResizeMode = 'cover';
 
   const [unlockedCosmetic, setUnlockedCosmetic] = useState<Cosmetic | null>(null);
-  const [partner, setPartner] = useState<PartnerData | null>(null);
+  const [partner, setPartner] = useState<PartnerData | null>(() => (
+    store.partnerUid && store.partnerPseudo
+      ? {
+          pseudo: store.partnerPseudo,
+          avatarUrl: store.partnerAvatar ?? undefined,
+          coupleId: [store.uid!, store.partnerUid].sort().join('_'),
+        }
+      : null
+  ));
   const [partnerLeft, setPartnerLeft] = useState(false);
   const [showMyProfile, setShowMyProfile] = useState(false);
   const [showPartnerProfile, setShowPartnerProfile] = useState(false);
@@ -82,13 +100,19 @@ export default function DashboardScreen() {
         const data = docSnap.data();
 
         if (!data.linkedTo) {
+          if (partnerUnsub) {
+            partnerUnsub();
+            partnerUnsub = null;
+          }
+          setPartner(null);
+          setPartnerLeft(true);
+          store.clearPartnerCache();
           setIsLoading(false);
-          router.replace('/onboarding/sync');
           return;
         }
         if (!data.coupleDate) {
+          setPartnerLeft(false);
           setIsLoading(false);
-          router.replace('/onboarding/date');
           return;
         }
 
@@ -97,29 +121,42 @@ export default function DashboardScreen() {
           partnerUnsub = onSnapshot(doc(db, 'users', data.linkedTo), (pSnap) => {
             if (pSnap.exists()) {
               const pData = pSnap.data();
-              if (pData.linkedTo === store.uid) {
-                store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
-                setPartner({
-                  pseudo: pData.pseudo,
-                  avatarUrl: pData.avatarUrl,
-                  coupleDate: data.coupleDate,
-                  age: pData.age,
-                  coupleId: [store.uid!, data.linkedTo].sort().join('_'),
-                });
-                setPartnerLeft(false);
-              } else {
-                setPartner(null);
-                setPartnerLeft(true);
-              }
+              // The current user's linkedTo is the source of truth for this
+              // screen. Do not hide a real partner because the reverse link is
+              // temporarily stale on one device.
+              store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
+              setPartner({
+                pseudo: pData.pseudo,
+                avatarUrl: pData.avatarUrl,
+                coupleDate: data.coupleDate,
+                age: pData.age,
+                coupleId: [store.uid!, data.linkedTo].sort().join('_'),
+              });
+              setPartnerLeft(false);
             } else {
-              setPartner(null);
-              setPartnerLeft(true);
+              // Keep the cached partner while Firestore reconnects. A missing
+              // snapshot is not enough evidence that the account was deleted.
+              setIsLoading(false);
             }
+            setIsLoading(false);
+          }, (error) => {
             setIsLoading(false);
           });
         }
       } else {
         setIsLoading(false);
+      }
+    }, (error) => {
+      if (error.code === 'permission-denied' || error.code === 'not-found') {
+        void auth.signOut().finally(() => {
+          store.setUid(null);
+          store.setPseudo('');
+          store.setAge('');
+          store.setAvatar(null);
+          store.setSynced(false);
+          router.replace('/onboarding/login');
+          if (Platform.OS === 'web') window.location.reload();
+        });
       }
     });
 
@@ -146,49 +183,39 @@ export default function DashboardScreen() {
   }, [store.uid, partner?.coupleId]);
 
   useEffect(() => {
-    if (!partner?.coupleId || !store.uid) return;
+    const currentUid = store.uid;
+    if (!partner?.coupleId || !currentUid) return;
+    const coupleId = partner.coupleId;
     const loadPartnerAnswers = async () => {
-      const partnerId = partner.coupleId!.replace(store.uid!, '').replace('_', '');
-      const dailySnap = await getDocs(collection(db, 'couples', partner.coupleId!, 'daily'));
+      const partnerId = coupleId.replace(currentUid, '').replace('_', '');
+      const dailySnap = await getDocs(collection(db, 'couples', coupleId, 'daily'));
       const answeredCategories = new Set<string>();
       await Promise.all(dailySnap.docs.map(async (dailyDoc) => {
         const category = dailyDoc.data().category as string | undefined;
         if (!category || category === 'all') return;
-        const answerSnap = await getDocs(collection(db, 'couples', partner.coupleId!, 'daily', dailyDoc.id, 'answers'));
+        const answerSnap = await getDocs(collection(db, 'couples', coupleId, 'daily', dailyDoc.id, 'answers'));
         const partnerAnswered = answerSnap.docs.some(answer => answer.id === partnerId);
         const myAnswered = answerSnap.docs.some(answer => answer.id === store.uid);
         if (partnerAnswered && !myAnswered) answeredCategories.add(category);
       }));
       setPartnerAnsweredCategories(answeredCategories);
     };
-    const answerListeners: Array<() => void> = [];
-    const dailyQuery = collection(db, 'couples', partner.coupleId!, 'daily');
-    const unsubscribeDaily = onSnapshot(dailyQuery, (dailySnapshot) => {
-      answerListeners.forEach(unsubscribe => unsubscribe());
-      answerListeners.length = 0;
-      invalidateStreakCache(partner.coupleId!);
-      dailySnapshot.docs.forEach(dailyDoc => {
-        if (dailyDoc.data().category && dailyDoc.data().category !== 'all') {
-          answerListeners.push(onSnapshot(
-            collection(db, 'couples', partner.coupleId!, 'daily', dailyDoc.id, 'answers'),
-            () => {
-              invalidateStreakCache(partner.coupleId!);
-              computeStreakCached(partner.coupleId!, true).then((streak) => {
-                setWallet(current => current ? { ...current, streak } : current);
-              }).catch(() => {});
-              loadPartnerAnswers().catch(() => setPartnerAnsweredCategories(new Set()));
-            },
-          ));
-        }
-      });
+    const dailyQuery = collection(db, 'couples', coupleId, 'daily');
+    const unsubscribeDaily = onSnapshot(dailyQuery, () => {
+      invalidateStreakCache(coupleId);
       loadPartnerAnswers().catch(() => setPartnerAnsweredCategories(new Set()));
-      computeStreakCached(partner.coupleId!, true).then((streak) => {
-        setWallet(current => current ? { ...current, streak } : current);
+      computeStreakCached(coupleId, true).then((streak) => {
+        setWallet((current: any) => current ? { ...current, streak } : current);
       }).catch(() => {});
+    }, (error) => {
+      if (error.code === 'permission-denied' || error.code === 'not-found') {
+        // Couple subcollections can be unavailable briefly while the second
+        // device finishes syncing. Keep the relationship and cached data.
+        setWallet((current: any) => current ?? { petals: 0, streak: 0, lastClaimDate: '', totalEarned: 0 });
+      }
     });
     return () => {
       unsubscribeDaily();
-      answerListeners.forEach(unsubscribe => unsubscribe());
     };
   }, [partner?.coupleId, store.uid]);
 
@@ -213,24 +240,29 @@ export default function DashboardScreen() {
   // Ecoute du Wallet en temps réel + correction streak
   useEffect(() => {
     if (!partner?.coupleId) return;
-    syncUnlimitedStats(partner.coupleId).then((stats) => {
-      setWallet((current) => current ? { ...current, unlimitedStats: stats } : current);
+    const coupleId = partner.coupleId;
+    syncUnlimitedStats(coupleId).then((stats) => {
+      setWallet((current: any) => current ? { ...current, unlimitedStats: stats } : current);
     }).catch(() => {});
-    const cachedWallet = getCachedWallet(partner.coupleId);
+    const cachedWallet = getCachedWallet(coupleId);
     if (cachedWallet) setWallet(cachedWallet);
-    const walletRef = doc(db, `couples/${partner.coupleId}/economy/wallet`);
+    const walletRef = doc(db, `couples/${coupleId}/economy/wallet`);
     const unsub = onSnapshot(walletRef, async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const calculatedStreak = await computeStreakCached(partner.coupleId);
+        const calculatedStreak = await computeStreakCached(coupleId);
         const nextWallet = { ...(data as any), streak: calculatedStreak };
-        cacheWallet(partner.coupleId!, nextWallet);
+        cacheWallet(coupleId, nextWallet);
         setWallet(nextWallet);
-        if (data.streak !== calculatedStreak) updateWalletStreak(partner.coupleId).catch(console.error);
+        if (data.streak !== calculatedStreak) updateWalletStreak(coupleId).catch(console.error);
       } else {
-        const sharedWallet = await getWallet(partner.coupleId);
-        cacheWallet(partner.coupleId!, sharedWallet);
+        const sharedWallet = await getWallet(coupleId);
+        cacheWallet(coupleId, sharedWallet);
         setWallet(sharedWallet);
+      }
+    }, (error) => {
+      if (error.code === 'permission-denied' || error.code === 'not-found') {
+        setWallet((current: any) => current ?? { petals: 0, streak: 0, lastClaimDate: '', totalEarned: 0 });
       }
     });
     return () => unsub();
@@ -253,7 +285,7 @@ export default function DashboardScreen() {
 
   if (isLoading) {
     return (
-      <ImageBackground source={backgroundSource} style={styles.container} resizeMode={backgroundResizeMode} imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
+      <ImageBackground source={backgroundSource} style={styles.container as any} resizeMode={backgroundResizeMode} imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
         <View style={[styles.safeArea, { overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }]}> 
           <ActivityIndicator color={theme.tint} size="large" />
           <Text style={{ color: theme.text, marginTop: 14 }}>Chargement du Dashboard...</Text>
@@ -390,13 +422,22 @@ export default function DashboardScreen() {
           {/* BLOC 1: EN COUPLE AVEC (Plus large, flex: 2) */}
           <Pressable 
             style={{ flex: 2, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
-            onPress={() => setShowPartnerProfile(true)}
+            onPress={() => { if (partner && !partnerLeft) setShowPartnerProfile(true); }}
+            disabled={!partner || partnerLeft}
+            accessibilityState={{ disabled: !partner || partnerLeft }}
           >
-            {renderAvatar(partner?.avatarUrl, partner?.pseudo || '?', true, partnerProfile)}
+            {partner && !partnerLeft
+              ? renderAvatar(partner.avatarUrl, partner.pseudo, true, partnerProfile)
+              : <View style={[styles.partnerAvatar, { backgroundColor: 'rgba(120,110,110,0.35)', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.tabIconDefault, fontSize: 18 }}>–</Text></View>}
             <View style={{ marginLeft: 10, flex: 1 }}>
-              <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>En couple avec</Text>
-              <Text style={{ color: '#FF6A88', fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner?.pseudo}</Text>
-              {partnerProfile?.selectedTag && getCosmeticById(partnerProfile.selectedTag) && (
+              <Text style={{ color: partner && !partnerLeft ? theme.text : theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>{partner && !partnerLeft ? 'En couple avec' : 'Mode solo'}</Text>
+              <Text style={{ color: partner && !partnerLeft ? '#FF6A88' : theme.tabIconDefault, fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner && !partnerLeft ? partner.pseudo : 'Partenaire indisponible'}</Text>
+              {(!partner || partnerLeft) && (
+                <Pressable onPress={() => router.push('/onboarding/sync')} style={{ marginTop: 5, alignSelf: 'flex-start' }}>
+                  <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>Entrer un code partenaire</Text>
+                </Pressable>
+              )}
+              {partner && !partnerLeft && partnerProfile?.selectedTag && getCosmeticById(partnerProfile.selectedTag) && (
                 <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 106, 136, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 106, 136, 0.3)' }}>
                   <Text style={{ fontSize: 13, color: '#FF6A88', fontWeight: '800' }} numberOfLines={1}>
                     {getCosmeticById(partnerProfile.selectedTag)?.emoji} {getCosmeticById(partnerProfile.selectedTag)?.name}
@@ -527,7 +568,22 @@ export default function DashboardScreen() {
                   {isLocked ? (
                     <Pressable 
                       style={[styles.categoryCard, { backgroundColor: store.isDarkMode ? 'rgba(38,28,27,0.88)' : '#F3F4F6', borderColor: store.isDarkMode ? 'rgba(80,60,58,0.6)' : '#E5E7EB' }]}
-                      onPress={() => setAlertMessage(`Il faut répondre à 10 questions de la catégorie "${cat.requires}" pour débloquer ce thème !`)}
+                      onPress={() => {
+                        const requiredCategory = [
+                          { id: 'amour', title: 'Amour' },
+                          { id: 'fun', title: 'Fun' },
+                          { id: 'profond', title: 'Profond' },
+                          { id: 'intime', title: 'Intime' },
+                          { id: 'pile_ou_face', title: 'Tu préfères' },
+                          { id: 'famille', title: 'Famille' },
+                          { id: 'debat', title: 'Débat' },
+                          { id: 'futur', title: 'Futur' },
+                          { id: 'souvenir', title: 'Souvenir' },
+                          { id: 'reve', title: 'Rêve' },
+                          { id: 'quotidien', title: 'Quotidien' },
+                        ].find(item => item.id === cat.requires)?.title ?? cat.requires;
+                        setAlertMessage(`Il faut répondre à 10 questions de la catégorie "${requiredCategory}" pour débloquer ce thème !`);
+                      }}
                     >
                       <View style={{ opacity: 0.4, alignItems: 'center' }}>
                         {cat.icon}
@@ -678,7 +734,7 @@ export default function DashboardScreen() {
 
 const getStyles = (theme: any) => StyleSheet.create({
   headerBanner: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 20, borderRadius: 30, marginBottom: 20 },
-  container: { flex: 1, width: '100%', height: '100%', minHeight: Platform.OS === 'web' ? '100vh' : '100%', overflow: 'hidden', backgroundColor: 'transparent' },
+  container: { flex: 1, width: '100%', height: '100%', minHeight: Platform.OS === 'web' ? 700 : 0, overflow: 'hidden', backgroundColor: 'transparent' },
   safeArea: { flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' },
   scrollContent: { padding: 20, paddingTop: Platform.OS === 'web' ? 40 : 60, paddingBottom: 100 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 },
@@ -739,12 +795,3 @@ const getStyles = (theme: any) => StyleSheet.create({
     fontStyle: 'italic',
   },
 });
-
-
-
-
-
-
-
-
-

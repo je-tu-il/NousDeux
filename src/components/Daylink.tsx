@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { CheckCircle2, Clock, Heart, Unlock } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -40,6 +41,20 @@ function todayKey(): string {
 function coupleId(uid1: string, uid2: string): string {
   return [uid1, uid2].sort().join('_');
 }
+
+const CATEGORY_LABELS: Record<string, string> = {
+  amour: 'Amour',
+  fun: 'Fun',
+  profond: 'Profond',
+  intime: 'Intime',
+  famille: 'Famille',
+  debat: 'Débat',
+  futur: 'Futur',
+  souvenir: 'Souvenir',
+  reve: 'Rêve',
+  quotidien: 'Quotidien',
+  defi: 'Défi',
+};
 
 async function pickDailyQuestion(cId: string, slotKey: string): Promise<string> {
   return runTransaction(db, async (tx) => {
@@ -95,6 +110,7 @@ export default function Daylink() {
 
   const [question, setQuestion]             = useState<Question | null>(null);
   const [loadingQuestion, setLoading]       = useState(true);
+  const [loadError, setLoadError]           = useState<string | null>(null);
   const [partnerUid, setPartnerUid]         = useState<string | null>(null);
   const [partnerPseudo, setPartnerPseudo]   = useState('Partenaire');
   const [cId, setCId]                       = useState('');
@@ -112,44 +128,58 @@ export default function Daylink() {
 
   // ── Chargement de la question ─────────────────────────────────────────────
   useEffect(() => {
-    if (!myUid) return;
+    if (!myUid) {
+      setLoadError('Session expirée. Reconnecte-toi pour charger la question du jour.');
+      setLoading(false);
+      return;
+    }
     const init = async () => {
       setLoading(true);
+      setLoadError(null);
+      try {
+        const myDocSnap = await getDoc(doc(db, 'users', myUid));
+        if (!myDocSnap.exists()) throw new Error('Profil utilisateur introuvable.');
+        const pUid = myDocSnap.data().linkedTo as string | undefined;
+        if (!pUid) throw new Error('Le compte partenaire n’est pas encore synchronisé.');
+        setPartnerUid(pUid);
 
-      const myDocSnap = await getDoc(doc(db, 'users', myUid));
-      if (!myDocSnap.exists()) return;
-      const pUid = myDocSnap.data().linkedTo as string | undefined;
-      if (!pUid) return;
-      setPartnerUid(pUid);
+        const coupleKey = coupleId(myUid, pUid);
+        setCId(coupleKey);
 
-      const coupleKey = coupleId(myUid, pUid);
-      setCId(coupleKey);
+        const reads = Promise.all([
+          getDoc(doc(db, 'users', pUid)),
+          pickDailyQuestion(coupleKey, slotKey),
+          getDoc(doc(db, 'couples', coupleKey, 'daily', slotKey, 'answers', myUid)),
+          getDoc(doc(db, 'couples', coupleKey, 'daily', slotKey, 'answers', pUid)),
+        ]);
+        const timeout = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('TIMEOUT')), 8000);
+        });
+        const [pDoc, questionId, myAns, pAns] = await Promise.race([reads, timeout]);
 
-      // Paralléliser : partnerDoc + question + réponses
-      const [pDoc, questionId, myAns, pAns] = await Promise.all([
-        getDoc(doc(db, 'users', pUid)),
-        pickDailyQuestion(coupleKey, slotKey),
-        getDoc(doc(db, 'couples', coupleKey, 'daily', slotKey, 'answers', myUid)),
-        getDoc(doc(db, 'couples', coupleKey, 'daily', slotKey, 'answers', pUid)),
-      ]);
+        if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
+        setQuestion(getById(questionId) ?? null);
 
-      if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
-      setQuestion(getById(questionId) ?? null);
-
-      if (myAns.exists()) {
-        setIsSubmitted(true);
-        isSubmittedRef.current = true;
-        setMyAnswer(await safeDecrypt(myAns.data(), coupleKey));
-      }
-
-      if (pAns.exists()) {
-        setPartnerHasAnswered(true);
-        if (isSubmittedRef.current) {
-          setPartnerAnswer(await safeDecrypt(pAns.data(), coupleKey));
+        if (myAns.exists()) {
+          setIsSubmitted(true);
+          isSubmittedRef.current = true;
+          setMyAnswer(await safeDecrypt(myAns.data(), coupleKey));
         }
-      }
 
-      setLoading(false);
+        if (pAns.exists()) {
+          setPartnerHasAnswered(true);
+          if (isSubmittedRef.current) {
+            setPartnerAnswer(await safeDecrypt(pAns.data(), coupleKey));
+          }
+        }
+      } catch (error) {
+        console.error('Daylink load failed:', error);
+        setLoadError(error instanceof Error && error.message === 'TIMEOUT'
+          ? 'Le chargement prend trop de temps. Vérifie ta connexion puis réessaie.'
+          : 'Impossible de charger la question du jour. Vérifie la synchronisation et réessaie.');
+      } finally {
+        setLoading(false);
+      }
     };
     init();
   }, [myUid]);
@@ -230,8 +260,11 @@ export default function Daylink() {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 30 }]}>
         <Text style={{ color: theme.text, textAlign: 'center', opacity: 0.6 }}>
-          Impossible de charger la question.{'\n'}Vérifie ta connexion.
+          {loadError ?? 'Impossible de charger la question.'}{'\n'}Vérifie ta connexion.
         </Text>
+        <Pressable onPress={() => router.replace('/daylink')} style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: theme.tint }}>
+          <Text style={{ color: 'white', fontWeight: '700' }}>Réessayer</Text>
+        </Pressable>
       </View>
     );
   }
@@ -253,6 +286,9 @@ export default function Daylink() {
         </LinearGradient>
 
         <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.categoryLabel, { color: theme.tint }]}>
+            Thème : {CATEGORY_LABELS[question.category] ?? question.category}
+          </Text>
           <View style={styles.statusRow}>
             <View style={[styles.pill, isSubmitted ? styles.pillDone : styles.pillWaiting]}>
               {isSubmitted
@@ -288,7 +324,7 @@ export default function Daylink() {
                 returnKeyType="send"
                 onSubmitEditing={() => handleSubmit()}
                 onKeyPress={(event) => {
-                  if (Platform.OS === 'web' && event.nativeEvent.key === 'Enter' && !event.nativeEvent.shiftKey) {
+                  if (Platform.OS === 'web' && event.nativeEvent.key === 'Enter' && !(event.nativeEvent as any).shiftKey) {
                     event.preventDefault();
                     handleSubmit();
                   }
@@ -355,6 +391,7 @@ const styles = StyleSheet.create({
   headerGradient: { padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   headerTitle: { color: 'white', fontSize: 22, fontWeight: '800', letterSpacing: 1 },
   content: { padding: 24, flexShrink: 1 },
+  categoryLabel: { fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 },
   statusRow: { flexDirection: 'row', gap: 10, marginBottom: 20, justifyContent: 'center' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   pillDone: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: '#22c55e' },

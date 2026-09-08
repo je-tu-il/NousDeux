@@ -10,26 +10,40 @@ service cloud.firestore {
       );
     }
 
-    // Par sécurité, on bloque tout ce qui n'est pas explicitement autorisé
-    match /{document=**} {
-      allow read, write: if false;
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isCoupleMember(coupleId) {
+      return signedIn() && coupleId.matches('(^|_)' + request.auth.uid + '(_|$)');
     }
 
     // 1. Profils utilisateurs
     match /users/{userId} {
-      allow read: if request.auth != null || isAdmin();
-      allow write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      allow read: if signedIn() || isAdmin();
+      allow create, delete: if (signedIn() && request.auth.uid == userId) || isAdmin();
+      allow update: if (signedIn() && (
+        request.auth.uid == userId ||
+        request.resource.data.get('linkedTo', null) == request.auth.uid ||
+        (
+          resource.data.get('linkedTo', null) == request.auth.uid &&
+          !request.resource.data.keys().hasAny(['linkedTo']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['linkedTo', 'coupleDate', 'proposedDate', 'archivedPartners'])
+        )
+      )) || isAdmin();
     }
 
     // 2. Profils Cosmétiques (Avatars, bordures...)
     match /userProfiles/{userId} {
-      allow read: if request.auth != null || isAdmin();
-      allow write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      // Le dashboard affiche aussi les cosmétiques du partenaire.
+      allow read: if signedIn() || isAdmin();
+      allow write: if (signedIn() && request.auth.uid == userId) || isAdmin();
     }
 
     // 3. Codes de synchronisation (Onboarding)
     match /pairing_codes/{codeId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if signedIn();
     }
 
     // 4. Messages de contact
@@ -40,13 +54,11 @@ service cloud.firestore {
 
     // 5. Données du Couple (Quêtes, Argent, Réponses, Inventaire, etc.)
     match /couples/{coupleId} {
-      allow read, write: if isAdmin();
-      allow read, write: if request.auth != null && coupleId.matches('.*' + request.auth.uid + '.*');
+      allow read, write: if isAdmin() || isCoupleMember(coupleId);
 
       // On applique la même règle pour toutes les sous-collections (economy, daily, progress...)
       match /{document=**} {
-        allow read, write: if isAdmin();
-        allow read, write: if request.auth != null && coupleId.matches('.*' + request.auth.uid + '.*');
+        allow read, write: if isAdmin() || isCoupleMember(coupleId);
       }
     }
   }

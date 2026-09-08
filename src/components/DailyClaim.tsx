@@ -143,7 +143,11 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
   }));
 
   useEffect(() => {
-    if (wallet === null) { setPhase('loading'); return; }
+    if (wallet === null) {
+      setPhase('loading');
+      const timeout = setTimeout(() => setPhase('locked'), 8000);
+      return () => clearTimeout(timeout);
+    }
     if (alreadyClaimed) { setPhase('done'); return; }
     if (!coupleId || !myUid) return;
 

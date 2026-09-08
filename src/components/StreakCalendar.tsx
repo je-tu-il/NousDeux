@@ -1,16 +1,10 @@
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
-import { ChevronLeft, ChevronRight, Flame } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { computeStreakCached } from '../lib/economy';
+import { collection, getDocs } from 'firebase/firestore';
+import { Flame } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { db } from '../lib/firebase';
 
 const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-const MONTH_NAMES = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-];
-
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function toKey(year: number, month: number, day: number): string {
@@ -35,55 +29,75 @@ interface Props {
 // ─── Composant ────────────────────────────────────────────────────────────────
 
 export default function StreakCalendar({ coupleId, showFullCalendar = false, currentStreak, compact = false, darkMode = false }: Props) {
-  const now = new Date();
   const [streak, setStreak] = useState<number>(currentStreak ?? 0);
   const [activeDays, setActive]   = useState<Set<string>>(new Set());
   const [loading, setLoading]     = useState(true);
-  const [calMonth, setCalMonth]   = useState(now.getMonth());
-  const [calYear, setCalYear]     = useState(now.getFullYear());
-  const hasLoadedCalendar = useRef(false);
+  const [record, setRecord] = useState<{ length: number; start: string; end: string } | null>(null);
+  const [currentDates, setCurrentDates] = useState<{ start: string; end: string } | null>(null);
   const today = todayKey();
 
-  useEffect(() => {
-    if (currentStreak !== undefined) setStreak(currentStreak);
-  }, [currentStreak]);
-
-  // ── Chargement du mois affiché ─────────────────────────────────────────────
+  // Une seule lecture de la collection remplace les lectures quotidiennes du calendrier.
   useEffect(() => {
     if (!coupleId) return;
     let cancelled = false;
 
     const load = async () => {
-      if (!hasLoadedCalendar.current) setLoading(true);
+      setLoading(true);
       try {
-        const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-        const miniKeys = Array.from({ length: 7 }, (_, index) => {
-          const date = new Date();
-          date.setDate(date.getDate() - index);
-          return toKey(date.getFullYear(), date.getMonth(), date.getDate());
-        });
-        const monthKeys = Array.from({ length: daysInMonth }, (_, i) => toKey(calYear, calMonth, i + 1));
-        const keysToLoad = [...new Set([...monthKeys, ...miniKeys])];
+        const dailySnapshot = await getDocs(collection(db, 'couples', coupleId, 'daily'));
         const active = new Set<string>();
-        // Load actual completed days from DB
-        await Promise.all(
-          keysToLoad.map(async (key) => {
-            const snap = await getDoc(doc(db, 'couples', coupleId, 'daily', key));
-            const data = snap.exists() ? snap.data() : null;
-            const completed = data && (data.bothAnswered === true || data.answered === true || data.complete === true);
-            const legacyAnswers = data ? await getDocs(collection(snap.ref, 'answers')) : null;
-            if (completed || (legacyAnswers?.size ?? 0) >= 2) {
-              active.add(key);
-            }
-          })
+        dailySnapshot.docs.forEach((dailyDoc) => {
+          const data = dailyDoc.data();
+          if (data.bothAnswered === true || data.answered === true || data.complete === true) active.add(dailyDoc.id);
+        });
+        const legacyResults = await Promise.all(
+          dailySnapshot.docs
+            .filter((dailyDoc) => !active.has(dailyDoc.id))
+            .map(async (dailyDoc) => ({ id: dailyDoc.id, count: (await getDocs(collection(dailyDoc.ref, 'answers'))).size }))
         );
-        
+        legacyResults.forEach(({ id, count }) => {
+          if (count >= 2) active.add(id);
+        });
+        const sorted = [...active].sort();
+        let best: { length: number; start: string; end: string } | null = null;
+        let runStart = '';
+        let previous: Date | null = null;
+        for (const key of sorted) {
+          const date = new Date(`${key}T00:00:00`);
+          const consecutive = previous && (date.getTime() - previous.getTime()) === 86400000;
+          if (!consecutive) runStart = key;
+          const candidate = { length: Math.round((date.getTime() - new Date(`${runStart}T00:00:00`).getTime()) / 86400000) + 1, start: runStart, end: key };
+          if (!best || candidate.length > best.length) best = candidate;
+          previous = date;
+        }
         if (!cancelled) {
           setActive(active);
-          hasLoadedCalendar.current = true;
+          setRecord(best);
+          if (currentStreak === undefined) {
+            const cursor = new Date();
+            let current = 0;
+            const todayCompleted = active.has(todayKey());
+            if (!todayCompleted) cursor.setDate(cursor.getDate() - 1);
+            const currentEnd = toKey(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+            let currentStart = currentEnd;
+            while (active.has(toKey(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()))) {
+              currentStart = toKey(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+              current++;
+              cursor.setDate(cursor.getDate() - 1);
+            }
+            setStreak(current);
+            setCurrentDates(current ? { start: currentStart, end: currentEnd } : null);
+          }
         }
       } catch (e) {
-        console.error('StreakCalendar:', e);
+        if ((e as { code?: string })?.code !== 'permission-denied') {
+          console.error('StreakCalendar:', e);
+        }
+        if (!cancelled) {
+          setActive(new Set());
+          setRecord(null);
+          setCurrentDates(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -91,33 +105,17 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
 
     load();
     return () => { cancelled = true; };
-  }, [coupleId, calMonth, calYear]);
-
-  useEffect(() => {
-    if (currentStreak !== undefined || !coupleId) return;
-    computeStreakCached(coupleId).then(setStreak).catch(() => {});
-  }, [coupleId, currentStreak]);
+  }, [coupleId]);
 
   // ── Streak mini-bar (fenêtre glissante) ─────────────────────────────────────
-  const daysToShow = Math.min(Math.max(streak, 1), 7);
+  const displayedStreak = currentStreak ?? streak;
+  const daysToShow = Math.min(Math.max(displayedStreak, 1), 7);
   const miniDays: string[] = [];
   for (let i = -(daysToShow - 1); i <= 0; i++) {
     const d = new Date();
     d.setDate(d.getDate() + i);
     miniDays.push(toKey(d.getFullYear(), d.getMonth(), d.getDate()));
   }
-
-  // ── Calendrier mensuel ───────────────────────────────────────────────────────
-  const daysInMonth     = new Date(calYear, calMonth + 1, 0).getDate();
-  const firstDayOfMonth = new Date(calYear, calMonth, 1).getDay(); // 0=dim
-  // Convertir : dimanche → 6, lundi → 0
-  const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
-  const calCells: (number | null)[] = [
-    ...Array(startOffset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-  // Compléter à un multiple de 7
-  while (calCells.length % 7 !== 0) calCells.push(null);
 
   if (loading) {
     return (
@@ -132,11 +130,11 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
       {/* ── Compteur streak ── */}
       <View style={styles.streakRow}>
         <Flame color="#FF6B35" size={24} fill="#FF6B35" />
-        <Text style={styles.streakNumber}>{streak}</Text>
+        <Text style={styles.streakNumber}>{displayedStreak}</Text>
         <Text numberOfLines={1} adjustsFontSizeToFit style={styles.streakLabel}>
-          {streak === 0
+          {displayedStreak === 0
             ? 'Nouveau streak !'
-            : streak === 1
+            : displayedStreak === 1
             ? 'jour d\'affilée 🚀'
             : 'jours d\'affilée 🔥'}
         </Text>
@@ -165,73 +163,17 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
         })}
       </View>
 
-      {/* ── Calendrier mensuel complet ── */}
       {showFullCalendar && (
-        <>
-          {/* Navigation mois */}
-          <View style={styles.calHeader}>
-            <Pressable
-              disabled={calYear === 2026 && calMonth === 0}
-              onPress={() => {
-                if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
-                else setCalMonth(m => m - 1);
-              }}
-              style={[styles.navBtn, calYear === 2026 && calMonth === 0 && styles.navBtnDisabled]}
-            >
-              <ChevronLeft color="#4A3B39" size={20} />
-            </Pressable>
-            <Text style={styles.calMonthTitle}>
-              {MONTH_NAMES[calMonth]} {calYear}
-            </Text>
-            <Pressable
-              onPress={() => {
-                if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
-                else setCalMonth(m => m + 1);
-              }}
-              style={styles.navBtn}
-            >
-              <ChevronRight color="#4A3B39" size={20} />
-            </Pressable>
-          </View>
-
-          {/* En-têtes jours */}
-          <View style={styles.calGrid}>
-            {DAY_LABELS.map((l, i) => (
-              <View key={i} style={styles.calCell}>
-                <Text style={styles.calDayLabel}>{l}</Text>
-              </View>
-            ))}
-
-            {/* Cellules */}
-            {calCells.map((day, i) => {
-              if (day === null) return <View key={`empty-${i}`} style={styles.calCell} />;
-              const key      = toKey(calYear, calMonth, day);
-              const isToday  = key === today;
-              const isActive = activeDays.has(key);
-              return (
-                <View key={key} style={styles.calCell}>
-                  <View style={[
-                    styles.calDayCircle,
-                    isActive && styles.calDayActive,
-                    isToday && !isActive && styles.calDayToday,
-                  ]}>
-                    {isActive
-                      ? <Text style={styles.calCheck}>✓</Text>
-                      : <Text style={[styles.calDayNum, isToday && { color: '#FF9A8B', fontWeight: '800' }]}>
-                          {day}
-                        </Text>}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-
-          {/* Légende */}
-          <View style={styles.legend}>
-            <View style={[styles.legendDot, { backgroundColor: '#FF9A8B' }]} />
-            <Text style={styles.legendText}>Tous les deux ont répondu</Text>
-          </View>
-        </>
+        <View style={styles.recordBox}>
+          <Text style={styles.recordTitle}>Série en cours</Text>
+          <Text style={styles.recordValue}>{displayedStreak} jour{displayedStreak === 1 ? '' : 's'}</Text>
+          {currentDates && <Text style={styles.recordDates}>Du {currentDates.start} au {currentDates.end}</Text>}
+          <View style={styles.recordSeparator} />
+          <Text style={styles.recordTitle}>Série record</Text>
+          <Text style={styles.recordValue}>{record?.length ?? 0} jour{record?.length === 1 ? '' : 's'}</Text>
+          {record && <Text style={styles.recordDates}>Du {record.start} au {record.end}</Text>}
+          <Text style={styles.legendText}>{activeDays.size} jour{activeDays.size === 1 ? '' : 's'} complété{activeDays.size === 1 ? '' : 's'} au total</Text>
+        </View>
       )}
     </View>
   );
@@ -280,4 +222,9 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
   legendDot: { width: 12, height: 12, borderRadius: 6 },
   legendText: { fontSize: 12, color: '#A99693' },
+  recordBox: { marginTop: 18, padding: 14, borderRadius: 14, backgroundColor: 'rgba(255,154,139,0.12)' },
+  recordTitle: { fontSize: 14, fontWeight: '800', color: '#4A3B39' },
+  recordValue: { fontSize: 24, fontWeight: '900', color: '#FF6B35', marginTop: 4 },
+  recordDates: { fontSize: 12, color: '#4A3B39', marginTop: 2 },
+  recordSeparator: { height: 1, backgroundColor: 'rgba(74,59,57,0.12)', marginVertical: 10 },
 });

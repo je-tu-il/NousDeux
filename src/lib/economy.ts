@@ -45,31 +45,35 @@ function getLocalDateKey(): string {
 
 export async function computeStreak(cId: string): Promise<number> {
   const today = new Date();
-  let streak = 0;
+  const dailySnapshot = await getDocs(collection(db, 'couples', cId, 'daily'));
+  const completedDays = new Set<string>();
+  dailySnapshot.docs.forEach((dailyDoc) => {
+    const data = dailyDoc.data();
+    if (data.bothAnswered === true || data.answered === true || data.complete === true) {
+      completedDays.add(dailyDoc.id);
+    }
+  });
+  const legacyDays = dailySnapshot.docs.filter((dailyDoc) => !completedDays.has(dailyDoc.id));
+  const legacyResults = await Promise.all(
+    legacyDays.map(async (dailyDoc) => ({ id: dailyDoc.id, count: (await getDocs(collection(dailyDoc.ref, 'answers'))).size }))
+  );
+  legacyResults.forEach(({ id, count }) => {
+    if (count >= 2) completedDays.add(id);
+  });
 
   const toKey = (year: number, month: number, day: number) => 
     `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-  const isCompletedDay = async (date: Date): Promise<boolean> => {
-    const snap = await getDoc(doc(db, 'couples', cId, 'daily', toKey(date.getFullYear(), date.getMonth(), date.getDate())));
-    if (!snap.exists()) return false;
-    const data = snap.data();
-    if (data.bothAnswered === true || data.answered === true || data.complete === true) return true;
-
-    // Legacy daily documents may not have the completion flag yet.
-    const answers = await getDocs(collection(snap.ref, 'answers'));
-    return answers.size >= 2;
-  };
-
   // A day still in progress must not reset the streak earned up to yesterday.
-  const startsToday = await isCompletedDay(today);
+  const startsToday = completedDays.has(toKey(today.getFullYear(), today.getMonth(), today.getDate()));
   const startOffset = startsToday ? 0 : -1;
+  let streak = 0;
 
   // Walk backward from today/yesterday using local calendar dates.
   for (let offset = startOffset; offset >= -90; offset--) {
     const d = new Date(today);
     d.setDate(d.getDate() + offset);
-    if (await isCompletedDay(d)) {
+    if (completedDays.has(toKey(d.getFullYear(), d.getMonth(), d.getDate()))) {
       streak++;
     } else { break; }
   }

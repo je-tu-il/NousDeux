@@ -15,9 +15,8 @@ export default function DaylinkScreen() {
   return (
     <ImageBackground 
       source={bgSource} 
-      style={styles.container}
+      style={styles.container as any}
       resizeMode="cover"
-      imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}
       imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}
     >
       <View style={styles.safeArea}>
@@ -41,7 +40,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: 'transparent',
-    minHeight: Platform.OS === 'web' ? '100vh' : '100%',
+    minHeight: Platform.OS === 'web' ? 700 : 0,
     overflow: 'hidden',
   },
   safeArea: {

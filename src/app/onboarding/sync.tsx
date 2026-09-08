@@ -7,7 +7,7 @@ import Animated, { FadeInDown, FadeInUp, ZoomIn, useSharedValue, useAnimatedStyl
 import { ArrowLeft, Copy, Share2, CheckCircle2, HeartHandshake } from 'lucide-react-native';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, deleteField } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
 
 const generateCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -126,16 +126,21 @@ export default function SyncScreen() {
         }
 
         // 2. Lier les comptes et forcer le passage par la page date avec reset total
-        await updateDoc(doc(db, "users", myUid!), { 
+        const linkBatch = writeBatch(db);
+        linkBatch.update(doc(db, "users", myUid!), {
           linkedTo: partnerUid,
           coupleDate: deleteField(),
           proposedDate: deleteField()
         });
-        await updateDoc(doc(db, "users", partnerUid), { 
+        linkBatch.update(doc(db, "users", partnerUid), {
           linkedTo: myUid,
           coupleDate: deleteField(),
           proposedDate: deleteField()
         });
+        await linkBatch.commit();
+        // Cosmetic ownership is personal. Re-pairing must not reset the
+        // account's equipped items; the new partner reads this profile.
+        state.setPartnerCache(null, '', null);
 
         // Succès garanti APRÈS la confirmation du serveur !
         const partnerDocFetched = await getDoc(doc(db, "users", partnerUid));

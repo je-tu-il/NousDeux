@@ -1,4 +1,5 @@
 import { getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
+import { auth } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -23,6 +24,32 @@ export default function RootLayout() {
   const uid = useOnboardingStore((state) => state.uid);
   const pseudo = useOnboardingStore((state) => state.pseudo);
   const age = useOnboardingStore((state) => state.age);
+
+  useEffect(() => {
+    const clearDeletedSession = async () => {
+      await auth.signOut().catch(() => {});
+      const store = useOnboardingStore.getState();
+      store.setUid(null);
+      store.setPseudo('');
+      store.setAge('');
+      store.setAvatar(null);
+      store.setSynced(false);
+      router.replace('/onboarding/login');
+      if (Platform.OS === 'web') window.location.reload();
+    };
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!user && useOnboardingStore.getState().uid) {
+        void clearDeletedSession();
+      } else if (user) {
+        void user.reload().catch((error: any) => {
+          if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-user-token') {
+            void clearDeletedSession();
+          }
+        });
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') {

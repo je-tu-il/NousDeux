@@ -14,6 +14,7 @@ export default function LoginScreen() {
   const setUid = useOnboardingStore((state) => state.setUid);
   const setPseudo = useOnboardingStore((state) => state.setPseudo);
   const setAge = useOnboardingStore((state) => state.setAge);
+  const setAvatar = useOnboardingStore((state) => state.setAvatar);
   const setSynced = useOnboardingStore((state) => state.setSynced);
   const hasAcceptedTerms = useOnboardingStore((state) => state.hasAcceptedTerms);
   const setHasAcceptedTerms = useOnboardingStore((state) => state.setHasAcceptedTerms);
@@ -50,6 +51,7 @@ export default function LoginScreen() {
             const data = userDoc.data();
             setPseudo(data.pseudo || "");
             setAge(data.age || "");
+            setAvatar(data.avatarUrl || null);
             if (data.linkedTo) {
               setSynced(true);
               return '/dashboard';

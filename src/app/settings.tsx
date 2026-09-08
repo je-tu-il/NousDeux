@@ -1,10 +1,11 @@
 import { Colors } from '@/constants/Colors';
 import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import * as ImagePicker from 'expo-image-picker';
 import { Link, router } from 'expo-router';
 import { arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { deleteUser, GoogleAuthProvider, reauthenticateWithPopup, signOut } from 'firebase/auth';
 import { ArrowLeft, Camera, Check, CheckCircle2, Copy, FileText, HeartCrack, LogOut, Mail, Shield, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
@@ -127,13 +128,25 @@ export default function SettingsScreen() {
       if (myDoc.exists()) {
         const data = myDoc.data();
         const partnerUid = data.linkedTo;
+
         if (partnerUid) {
-          await updateDoc(doc(db, 'users', store.uid), {
+          const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
+          const leaveBatch = writeBatch(db);
+          leaveBatch.update(doc(db, 'users', store.uid), {
             linkedTo: deleteField(),
             coupleDate: deleteField(),
             proposedDate: deleteField(),
             archivedPartners: arrayUnion(partnerUid),
           });
+          if (partnerDoc.exists() && partnerDoc.data().linkedTo === store.uid) {
+            leaveBatch.update(doc(db, 'users', partnerUid), {
+              linkedTo: deleteField(),
+              coupleDate: deleteField(),
+              proposedDate: deleteField(),
+              archivedPartners: arrayUnion(store.uid),
+            });
+          }
+          await leaveBatch.commit();
         } else {
           await updateDoc(doc(db, 'users', store.uid), {
             linkedTo: null, coupleDate: null, proposedDate: null,
@@ -141,8 +154,9 @@ export default function SettingsScreen() {
         }
         store.setSynced(false);
         store.setPartnerCode('');
+        store.clearPartnerCache();
         setShowDesyncModal(false);
-        router.replace('/onboarding/sync');
+        router.replace('/dashboard');
       }
     } catch (error: any) {
       Alert.alert('Erreur', error.message);
@@ -155,6 +169,14 @@ export default function SettingsScreen() {
     setLoading(true);
     try {
       if (!store.uid) return;
+      const firebaseUser = auth.currentUser;
+      const lastSignIn = firebaseUser?.metadata.lastSignInTime
+        ? Date.parse(firebaseUser.metadata.lastSignInTime)
+        : 0;
+      const recentLogin = lastSignIn > Date.now() - 5 * 60 * 1000;
+      if (firebaseUser?.providerData.some(provider => provider.providerId === 'google.com') && !recentLogin) {
+        await reauthenticateWithPopup(firebaseUser, new GoogleAuthProvider());
+      }
 
       // 1. Récupérer le partnerUid avant suppression
       const myDoc = await getDoc(doc(db, 'users', store.uid));
@@ -179,8 +201,22 @@ export default function SettingsScreen() {
         await deleteDoc(coupleRef);
       }
 
-      // 3. Supprimer le document utilisateur
-      await deleteDoc(doc(db, 'users', store.uid));
+      // 3. Désolidariser le partenaire et supprimer le profil courant
+      // dans la même opération atomique.
+      const deleteBatch = writeBatch(db);
+      if (partnerUid) {
+        const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
+        if (partnerDoc.exists() && partnerDoc.data().linkedTo === store.uid) {
+          deleteBatch.update(doc(db, 'users', partnerUid), {
+            linkedTo: deleteField(),
+            coupleDate: deleteField(),
+            proposedDate: deleteField(),
+          });
+        }
+      }
+      deleteBatch.delete(doc(db, 'users', store.uid));
+      await deleteBatch.commit();
+      if (firebaseUser) await deleteUser(firebaseUser);
 
       // 4. Réinitialiser le store local
       store.setUid(null);
@@ -191,10 +227,15 @@ export default function SettingsScreen() {
       store.setMyCode('');
       store.setPartnerCode('');
       store.clearPartnerCache();
+      store.setSelectedCosmetics('bg_free_1', 'bd_free_1', 'tag_free_0');
       setShowDeleteModal(false);
       router.replace('/onboarding/login');
     } catch (error: any) {
-      Alert.alert('Erreur', error.message);
+      if (error?.code === 'auth/requires-recent-login') {
+        Alert.alert('Reconnecte-toi pour continuer', 'Google doit confirmer ton identité avant la suppression. Déconnecte-toi puis reconnecte-toi, et recommence.');
+      } else {
+        Alert.alert('Erreur', error.message);
+      }
       setLoading(false);
     }
   };
@@ -226,14 +267,15 @@ export default function SettingsScreen() {
         {
           text: 'Déconnecter',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            await signOut(auth);
             store.setPseudo('');
             store.setAge('');
             store.setAvatar(null);
             store.setSynced(false);
             store.setMyCode('');
             store.setPartnerCode('');
-            store.setUid('');
+            store.setUid(null);
             router.replace('/onboarding/login');
           },
         },
@@ -430,23 +472,24 @@ export default function SettingsScreen() {
 
           <View style={[styles.card, { backgroundColor: 'rgba(255,200,200,0.7)', borderColor: 'red' }]}>
 
-            <View style={styles.dangerItem}>
-              <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
-                En quittant le couple, vous serez désynchronisés. Ton partenaire sera archivé pour conserver vos succès.
-              </Text>
-              <Pressable
-                style={({ pressed }) => [styles.dangerButton, { opacity: pressed || loading ? 0.8 : 1 }]}
-                onPress={() => setShowDesyncModal(true)}
-                disabled={loading}
-              >
-                <HeartCrack color="white" size={20} />
-                <Text style={styles.dangerButtonText}>Quitter le couple</Text>
-              </Pressable>
-            </View>
-
-
-
-            <View style={styles.divider} />
+            {!isAlone && (
+              <>
+                <View style={styles.dangerItem}>
+                  <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
+                    En quittant le couple, vous serez désynchronisés. Ton partenaire sera archivé pour conserver vos succès.
+                  </Text>
+                  <Pressable
+                    style={({ pressed }) => [styles.dangerButton, { opacity: pressed || loading ? 0.8 : 1 }]}
+                    onPress={() => setShowDesyncModal(true)}
+                    disabled={loading}
+                  >
+                    <HeartCrack color="white" size={20} />
+                    <Text style={styles.dangerButtonText}>Quitter le couple</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.divider} />
+              </>
+            )}
 
             <View style={styles.dangerItem}>
               <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>

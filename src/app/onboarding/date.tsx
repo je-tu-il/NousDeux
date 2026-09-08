@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, TextInput } from 'react-native';
-import { router } from 'expo-router';
+import { router, useSegments } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import Animated, { FadeInDown, FadeInUp, withRepeat, withTiming, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { ArrowRight, CalendarDays, Loader2 } from 'lucide-react-native';
@@ -23,7 +23,17 @@ export default function DateScreen() {
   const theme    = Colors.light;
   const store    = useOnboardingStore((s) => s);
   const myUid    = store.uid;
+  const segments = useSegments();
+  const redirectGuardRef = useRef<string | null>(null);
   const spinAnim = useSharedValue(0);
+
+  const redirectOnce = (route: '/dashboard' | '/onboarding/sync') => {
+    const current = segments[segments.length - 1];
+    if (current === route.split('/').pop()) return;
+    if (redirectGuardRef.current === route) return;
+    redirectGuardRef.current = route;
+    router.replace(route);
+  };
 
   const waitingRef = useRef(false);
   useEffect(() => { waitingRef.current = waitingForPartner; }, [waitingForPartner]);
@@ -47,7 +57,7 @@ export default function DateScreen() {
       if (myUid) batch.update(doc(db, 'users', myUid), { coupleDate: myProposed, proposedDate: deleteField() });
       batch.update(doc(db, 'users', pUid), { coupleDate: myProposed, proposedDate: deleteField() });
       await batch.commit();
-      setTimeout(() => router.replace('/dashboard'), 2000);
+      setTimeout(() => redirectOnce('/dashboard'), 2000);
     } else {
       const batch = writeBatch(db);
       if (myUid) batch.update(doc(db, 'users', myUid), { proposedDate: deleteField() });
@@ -72,13 +82,13 @@ export default function DateScreen() {
       const data = myDoc.data();
       const pUid = data.linkedTo as string | undefined;
 
-      if (!pUid) { router.replace('/onboarding/sync'); return; }
+      if (!pUid) { redirectOnce('/onboarding/sync'); return; }
 
       // Stocker partnerUid dans le state pour handleSubmit
       setPartnerUid(pUid);
 
       // Si coupleDate déjà présente → dashboard directement (pas de suppression!)
-      if (data.coupleDate) { router.replace('/dashboard'); return; }
+      if (data.coupleDate) { redirectOnce('/dashboard'); return; }
 
       // Restauration de l'état "en attente" après un refresh
       if (data.proposedDate) {
@@ -101,7 +111,7 @@ export default function DateScreen() {
         // Cas 1 : partenaire a déjà une coupleDate → on la copie, on part
         if (pData.coupleDate) {
           await updateDoc(doc(db, 'users', myUid), { coupleDate: pData.coupleDate, proposedDate: deleteField() });
-          router.replace('/dashboard');
+          redirectOnce('/dashboard');
           return;
         }
 
@@ -152,7 +162,7 @@ export default function DateScreen() {
         if (pData.coupleDate) {
           // Partenaire a déjà une date officielle → on la prend
           await updateDoc(doc(db, 'users', myUid), { coupleDate: pData.coupleDate, proposedDate: deleteField() });
-          router.replace('/dashboard');
+          redirectOnce('/dashboard');
           return;
         }
         if (pData.proposedDate) {

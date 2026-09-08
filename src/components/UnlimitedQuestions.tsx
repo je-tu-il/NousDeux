@@ -10,7 +10,7 @@ import {
     Heart,
     Home,
     Infinity as InfinityIcon,
-    MessageCircle, Rocket,
+    MessageCircle, Rocket, Star, Coffee,
     Smile,
     Split,
     Unlock
@@ -177,6 +177,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
   const [question, setQuestion]             = useState<AnyQuestion | null>(null);
   const [loadingQuestion, setLoading]       = useState(true);
+  const [loadError, setLoadError]           = useState<string | null>(null);
   const [partnerUid, setPartnerUid]         = useState<string | null>(null);
   const [partnerPseudo, setPartnerPseudo]   = useState('Partenaire');
   const [cId, setCId]                       = useState('');
@@ -202,6 +203,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
   const loadSlot = useCallback(async (uid: string, pUid: string, coupleKey: string, idx: number) => {
     setLoading(true);
+    setLoadError(null);
     setMyAnswer('');
     setPartnerAnswer(null);
     setPartnerHasAnswered(false);
@@ -214,48 +216,62 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     setPartnerMovedToNext(false);
 
     // Paralléliser : question + réponses existantes
-    const [questionId, myAns, pAns] = await Promise.all([
-      pickUnlimitedQuestion(coupleKey, slot, categoryFilter),
-      getDoc(doc(db, 'couples', coupleKey, 'daily', slot, 'answers', uid)),
-      getDoc(doc(db, 'couples', coupleKey, 'daily', slot, 'answers', pUid)),
-    ]);
+    try {
+      const reads = Promise.all([
+        pickUnlimitedQuestion(coupleKey, slot, categoryFilter),
+        getDoc(doc(db, 'couples', coupleKey, 'daily', slot, 'answers', uid)),
+        getDoc(doc(db, 'couples', coupleKey, 'daily', slot, 'answers', pUid)),
+      ]);
+      const timeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('TIMEOUT')), 8000);
+      });
+      const [questionId, myAns, pAns] = await Promise.race([reads, timeout]);
 
-    setQuestion(getQuestionById(questionId));
+      setQuestion(getQuestionById(questionId));
 
-    if (myAns.exists()) {
-      setIsSubmitted(true);
-      isSubmittedRef.current = true;
-      setMyAnswer(await safeDecrypt(myAns.data(), coupleKey));
-    }
-
-    if (pAns.exists()) {
-      const data = pAns.data();
-      setPartnerHasAnswered(true);
-      if (data.movedToNext) {
-        setPartnerMovedToNext(true);
+      if (myAns.exists()) {
+        setIsSubmitted(true);
+        isSubmittedRef.current = true;
+        setMyAnswer(await safeDecrypt(myAns.data(), coupleKey));
       }
-      if (isSubmittedRef.current) {
-        setPartnerAnswer(await safeDecrypt(data, coupleKey));
-      }
-    }
 
-    setLoading(false);
+      if (pAns.exists()) {
+        const data = pAns.data();
+        setPartnerHasAnswered(true);
+        if (data.movedToNext) {
+          setPartnerMovedToNext(true);
+        }
+        if (isSubmittedRef.current) {
+          setPartnerAnswer(await safeDecrypt(data, coupleKey));
+        }
+      }
+    } catch (error) {
+      console.error('Unlimited question load failed:', error);
+      setQuestion(null);
+      setLoadError(error instanceof Error && error.message === 'TIMEOUT'
+        ? 'Le chargement prend trop de temps. Vérifie ta connexion puis réessaie.'
+        : 'Impossible de charger cette question. Vérifie la synchronisation et réessaie.');
+    } finally {
+      setLoading(false);
+    }
   }, [categoryFilter]);
 
   useEffect(() => {
     if (!myUid) return;
     const init = async () => {
-      const myDoc = await getDoc(doc(db, 'users', myUid));
-      if (!myDoc.exists()) return;
-      const pUid = myDoc.data().linkedTo as string | undefined;
-      if (!pUid) return;
-      setPartnerUid(pUid);
+      setLoadError(null);
+      try {
+        const myDoc = await getDoc(doc(db, 'users', myUid));
+        if (!myDoc.exists()) throw new Error('Profil utilisateur introuvable.');
+        const pUid = myDoc.data().linkedTo as string | undefined;
+        if (!pUid) throw new Error('Le compte partenaire n’est pas encore synchronisé.');
+        setPartnerUid(pUid);
 
-      const coupleKey = coupleId(myUid, pUid);
-      setCId(coupleKey);
+        const coupleKey = coupleId(myUid, pUid);
+        setCId(coupleKey);
 
-      // --- VÉRIFICATION DE VERROUILLAGE DES THÈMES ---
-      if (categoryFilter) {
+        // --- VÉRIFICATION DE VERROUILLAGE DES THÈMES ---
+        if (categoryFilter) {
         const CATEGORY_REQUIREMENTS: Record<string, string | null> = {
           amour: null, fun: 'amour', profond: 'fun', intime: 'profond',
           pile_ou_face: 'intime', famille: 'pile_ou_face', debat: 'famille',
@@ -272,16 +288,21 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
             return;
           }
         }
+        }
+        // ------------------------------------------------
+
+        const [pDoc, currentIdx] = await Promise.all([
+          getDoc(doc(db, 'users', pUid)),
+          readCurrentIndex(coupleKey, myUid, categoryFilter),
+        ]);
+
+        if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
+        await loadSlot(myUid, pUid, coupleKey, currentIdx);
+      } catch (error) {
+        console.error('Unlimited init failed:', error);
+        setLoadError('Impossible de charger les questions. Vérifie la synchronisation et réessaie.');
+        setLoading(false);
       }
-      // ------------------------------------------------
-
-      const [pDoc, currentIdx] = await Promise.all([
-        getDoc(doc(db, 'users', pUid)),
-        readCurrentIndex(coupleKey, myUid, categoryFilter),
-      ]);
-
-      if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
-      await loadSlot(myUid, pUid, coupleKey, currentIdx);
     };
     init();
   }, [myUid, categoryFilter, loadSlot]);
@@ -395,7 +416,12 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   if (!question) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 30 }]}>
-        <Text style={{ color: '#4A3B39', textAlign: 'center', opacity: 0.6 }}>Impossible de charger une question.</Text>
+        <Text style={{ color: '#4A3B39', textAlign: 'center', opacity: 0.6 }}>
+          {loadError ?? 'Impossible de charger une question.'}
+        </Text>
+        <Pressable onPress={() => router.replace('/unlimited')} style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: '#A855F7' }}>
+          <Text style={{ color: 'white', fontWeight: '700' }}>Réessayer</Text>
+        </Pressable>
       </View>
     );
   }
@@ -419,11 +445,15 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
       case 'debat': return { colors: ['#8B5CF6', '#C4B5FD'], icon: <MessageCircle color="white" size={22} />, title: 'DÉBAT' };
       case 'futur': return { colors: ['#6366F1', '#A5B4FC'], icon: <Rocket color="white" size={22} />, title: 'FUTUR' };
       case 'souvenir': return { colors: ['#14B8A6', '#5EEAD4'], icon: <Camera color="white" size={22} />, title: 'SOUVENIR' };
+      case 'reve': return { colors: ['#EAB308', '#FDE68A'], icon: <Star color="white" size={22} />, title: 'RÊVE' };
+      case 'quotidien': return { colors: ['#78716C', '#D6D3D1'], icon: <Coffee color="white" size={22} />, title: 'QUOTIDIEN' };
+      case 'defi': return { colors: ['#EA580C', '#FDBA74'], icon: <Rocket color="white" size={22} />, title: 'DÉFI' };
       default: return { colors: ['#A855F7', '#D946EF'], icon: <InfinityIcon color="white" size={22} />, title: 'ILLIMITÉ' };
     }
   };
 
-  const catInfo = getCategoryInfo(categoryFilter);
+  const displayedCategory = isPofQuestion ? 'pile_ou_face' : question.category;
+  const catInfo = getCategoryInfo(displayedCategory);
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
