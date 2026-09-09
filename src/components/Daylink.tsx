@@ -22,13 +22,14 @@ import {
     setDoc,
     updateDoc,
 } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import { Colors } from '../constants/Colors';
 import type { Question } from '../data/questions';
 import { getById, getUnseen, QUESTIONS } from '../data/questions';
 import { getScheduledQuestionId } from '../data/scheduledQuestions';
 import { decryptText, encryptText } from '../lib/crypto';
 import { checkQuests, updateWalletStreak } from '../lib/economy';
-import { db } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -128,28 +129,26 @@ export default function Daylink() {
 
   // ── Chargement de la question ─────────────────────────────────────────────
   useEffect(() => {
-    if (!myUid) {
-      setLoadError('Session expirée. Reconnecte-toi pour charger la question du jour.');
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
     const init = async () => {
+      const firebaseUid = auth.currentUser?.uid;
+      if (!firebaseUid) return;
       setLoading(true);
       setLoadError(null);
       try {
-        const myDocSnap = await getDoc(doc(db, 'users', myUid));
+        const myDocSnap = await getDoc(doc(db, 'users', firebaseUid));
         if (!myDocSnap.exists()) throw new Error('Profil utilisateur introuvable.');
         const pUid = myDocSnap.data().linkedTo as string | undefined;
         if (!pUid) throw new Error('Le compte partenaire n’est pas encore synchronisé.');
         setPartnerUid(pUid);
 
-        const coupleKey = coupleId(myUid, pUid);
+        const coupleKey = coupleId(firebaseUid, pUid);
         setCId(coupleKey);
 
         const reads = Promise.all([
           getDoc(doc(db, 'users', pUid)),
           pickDailyQuestion(coupleKey, slotKey),
-          getDoc(doc(db, 'couples', coupleKey, 'daily', slotKey, 'answers', myUid)),
+          getDoc(doc(db, 'couples', coupleKey, 'daily', slotKey, 'answers', firebaseUid)),
           getDoc(doc(db, 'couples', coupleKey, 'daily', slotKey, 'answers', pUid)),
         ]);
         const timeout = new Promise<never>((_, reject) => {
@@ -157,6 +156,7 @@ export default function Daylink() {
         });
         const [pDoc, questionId, myAns, pAns] = await Promise.race([reads, timeout]);
 
+        if (cancelled) return;
         if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
         setQuestion(getById(questionId) ?? null);
 
@@ -174,14 +174,32 @@ export default function Daylink() {
         }
       } catch (error) {
         console.error('Daylink load failed:', error);
-        setLoadError(error instanceof Error && error.message === 'TIMEOUT'
-          ? 'Le chargement prend trop de temps. Vérifie ta connexion puis réessaie.'
-          : 'Impossible de charger la question du jour. Vérifie la synchronisation et réessaie.');
+        if (!cancelled) {
+          const code = typeof error === 'object' && error !== null && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : '';
+          setLoadError(error instanceof Error && error.message === 'TIMEOUT'
+            ? 'Le chargement prend trop de temps. Vérifie ta connexion puis réessaie.'
+            : code === 'permission-denied'
+              ? 'Accès Firestore refusé. Vérifie que ton compte est bien synchronisé puis réessaie.'
+              : 'Impossible de charger la question du jour. Vérifie la synchronisation et réessaie.');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled && auth.currentUser) setLoading(false);
       }
     };
-    init();
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setLoadError('Session expirée. Reconnecte-toi pour charger la question du jour.');
+        setLoading(false);
+        return;
+      }
+      void init();
+    });
+    return () => {
+      cancelled = true;
+      unsubscribeAuth();
+    };
   }, [myUid]);
 
   // ── Listener partenaire — temps réel ─────────────────────────────────────
@@ -197,6 +215,10 @@ export default function Daylink() {
       } else {
         setPartnerHasAnswered(false);
         setPartnerAnswer(null);
+      }
+    }, (error) => {
+      if (error.code !== 'permission-denied') {
+        console.error('Daylink partner listener failed:', error);
       }
     });
     return () => unsub();

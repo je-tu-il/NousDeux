@@ -38,8 +38,9 @@ import {
     updateDoc,
     increment,
 } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import { Colors } from '../constants/Colors';
-import { db } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
 
 import type { PileOuFaceQuestion } from '../data/pileouface';
@@ -257,17 +258,19 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   }, [categoryFilter]);
 
   useEffect(() => {
-    if (!myUid) return;
+    let cancelled = false;
     const init = async () => {
+      const firebaseUid = auth.currentUser?.uid;
+      if (!firebaseUid) return;
       setLoadError(null);
       try {
-        const myDoc = await getDoc(doc(db, 'users', myUid));
+        const myDoc = await getDoc(doc(db, 'users', firebaseUid));
         if (!myDoc.exists()) throw new Error('Profil utilisateur introuvable.');
         const pUid = myDoc.data().linkedTo as string | undefined;
         if (!pUid) throw new Error('Le compte partenaire n’est pas encore synchronisé.');
         setPartnerUid(pUid);
 
-        const coupleKey = coupleId(myUid, pUid);
+        const coupleKey = coupleId(firebaseUid, pUid);
         setCId(coupleKey);
 
         // --- VÉRIFICATION DE VERROUILLAGE DES THÈMES ---
@@ -293,18 +296,37 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
         const [pDoc, currentIdx] = await Promise.all([
           getDoc(doc(db, 'users', pUid)),
-          readCurrentIndex(coupleKey, myUid, categoryFilter),
+          readCurrentIndex(coupleKey, firebaseUid, categoryFilter),
         ]);
 
+        if (cancelled) return;
         if (pDoc.exists()) setPartnerPseudo(pDoc.data().pseudo ?? 'Partenaire');
-        await loadSlot(myUid, pUid, coupleKey, currentIdx);
+        await loadSlot(firebaseUid, pUid, coupleKey, currentIdx);
       } catch (error) {
         console.error('Unlimited init failed:', error);
-        setLoadError('Impossible de charger les questions. Vérifie la synchronisation et réessaie.');
-        setLoading(false);
+        if (!cancelled) {
+          const code = typeof error === 'object' && error !== null && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : '';
+          setLoadError(code === 'permission-denied'
+            ? 'Accès Firestore refusé. Vérifie que ton compte est bien synchronisé puis réessaie.'
+            : 'Impossible de charger les questions. Vérifie la synchronisation et réessaie.');
+          setLoading(false);
+        }
       }
     };
-    init();
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setLoadError('Session expirée. Reconnecte-toi pour accéder aux catégories.');
+        setLoading(false);
+        return;
+      }
+      void init();
+    });
+    return () => {
+      cancelled = true;
+      unsubscribeAuth();
+    };
   }, [myUid, categoryFilter, loadSlot]);
 
   // ── Listener partenaire ─────────────────────────────────────────────────
@@ -328,6 +350,10 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         setPartnerHasAnswered(false);
         setPartnerAnswer(null);
         setPartnerMovedToNext(false);
+      }
+    }, (error) => {
+      if (error.code !== 'permission-denied') {
+        console.error('Unlimited partner listener failed:', error);
       }
     });
     return () => unsub();
@@ -419,7 +445,10 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         <Text style={{ color: '#4A3B39', textAlign: 'center', opacity: 0.6 }}>
           {loadError ?? 'Impossible de charger une question.'}
         </Text>
-        <Pressable onPress={() => router.replace('/unlimited')} style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: '#A855F7' }}>
+        <Pressable
+          onPress={() => router.replace(categoryFilter ? `/unlimited?category=${encodeURIComponent(categoryFilter)}` : '/unlimited')}
+          style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: '#A855F7' }}
+        >
           <Text style={{ color: 'white', fontWeight: '700' }}>Réessayer</Text>
         </Pressable>
       </View>
