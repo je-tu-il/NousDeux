@@ -130,12 +130,14 @@ export default function SyncScreen() {
         linkBatch.update(doc(db, "users", myUid!), {
           linkedTo: partnerUid,
           coupleDate: deleteField(),
-          proposedDate: deleteField()
+          proposedDate: deleteField(),
+          needsDate: true,
         });
         linkBatch.update(doc(db, "users", partnerUid), {
           linkedTo: myUid,
           coupleDate: deleteField(),
-          proposedDate: deleteField()
+          proposedDate: deleteField(),
+          needsDate: true,
         });
         await linkBatch.commit();
         // Cosmetic ownership is personal. Re-pairing must not reset the

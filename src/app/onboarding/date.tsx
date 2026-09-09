@@ -54,8 +54,8 @@ export default function DateScreen() {
     if (myProposed === partnerProposed) {
       setSuccess(true);
       const batch = writeBatch(db);
-      if (myUid) batch.update(doc(db, 'users', myUid), { coupleDate: myProposed, proposedDate: deleteField() });
-      batch.update(doc(db, 'users', pUid), { coupleDate: myProposed, proposedDate: deleteField() });
+      if (myUid) batch.update(doc(db, 'users', myUid), { coupleDate: myProposed, proposedDate: deleteField(), needsDate: deleteField() });
+      batch.update(doc(db, 'users', pUid), { coupleDate: myProposed, proposedDate: deleteField(), needsDate: deleteField() });
       await batch.commit();
       setTimeout(() => redirectOnce('/dashboard'), 2000);
     } else {
@@ -88,7 +88,7 @@ export default function DateScreen() {
       setPartnerUid(pUid);
 
       // Si coupleDate déjà présente → dashboard directement (pas de suppression!)
-      if (data.coupleDate) { redirectOnce('/dashboard'); return; }
+      if (data.coupleDate && !data.needsDate) { redirectOnce('/dashboard'); return; }
 
       // Restauration de l'état "en attente" après un refresh
       if (data.proposedDate) {
@@ -109,12 +109,6 @@ export default function DateScreen() {
         const pData = partnerSnap.data();
 
         // Cas 1 : partenaire a déjà une coupleDate → on la copie, on part
-        if (pData.coupleDate) {
-          await updateDoc(doc(db, 'users', myUid), { coupleDate: pData.coupleDate, proposedDate: deleteField() });
-          redirectOnce('/dashboard');
-          return;
-        }
-
         // Cas 2 : partenaire a proposé une date et JE suis en attente
         if (waitingRef.current && pData.proposedDate) {
           const myLatest = await getDoc(doc(db, 'users', myUid));
@@ -159,12 +153,6 @@ export default function DateScreen() {
       const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
       if (partnerDoc.exists()) {
         const pData = partnerDoc.data();
-        if (pData.coupleDate) {
-          // Partenaire a déjà une date officielle → on la prend
-          await updateDoc(doc(db, 'users', myUid), { coupleDate: pData.coupleDate, proposedDate: deleteField() });
-          redirectOnce('/dashboard');
-          return;
-        }
         if (pData.proposedDate) {
           // Partenaire a déjà proposé → comparer maintenant, sans attendre le listener
           await compareProposals(proposed, pData.proposedDate, partnerUid);

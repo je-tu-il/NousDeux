@@ -136,6 +136,7 @@ export default function SettingsScreen() {
             linkedTo: deleteField(),
             coupleDate: deleteField(),
             proposedDate: deleteField(),
+            needsDate: deleteField(),
             archivedPartners: arrayUnion(partnerUid),
           });
           if (partnerDoc.exists() && partnerDoc.data().linkedTo === store.uid) {
@@ -143,6 +144,7 @@ export default function SettingsScreen() {
               linkedTo: deleteField(),
               coupleDate: deleteField(),
               proposedDate: deleteField(),
+              needsDate: deleteField(),
               archivedPartners: arrayUnion(store.uid),
             });
           }

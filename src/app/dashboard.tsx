@@ -110,6 +110,11 @@ export default function DashboardScreen() {
           setIsLoading(false);
           return;
         }
+        if (data.needsDate) {
+          setIsLoading(false);
+          router.replace('/onboarding/date');
+          return;
+        }
         if (!data.coupleDate) {
           setPartnerLeft(false);
           setIsLoading(false);

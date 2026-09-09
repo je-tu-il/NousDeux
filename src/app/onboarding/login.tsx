@@ -52,9 +52,13 @@ export default function LoginScreen() {
             setPseudo(data.pseudo || "");
             setAge(data.age || "");
             setAvatar(data.avatarUrl || null);
-            if (data.linkedTo) {
+            if (data.linkedTo && !data.needsDate) {
               setSynced(true);
               return '/dashboard';
+            }
+            if (data.linkedTo && data.needsDate) {
+              setSynced(true);
+              return '/onboarding/date';
             }
             return data.pseudo ? '/onboarding/sync' : null;
           }
