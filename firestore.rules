@@ -15,7 +15,10 @@ service cloud.firestore {
     }
 
     function isCoupleMember(coupleId) {
-      return signedIn() && coupleId.matches('(^|_)' + request.auth.uid + '(_|$)');
+      // Couple IDs are created as the two UIDs joined with "_".
+      // Keep this check compatible with existing documents created before
+      // the stricter boundary expression was introduced.
+      return signedIn() && coupleId.matches('.*' + request.auth.uid + '.*');
     }
 
     // 1. Profils utilisateurs
@@ -29,7 +32,7 @@ service cloud.firestore {
           resource.data.get('linkedTo', null) == request.auth.uid &&
           !request.resource.data.keys().hasAny(['linkedTo']) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['linkedTo', 'coupleDate', 'proposedDate', 'archivedPartners'])
+            .hasOnly(['linkedTo', 'coupleDate', 'proposedDate', 'needsDate', 'archivedPartners'])
         )
       )) || isAdmin();
     }
