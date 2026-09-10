@@ -128,7 +128,7 @@ export async function getWallet(cId: string): Promise<WalletData> {
   return defaultWallet;
 }
 
-export async function claimDaily(cId: string, uid: string, amountFromWheel?: number): Promise<{ petals: number; alreadyClaimed: boolean }> {
+export async function claimDaily(cId: string, uid: string, amountFromWheel?: number): Promise<{ petals: number; balance: number; totalEarned: number; alreadyClaimed: boolean }> {
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
   
   return await runTransaction(db, async (transaction) => {
@@ -143,7 +143,12 @@ export async function claimDaily(cId: string, uid: string, amountFromWheel?: num
     }
 
     if (data.dailyClaims?.[uid] === today) {
-      return { petals: 0, alreadyClaimed: true };
+      return {
+        petals: 0,
+        balance: data.petals || 0,
+        totalEarned: data.totalEarned || 0,
+        alreadyClaimed: true,
+      };
     }
 
     const currentStreak = data.streak || 0;
@@ -161,7 +166,12 @@ export async function claimDaily(cId: string, uid: string, amountFromWheel?: num
     transaction.set(walletRef, newData, { merge: true });
     checkQuests(cId, 'daily_claim', 1).catch(e => console.error(e));
     checkQuests(cId, 'petals_earned', earned).catch(e => console.error(e));
-    return { petals: earned, alreadyClaimed: false };
+    return {
+      petals: earned,
+      balance: newData.petals,
+      totalEarned: newData.totalEarned,
+      alreadyClaimed: false,
+    };
   });
 }
 

@@ -118,6 +118,8 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
   const [showModal, setShowModal] = useState(false);
   const [wheelPhase, setWheelPhase] = useState<WheelPhase>('idle');
   const [wonAmount, setWonAmount] = useState(0);
+  const [claimedBalance, setClaimedBalance] = useState<number | null>(null);
+  const [claimedTotalEarned, setClaimedTotalEarned] = useState<number | null>(null);
   const [wonSeg, setWonSeg] = useState<number | null>(null);
 
   const rotation = useSharedValue(0);
@@ -214,6 +216,8 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
       return;
     }
     setWonAmount(claim.petals);
+    setClaimedBalance(claim.balance);
+    setClaimedTotalEarned(claim.totalEarned);
     resultScale.value = withSpring(1, { damping: 10 });
     setWheelPhase('result');
   }, [coupleId, myUid, resultScale]);
@@ -221,11 +225,12 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
   const handleCollect = () => {
     setShowModal(false);
     setPhase('done');
+    const nextBalance = claimedBalance ?? ((wallet?.petals ?? 0) + wonAmount);
     onClaimed({ 
-      petals: (wallet?.petals ?? 0) + wonAmount, 
+      petals: nextBalance,
       streak: (wallet?.streak ?? 0), 
       lastClaimDate: today, 
-      totalEarned: (wallet?.totalEarned ?? 0) + wonAmount,
+      totalEarned: claimedTotalEarned ?? ((wallet?.totalEarned ?? 0) + wonAmount),
       dailyClaims: { ...(wallet?.dailyClaims ?? {}), [myUid]: today },
     });
   };
