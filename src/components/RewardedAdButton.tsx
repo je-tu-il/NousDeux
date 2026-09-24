@@ -27,6 +27,7 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
   const [modalVisible, setModalVisible] = useState(false);
   const [modalStep, setModalStep] = useState<'watching' | 'success'>('watching');
   const [dailyWatches, setDailyWatches] = useState(0);
+  const isProcessingRef = React.useRef(false);
 
   useEffect(() => {
     if (!coupleId) return;
@@ -46,6 +47,9 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
   const isLimitReached = dailyWatches >= maxVideos;
 
   const recordSuccess = async () => {
+    if (dailyWatches >= maxVideos) {
+      return;
+    }
     const petals = GOOGLE_ADS_CONFIG.rewardPetalsAmount;
     try {
       await awardBonusPetals(coupleId, petals);
@@ -61,7 +65,10 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
   };
 
   const handlePress = async () => {
-    if (isLoading || isLimitReached) return;
+    if (isLoading || isLimitReached || dailyWatches >= maxVideos || isProcessingRef.current) {
+      return;
+    }
+    isProcessingRef.current = true;
     setIsLoading(true);
 
     // Tentative chargement natif Mobile (AdMob Rewarded)
@@ -76,36 +83,67 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
     }
 
     if (RewardedAd && RewardedAdEventType && !GOOGLE_ADS_CONFIG.isTestMode) {
+      let adTimeout: any = null;
       try {
         const rewarded = RewardedAd.createForAdRequest(getRewardedAdUnitId(), {
           requestNonPersonalizedAdsOnly: true,
         });
 
+        // Timeout de sécurité : si la pub ne charge pas en 12s, annuler sans donner de récompense
+        adTimeout = setTimeout(() => {
+          setIsLoading(false);
+          isProcessingRef.current = false;
+          alert("Le chargement de l'annonce a pris trop de temps. Vérifie ta connexion et réessaie.");
+        }, 12000);
+
         rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
+          if (adTimeout) clearTimeout(adTimeout);
           setIsLoading(false);
           rewarded.show();
+        });
+
+        rewarded.addAdEventListener(RewardedAdEventType.ERROR, (err: any) => {
+          if (adTimeout) clearTimeout(adTimeout);
+          setIsLoading(false);
+          isProcessingRef.current = false;
+          console.warn('AdMob rewarded ad error:', err);
+          alert("L'annonce n'a pas pu être chargée pour le moment. Réessaie dans un instant.");
         });
 
         rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, async () => {
           await recordSuccess();
           setModalVisible(true);
+          isProcessingRef.current = false;
         });
 
         rewarded.load();
         return;
       } catch (err) {
-        console.warn('Native rewarded ad error, falling back to test flow:', err);
+        if (adTimeout) clearTimeout(adTimeout);
+        setIsLoading(false);
+        isProcessingRef.current = false;
+        console.warn('Native rewarded ad fatal exception:', err);
+        alert("Impossible de charger la publicité. Réessaie plus tard.");
+        return;
       }
     }
 
-    // Flux de test & Web (simulation de 2 secondes)
-    setModalStep('watching');
-    setModalVisible(true);
-    setIsLoading(false);
+    // Flux de test & Web sécurisé (accessible UNIQUEMENT si isTestMode est true)
+    if (GOOGLE_ADS_CONFIG.isTestMode) {
+      setModalStep('watching');
+      setModalVisible(true);
+      setIsLoading(false);
 
-    setTimeout(async () => {
-      await recordSuccess();
-    }, 2000);
+      setTimeout(async () => {
+        await recordSuccess();
+        isProcessingRef.current = false;
+      }, 2500);
+    } else {
+      // En production, si aucun module natif d'annonces n'est disponible, ne jamais donner de récompense fictive
+      setIsLoading(false);
+      isProcessingRef.current = false;
+      alert("Les annonces ne sont pas disponibles sur cette plateforme.");
+    }
   };
 
   return (
@@ -117,6 +155,8 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
         ]}
         onPress={handlePress}
         disabled={isLoading || isLimitReached}
+        pointerEvents={isLoading || isLimitReached ? 'none' : 'auto'}
+        accessibilityState={{ disabled: isLoading || isLimitReached }}
       >
         <LinearGradient
           colors={isDarkMode ? ['#3D1E2A', '#24141E'] : ['#FFF5F5', '#FFE8EC']}

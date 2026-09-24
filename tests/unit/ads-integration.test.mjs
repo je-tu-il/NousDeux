@@ -53,3 +53,24 @@ test('QuestCard keeps view on unclaimed tier and does not advance prematurely', 
     'QuestCard must not wipe optimisticClaimedTiers on every progress change to prevent button flickering'
   );
 });
+
+test('Anti-bypass protections prevent clicking disabled buttons and fake rewards', async () => {
+  const rewardedSrc = await read('src/components/RewardedAdButton.tsx');
+  const cardSrc = await read('src/components/QuestCard.tsx');
+  const launchSrc = await read('src/components/AppLaunchAd.tsx');
+
+  // RewardedAdButton protections
+  assert.match(rewardedSrc, /pointerEvents=\{isLoading \|\| isLimitReached \? 'none' : 'auto'\}/);
+  assert.match(rewardedSrc, /isProcessingRef\.current/, 'Must have sync processing ref to block rapid multi-tap');
+  assert.match(rewardedSrc, /RewardedAdEventType\.ERROR/, 'Must handle ad load error explicitly');
+
+  // QuestCard protections
+  assert.match(cardSrc, /loadingClaim \|\| hasUserClaimed/, 'Must guard claim click when claiming or already claimed');
+  assert.match(cardSrc, /pointerEvents=\{loadingClaim \|\| hasUserClaimed \? 'none' : 'auto'\}/);
+
+  // AppLaunchAd protections
+  assert.match(launchSrc, /pointerEvents=\{secondsLeft > 0 \? 'none' : 'auto'\}/);
+  assert.match(launchSrc, /disabled=\{secondsLeft > 0\}/);
+});
+
+

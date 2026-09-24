@@ -43,14 +43,23 @@ export default function AppLaunchAd() {
           interstitial.show();
         });
 
+        interstitial.addAdEventListener(AdEventType.ERROR, (err: any) => {
+          console.warn('Native interstitial ad error:', err);
+        });
+
         interstitial.load();
         return;
       } catch (err) {
-        console.warn('Native interstitial ad load failed, using fallback:', err);
+        console.warn('Native interstitial ad load failed:', err);
+        return;
       }
     }
 
     // Affichage court d'ouverture (mode test / web / dev)
+    if (!GOOGLE_ADS_CONFIG.isTestMode) {
+      return;
+    }
+
     setVisible(true);
     const interval = setInterval(() => {
       setSecondsLeft((prev) => {
@@ -72,9 +81,11 @@ export default function AppLaunchAd() {
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: 'rgba(255,106,136,0.3)' }]}>
-          <Pressable style={styles.closeBtn} onPress={() => setVisible(false)}>
-            <X color={theme.text} size={20} />
-          </Pressable>
+          {secondsLeft <= 0 && (
+            <Pressable style={styles.closeBtn} onPress={() => setVisible(false)}>
+              <X color={theme.text} size={20} />
+            </Pressable>
+          )}
 
           <View style={styles.iconWrap}>
             <Heart color="#FF6A88" size={32} fill="#FF6A88" />
@@ -95,7 +106,15 @@ export default function AppLaunchAd() {
             </Text>
           </View>
 
-          <Pressable style={styles.actionBtn} onPress={() => setVisible(false)}>
+          <Pressable
+            style={[styles.actionBtn, secondsLeft > 0 && { opacity: 0.6 }]}
+            onPress={() => {
+              if (secondsLeft <= 0) setVisible(false);
+            }}
+            disabled={secondsLeft > 0}
+            pointerEvents={secondsLeft > 0 ? 'none' : 'auto'}
+            accessibilityState={{ disabled: secondsLeft > 0 }}
+          >
             <Text style={styles.actionBtnText}>
               {secondsLeft > 0 ? `Passer (${secondsLeft}s)` : 'Accéder à NousDeux'}
             </Text>

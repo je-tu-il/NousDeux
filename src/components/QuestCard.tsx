@@ -129,7 +129,7 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
   const barStyle = useAnimatedStyle(() => ({ width: `${barWidth.value}%` }));
 
   const handleClaim = async () => {
-    if (!onClaim || !isUnclaimed || hasUserClaimed) return;
+    if (!onClaim || !isUnclaimed || hasUserClaimed || loadingClaim) return;
     const tier = viewTier.tier;
     setOptimisticClaimedTiers((prev) => ({ ...prev, [tier]: true }));
     setLoadingClaim(true);
@@ -205,7 +205,13 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
         </View>
 
         {isUnclaimed && !hasUserClaimed && (
-          <Pressable style={styles.claimBtn} onPress={handleClaim} disabled={loadingClaim}>
+          <Pressable
+            style={[styles.claimBtn, loadingClaim && { opacity: 0.6 }]}
+            onPress={handleClaim}
+            disabled={loadingClaim || hasUserClaimed}
+            pointerEvents={loadingClaim || hasUserClaimed ? 'none' : 'auto'}
+            accessibilityState={{ disabled: loadingClaim || hasUserClaimed }}
+          >
             {loadingClaim ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
