@@ -39,3 +39,35 @@ test('streak unlocks are synced to inventory and isOwned checks inventory safely
   assert.match(economySrc, /STREAK_UNLOCKS/, 'economy.ts must define streak unlocks');
   assert.match(cosmeticsSrc, /inventory\?\.backgrounds\?\.includes/, 'isOwned must safely verify inventory backgrounds');
 });
+
+test('unlimited questions progression strictly requires both partners to have answered', async () => {
+  const unlimitedSrc = await read('src/components/UnlimitedQuestions.tsx');
+  const economySrc = await read('src/lib/economy.ts');
+
+  // Must check both answers exist before completing
+  assert.match(
+    unlimitedSrc,
+    /if\s*\(!slotSnap\.exists\(\)\s*\|\|\s*!myAnswer\.exists\(\)\s*\|\|\s*!partnerAnswer\.exists\(\)\)\s*return;/,
+    'completeUnlimitedQuestion must strictly require both answers to exist'
+  );
+
+  // Must not have recordCategoryAnswer advancing on single answer
+  assert.doesNotMatch(
+    unlimitedSrc,
+    /recordCategoryAnswer/,
+    'recordCategoryAnswer must not exist to prevent single-partner progress'
+  );
+
+  // Must preserve wallet progress and resolve category
+  assert.match(
+    economySrc,
+    /resolveQuestionCategory/,
+    'economy.ts must export resolveQuestionCategory'
+  );
+  assert.match(
+    economySrc,
+    /Math\.max\(mergedStats\[cat\]\s*\?\?\s*0,\s*count\)/,
+    'syncUnlimitedStats must merge with Math.max to prevent wiping wallet progress'
+  );
+});
+

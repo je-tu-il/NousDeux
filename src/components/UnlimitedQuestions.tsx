@@ -114,13 +114,14 @@ async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?:
     }
 
     const picked = unseen[Math.floor(Math.random() * unseen.length)];
+    const pickedCategory = isPof(picked) ? 'pile_ou_face' : (picked as Question).category;
     tx.set(progressRef, { questionIds: [...newSeenIds, picked.id], updatedAt: new Date() });
     tx.set(slotRef, {
       questionId: picked.id,
       createdAt: new Date(),
       mode: 'unlimited',
-      category: categoryFilter || picked.category || 'all',
-      questionCategory: picked.category,
+      category: categoryFilter || pickedCategory,
+      questionCategory: pickedCategory,
     });
     return picked.id;
   });
@@ -198,53 +199,13 @@ const NEXT_CATEGORY_MAP: Record<string, string | null> = {
   defi: null,
 };
 
-async function recordCategoryAnswer(cId: string, slot: string, category: string | undefined, uid: string): Promise<{ justReachedTen?: boolean; nextCategory?: string } | void> {
-  if (!cId || !slot) return;
-  const slotRef = doc(db, 'couples', cId, 'daily', slot);
-  const walletRef = doc(db, `couples/${cId}/economy/wallet`);
-
-  return await runTransaction(db, async (tx) => {
-    const slotSnap = await tx.get(slotRef);
-    if (!slotSnap.exists()) return;
-
-    const slotData = slotSnap.data();
-    const resolvedCategory = (category && category !== 'all')
-      ? category
-      : (slotData.questionCategory || (slotData.questionId ? getById(slotData.questionId)?.category : undefined) || (slotData.category !== 'all' ? slotData.category : undefined));
-
-    let walletSnap: any = null;
-    if (resolvedCategory) walletSnap = await tx.get(walletRef);
-
-    let justReachedTen = false;
-    let nextCategory: string | undefined = undefined;
-
-    if (resolvedCategory && !slotData.countedForStats) {
-      const currentCount = walletSnap?.exists() ? (walletSnap.data().unlimitedStats?.[resolvedCategory] || 0) : 0;
-      const newCount = currentCount + 1;
-      tx.set(walletRef, { unlimitedStats: { [resolvedCategory]: increment(1) } }, { merge: true });
-      tx.set(slotRef, {
-        countedForStats: true,
-        hasAnswer: true,
-        category: resolvedCategory,
-        answeredBy: arrayUnion(uid),
-      }, { merge: true });
-
-      if (newCount === 10) {
-        justReachedTen = true;
-        nextCategory = NEXT_CATEGORY_MAP[resolvedCategory] || undefined;
-      }
-    } else {
-      tx.set(slotRef, {
-        hasAnswer: true,
-        answeredBy: arrayUnion(uid),
-      }, { merge: true });
-    }
-
-    return { justReachedTen, nextCategory };
-  });
-}
-
-async function completeUnlimitedQuestion(cId: string, slot: string, category: string | undefined, uid: string, partnerUid: string): Promise<{ justReachedTen?: boolean; nextCategory?: string } | void> {
+async function completeUnlimitedQuestion(
+  cId: string,
+  slot: string,
+  category: string | undefined,
+  uid: string,
+  partnerUid: string
+): Promise<{ justReachedTen?: boolean; nextCategory?: string } | void> {
   if (!cId) throw new Error('Missing coupleId');
   const slotRef = doc(db, 'couples', cId, 'daily', slot);
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
@@ -255,30 +216,65 @@ async function completeUnlimitedQuestion(cId: string, slot: string, category: st
     const slotSnap = await tx.get(slotRef);
     const myAnswer = await tx.get(myAnswerRef);
     const partnerAnswer = await tx.get(partnerAnswerRef);
-    if (!slotSnap.exists() || slotSnap.data().bothAnswered === true || !myAnswer.exists() || !partnerAnswer.exists()) return;
+    // Les deux partenaires DOIVENT avoir répondu pour que la question soit validée
+    if (!slotSnap.exists() || !myAnswer.exists() || !partnerAnswer.exists()) return;
 
     const slotData = slotSnap.data();
-    const resolvedCategory = (category && category !== 'all')
-      ? category
-      : (slotData.questionCategory || (slotData.questionId ? getById(slotData.questionId)?.category : undefined) || (slotData.category !== 'all' ? slotData.category : undefined));
+    if (slotData.bothAnswered === true) return;
+
+    // Résolution précise et infaillible de la catégorie
+    let resolvedCategory = (category && category !== 'all') ? category : undefined;
+    if (!resolvedCategory && slotData.questionCategory && slotData.questionCategory !== 'all') {
+      resolvedCategory = slotData.questionCategory;
+    }
+    if (!resolvedCategory && slotData.category && slotData.category !== 'all') {
+      resolvedCategory = slotData.category;
+    }
+    if (!resolvedCategory && slotData.questionId) {
+      const q = getQuestionById(slotData.questionId);
+      if (q) {
+        resolvedCategory = isPof(q) ? 'pile_ou_face' : q.category;
+      } else if (slotData.questionId.startsWith('pof_')) {
+        resolvedCategory = 'pile_ou_face';
+      } else {
+        const match = slotData.questionId.match(/^q_gen_([a-z_]+)_\d+$/);
+        if (match) resolvedCategory = match[1];
+      }
+    }
 
     let walletSnap: any = null;
-    if (resolvedCategory) walletSnap = await tx.get(walletRef);
+    if (resolvedCategory) {
+      walletSnap = await tx.get(walletRef);
+    }
 
-    tx.update(slotRef, { bothAnswered: true, hasAnswer: true });
+    tx.update(slotRef, {
+      bothAnswered: true,
+      hasAnswer: true,
+      countedForStats: true,
+      category: resolvedCategory || slotData.category || 'all',
+      questionCategory: resolvedCategory || slotData.questionCategory || null,
+    });
+
     let justReachedTen = false;
     let nextCategory: string | undefined = undefined;
 
     if (resolvedCategory && !slotData.countedForStats) {
-      const currentCount = walletSnap?.exists() ? (walletSnap.data().unlimitedStats?.[resolvedCategory] || 0) : 0;
+      const currentStats = walletSnap?.exists() ? (walletSnap.data().unlimitedStats || {}) : {};
+      const currentCount = currentStats[resolvedCategory] || 0;
       const newCount = currentCount + 1;
-      tx.set(walletRef, { unlimitedStats: { [resolvedCategory]: increment(1) } }, { merge: true });
-      tx.set(slotRef, { countedForStats: true }, { merge: true });
+      tx.set(walletRef, {
+        unlimitedStats: {
+          ...currentStats,
+          [resolvedCategory]: newCount,
+        }
+      }, { merge: true });
+
       if (newCount === 10) {
         justReachedTen = true;
         nextCategory = NEXT_CATEGORY_MAP[resolvedCategory] || undefined;
       }
     }
+
     return { justReachedTen, nextCategory };
   });
 }
@@ -522,14 +518,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
       void checkQuests(cId, 'question_answered', 1);
       void checkQuests(cId, 'bonus_question', 1);
 
-      const currentCat = categoryFilter || question.category;
-      const catRes = await recordCategoryAnswer(cId, slotKey, currentCat, myUid).catch(() => {});
-      if (catRes && catRes.justReachedTen) {
-        setCelebration({
-          categoryName: CATEGORY_NAMES[currentCat || 'amour'] || 'cette catégorie',
-          nextCategoryName: catRes.nextCategory ? CATEGORY_NAMES[catRes.nextCategory] : undefined,
-        });
-      }
+      const resolvedCat = categoryFilter || (question && isPof(question) ? 'pile_ou_face' : (question as Question)?.category);
 
       if (partnerHasAnswered) {
         const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
@@ -538,10 +527,10 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
           if (decryptedPartner && decryptedPartner.length > 0) {
             setPartnerAnswer(decryptedPartner);
           }
-          const res = await completeUnlimitedQuestion(cId, slotKey, currentCat, myUid, partnerUid);
+          const res = await completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid);
           if (res && typeof res === 'object' && res.justReachedTen) {
             setCelebration({
-              categoryName: CATEGORY_NAMES[currentCat || 'amour'] || 'cette catégorie',
+              categoryName: CATEGORY_NAMES[resolvedCat || 'amour'] || 'cette catégorie',
               nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
             });
           }
@@ -562,11 +551,11 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         const decryptedPartner = await safeDecrypt(snap.data(), cId);
         if (decryptedPartner && decryptedPartner.length > 0) {
           setPartnerAnswer(decryptedPartner);
-          const currentCat = categoryFilter || question?.category;
-          const res = await completeUnlimitedQuestion(cId, slotKey, currentCat, myUid, partnerUid).catch(() => {});
+          const resolvedCat = categoryFilter || (question && isPof(question) ? 'pile_ou_face' : (question as Question)?.category);
+          const res = await completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid).catch(() => {});
           if (res && typeof res === 'object' && res.justReachedTen) {
             setCelebration({
-              categoryName: CATEGORY_NAMES[currentCat || 'amour'] || 'cette catégorie',
+              categoryName: CATEGORY_NAMES[resolvedCat || 'amour'] || 'cette catégorie',
               nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
             });
           }
@@ -574,7 +563,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         }
       }
     });
-  }, [partnerHasAnswered, isSubmitted]);
+  }, [partnerHasAnswered, isSubmitted, question, categoryFilter]);
 
   // ── Question suivante — stockage provisoire avec flag movedToNext ────────
   const handleNext = async () => {

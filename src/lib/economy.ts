@@ -96,29 +96,72 @@ export async function computeStreakCached(cId: string, force = false): Promise<n
   return streak;
 }
 
+export function resolveQuestionCategory(questionId?: string, fallbackCat?: string): string | undefined {
+  if (fallbackCat && fallbackCat !== 'all') return fallbackCat;
+  if (!questionId) return undefined;
+  if (questionId.startsWith('pof_')) return 'pile_ou_face';
+  const q = getById(questionId);
+  if (q?.category) return q.category;
+  const match = questionId.match(/^q_gen_([a-z_]+)_\d+$/);
+  if (match) return match[1];
+  return undefined;
+}
+
 export async function syncUnlimitedStats(cId: string): Promise<Record<string, number>> {
   if (!cId) throw new Error('Missing coupleId');
   const dailySnapshot = await getDocs(collection(db, 'couples', cId, 'daily'));
   const stats: Record<string, number> = {};
+  const unconfirmedSlots: Array<{ ref: any; data: any }> = [];
+
   dailySnapshot.docs.forEach((dailyDoc) => {
     const data = dailyDoc.data();
-    if (data.bothAnswered === true || data.countedForStats === true || data.hasAnswer === true) {
-      let cat = data.category;
-      if (!cat || cat === 'all') {
-        cat = data.questionCategory || (data.questionId ? getById(data.questionId)?.category : undefined);
-      }
-      if (!cat && data.questionId) {
-        cat = getById(data.questionId)?.category || 'quotidien';
-      } else if (!cat && !data.mode) {
-        cat = 'quotidien';
-      }
+    if (data.bothAnswered === true) {
+      const cat = resolveQuestionCategory(data.questionId, data.category !== 'all' ? data.category : data.questionCategory);
       if (cat && cat !== 'all') {
         stats[cat] = (stats[cat] ?? 0) + 1;
       }
+    } else if (dailyDoc.id.startsWith('unlimited_')) {
+      unconfirmedSlots.push({ ref: dailyDoc.ref, data });
     }
   });
-  await setDoc(doc(db, `couples/${cId}/economy/wallet`), { unlimitedStats: stats }, { merge: true });
-  return stats;
+
+  // Pour les questions illimitées sans bothAnswered marqué, vérifier si les 2 partenaires ont répondu
+  if (unconfirmedSlots.length > 0) {
+    const checks = await Promise.all(
+      unconfirmedSlots.map(async ({ ref, data }) => {
+        try {
+          const ansSnap = await getDocs(collection(ref, 'answers'));
+          if (ansSnap.size >= 2) {
+            await updateDoc(ref, { bothAnswered: true, countedForStats: true }).catch(() => {});
+            return { data, bothAnswered: true };
+          }
+        } catch {}
+        return { data, bothAnswered: false };
+      })
+    );
+
+    checks.forEach(({ data, bothAnswered }) => {
+      if (bothAnswered) {
+        const cat = resolveQuestionCategory(data.questionId, data.category !== 'all' ? data.category : data.questionCategory);
+        if (cat && cat !== 'all') {
+          stats[cat] = (stats[cat] ?? 0) + 1;
+        }
+      }
+    });
+  }
+
+  // Préserver les stats existantes du wallet pour éviter toute régression
+  const walletRef = doc(db, `couples/${cId}/economy/wallet`);
+  const walletSnap = await getDoc(walletRef);
+  const existingStats = walletSnap.exists() ? (walletSnap.data().unlimitedStats || {}) : {};
+
+  const mergedStats: Record<string, number> = { ...existingStats };
+  for (const [cat, count] of Object.entries(stats)) {
+    mergedStats[cat] = Math.max(mergedStats[cat] ?? 0, count);
+  }
+
+  await setDoc(walletRef, { unlimitedStats: mergedStats }, { merge: true });
+  return mergedStats;
 }
 
 const STREAK_UNLOCKS = [
