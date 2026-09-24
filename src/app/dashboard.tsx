@@ -567,21 +567,21 @@ export default function DashboardScreen() {
           <View style={styles.categoryGrid}>
             {[
               { id: 'amour', title: 'Amour', icon: <Heart color="#EF4444" size={24} />, bg: 'rgba(254,242,242,0.95)', bgDark: 'rgba(50,20,20,0.92)', border: 'rgba(239,68,68,0.7)', requires: null, rarity: 'Commun' },
-              { id: 'fun', title: 'Fun', icon: <Smile color="#F59E0B" size={24} />, bg: 'rgba(254,243,199,0.95)', bgDark: 'rgba(50,38,15,0.92)', border: 'rgba(245,158,11,0.7)', requires: 'amour', rarity: 'Commun' },
-              { id: 'profond', title: 'Profond', icon: <Brain color="#3B82F6" size={24} />, bg: 'rgba(239,246,255,0.95)', bgDark: 'rgba(20,30,55,0.92)', border: 'rgba(59,130,246,0.7)', requires: 'fun', rarity: 'Commun' },
-              { id: 'intime', title: 'Intime', icon: <Flame color="#BE185D" size={24} />, bg: 'rgba(253,242,248,0.95)', bgDark: 'rgba(50,15,35,0.92)', border: 'rgba(236,72,153,0.7)', requires: 'profond', rarity: 'Rare' },
-              { id: 'pile_ou_face', title: 'Tu préfères', icon: <Split color="#0EA5E9" size={24} />, bg: 'rgba(240,249,255,0.95)', bgDark: 'rgba(15,35,50,0.92)', border: 'rgba(14,165,233,0.7)', requires: 'intime', rarity: 'Rare' },
-              { id: 'famille', title: 'Famille', icon: <Home color="#10B981" size={24} />, bg: 'rgba(236,253,245,0.95)', bgDark: 'rgba(15,45,30,0.92)', border: 'rgba(16,185,129,0.7)', requires: 'pile_ou_face', rarity: 'Rare' },
-              { id: 'debat', title: 'Débat', icon: <MessageCircle color="#8B5CF6" size={24} />, bg: 'rgba(245,243,255,0.95)', bgDark: 'rgba(35,20,55,0.92)', border: 'rgba(139,92,246,0.7)', requires: 'famille', rarity: 'Rare' },
-              { id: 'futur', title: 'Futur', icon: <Rocket color="#6366F1" size={24} />, bg: 'rgba(238,242,255,0.95)', bgDark: 'rgba(25,25,60,0.92)', border: 'rgba(99,102,241,0.7)', requires: 'debat', rarity: 'Épique' },
-              { id: 'souvenir', title: 'Souvenir', icon: <Camera color="#14B8A6" size={24} />, bg: 'rgba(240,253,250,0.95)', bgDark: 'rgba(15,45,45,0.92)', border: 'rgba(20,184,166,0.7)', requires: 'futur', rarity: 'Épique' },
-              { id: 'reve', title: 'Rêve', icon: <Star color="#F59E0B" size={24} />, bg: 'rgba(254,252,232,0.95)', bgDark: 'rgba(50,45,15,0.92)', border: 'rgba(252,211,77,0.8)', requires: 'souvenir', rarity: 'Légendaire' },
-              { id: 'quotidien', title: 'Quotidien', icon: <Coffee color="#78716C" size={24} />, bg: 'rgba(245,245,244,0.95)', bgDark: 'rgba(40,38,36,0.92)', border: 'rgba(168,162,158,0.7)', requires: 'reve', rarity: 'Légendaire' },
-              { id: 'defi', title: 'Défi', icon: <Trophy color="#F97316" size={24} />, bg: 'rgba(255,247,237,0.95)', bgDark: 'rgba(55,25,10,0.92)', border: 'rgba(249,115,22,0.7)', requires: 'quotidien', rarity: 'Légendaire' },
+              { id: 'fun', title: 'Fun', icon: <Smile color="#F59E0B" size={24} />, bg: 'rgba(254,243,199,0.95)', bgDark: 'rgba(50,38,15,0.92)', border: 'rgba(245,158,11,0.7)', requires: 'fun', rarity: 'Commun' },
+              { id: 'profond', title: 'Profond', icon: <Brain color="#3B82F6" size={24} />, bg: 'rgba(239,246,255,0.95)', bgDark: 'rgba(20,30,55,0.92)', border: 'rgba(59,130,246,0.7)', requires: 'profond', rarity: 'Commun' },
+              { id: 'intime', title: 'Intime', icon: <Flame color="#BE185D" size={24} />, bg: 'rgba(253,242,248,0.95)', bgDark: 'rgba(50,15,35,0.92)', border: 'rgba(236,72,153,0.7)', requires: 'intime', rarity: 'Rare' },
+              { id: 'pile_ou_face', title: 'Tu préfères', icon: <Split color="#0EA5E9" size={24} />, bg: 'rgba(240,249,255,0.95)', bgDark: 'rgba(15,35,50,0.92)', border: 'rgba(14,165,233,0.7)', requires: 'pile_ou_face', rarity: 'Rare' },
+              { id: 'famille', title: 'Famille', icon: <Home color="#10B981" size={24} />, bg: 'rgba(236,253,245,0.95)', bgDark: 'rgba(15,45,30,0.92)', border: 'rgba(16,185,129,0.7)', requires: 'famille', rarity: 'Rare' },
+              { id: 'debat', title: 'Débat', icon: <MessageCircle color="#8B5CF6" size={24} />, bg: 'rgba(245,243,255,0.95)', bgDark: 'rgba(35,20,55,0.92)', border: 'rgba(139,92,246,0.7)', requires: 'debat', rarity: 'Rare' },
+              { id: 'futur', title: 'Futur', icon: <Rocket color="#6366F1" size={24} />, bg: 'rgba(238,242,255,0.95)', bgDark: 'rgba(25,25,60,0.92)', border: 'rgba(99,102,241,0.7)', requires: 'futur', rarity: 'Épique' },
+              { id: 'souvenir', title: 'Souvenir', icon: <Camera color="#14B8A6" size={24} />, bg: 'rgba(240,253,250,0.95)', bgDark: 'rgba(15,45,45,0.92)', border: 'rgba(20,184,166,0.7)', requires: 'souvenir', rarity: 'Épique' },
+              { id: 'reve', title: 'Rêve', icon: <Star color="#F59E0B" size={24} />, bg: 'rgba(254,252,232,0.95)', bgDark: 'rgba(50,45,15,0.92)', border: 'rgba(252,211,77,0.8)', requires: 'reve', rarity: 'Légendaire' },
+              { id: 'quotidien', title: 'Quotidien', icon: <Coffee color="#78716C" size={24} />, bg: 'rgba(245,245,244,0.95)', bgDark: 'rgba(40,38,36,0.92)', border: 'rgba(168,162,158,0.7)', requires: 'quotidien', rarity: 'Légendaire' },
+              { id: 'defi', title: 'Défi', icon: <Trophy color="#F97316" size={24} />, bg: 'rgba(255,247,237,0.95)', bgDark: 'rgba(55,25,10,0.92)', border: 'rgba(249,115,22,0.7)', requires: 'defi', rarity: 'Légendaire' },
             ].map((cat, index) => {
-              // Vérifier si la catégorie requise a atteint 10 questions
-              const reqCount = cat.requires ? ((wallet as any)?.unlimitedStats?.[cat.requires] || 0) : 10;
-              const isLocked = cat.requires !== null && reqCount < 10;
+              // Vérifier si le thème a atteint 10 questions en mode illimité
+              const count = (wallet as any)?.unlimitedStats?.[cat.id] || 0;
+              const isLocked = cat.requires !== null && count < 10;
               const cardBg = store.isDarkMode ? cat.bgDark : cat.bg;
               
               return (
@@ -590,23 +590,8 @@ export default function DashboardScreen() {
                     <Pressable 
                       style={[styles.categoryCard, { backgroundColor: store.isDarkMode ? 'rgba(38,28,27,0.95)' : 'rgba(245,245,247,0.95)', borderColor: store.isDarkMode ? 'rgba(80,60,58,0.8)' : '#D1D5DB' }]}
                       onPress={() => {
-                        const requiredCategory = cat.requires
-                          ? [
-                              { id: 'amour', title: 'Amour' },
-                              { id: 'fun', title: 'Fun' },
-                              { id: 'profond', title: 'Profond' },
-                              { id: 'intime', title: 'Intime' },
-                              { id: 'pile_ou_face', title: 'Tu préfères' },
-                              { id: 'famille', title: 'Famille' },
-                              { id: 'debat', title: 'Débat' },
-                              { id: 'futur', title: 'Futur' },
-                              { id: 'souvenir', title: 'Souvenir' },
-                              { id: 'reve', title: 'Rêve' },
-                              { id: 'quotidien', title: 'Quotidien' },
-                            ].find(item => item.id === cat.requires)?.title ?? cat.requires
-                          : null;
                         setAlertMessage(
-                          `Le thème "${cat.title}" est verrouillé. Il faut répondre à 10 questions de "${requiredCategory}" pour le débloquer !`,
+                          `Le thème "${cat.title}" est verrouillé. Il faut répondre à 10 questions de ce thème en mode Illimité pour le débloquer ! (${count}/10)`,
                         );
                       }}
                     >
@@ -615,24 +600,9 @@ export default function DashboardScreen() {
                         <Text style={styles.categoryCardTitle}>{cat.title}</Text>
                       </View>
                       <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: store.isDarkMode ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.7)', borderRadius: 20 }}>
-                        <Lock color={store.isDarkMode ? '#A89997' : '#6B7280'} size={26} />
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: store.isDarkMode ? '#A89997' : '#4B5563', marginTop: 3 }}>
-                          {reqCount}/10
-                        </Text>
-                        <Text style={{ fontSize: 9, fontWeight: '700', color: store.isDarkMode ? '#A89997' : '#6B7280', opacity: 0.85 }}>
-                          {cat.requires ? [
-                            { id: 'amour', title: 'Amour' },
-                            { id: 'fun', title: 'Fun' },
-                            { id: 'profond', title: 'Profond' },
-                            { id: 'intime', title: 'Intime' },
-                            { id: 'pile_ou_face', title: 'Tu préfères' },
-                            { id: 'famille', title: 'Famille' },
-                            { id: 'debat', title: 'Débat' },
-                            { id: 'futur', title: 'Futur' },
-                            { id: 'souvenir', title: 'Souvenir' },
-                            { id: 'reve', title: 'Rêve' },
-                            { id: 'quotidien', title: 'Quotidien' },
-                          ].find(item => item.id === cat.requires)?.title ?? cat.requires : ''}
+                        <Lock color={store.isDarkMode ? '#A89997' : '#6B7280'} size={24} />
+                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: store.isDarkMode ? '#A89997' : '#4B5563', marginTop: 4 }}>
+                          {count}/10
                         </Text>
                       </View>
                     </Pressable>

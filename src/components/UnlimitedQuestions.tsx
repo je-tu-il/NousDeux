@@ -80,6 +80,21 @@ function indexKey(uid: string, categoryFilter?: string): string {
   return `currentIndex_${uid}_${categoryFilter ?? 'all'}`;
 }
 
+const CATEGORY_RARITY_WEIGHTS: Record<string, number> = {
+  amour: 4,
+  fun: 4,
+  profond: 4,
+  intime: 3,
+  pile_ou_face: 3,
+  famille: 3,
+  debat: 3,
+  futur: 2,
+  souvenir: 2,
+  reve: 1,
+  quotidien: 1,
+  defi: 1,
+};
+
 async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?: string): Promise<string> {
   if (!cId) throw new Error('Missing coupleId');
   return runTransaction(db, async (tx) => {
@@ -113,7 +128,32 @@ async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?:
       newSeenIds = [];
     }
 
-    const picked = unseen[Math.floor(Math.random() * unseen.length)];
+    let picked: AnyQuestion;
+    if (!categoryFilter) {
+      const byCat: Record<string, AnyQuestion[]> = {};
+      for (const q of unseen) {
+        const cat = isPof(q) ? 'pile_ou_face' : (q as Question).category;
+        if (!byCat[cat]) byCat[cat] = [];
+        byCat[cat].push(q);
+      }
+      const catsWithQuestions = Object.keys(byCat);
+      const totalWeight = catsWithQuestions.reduce((sum, cat) => sum + (CATEGORY_RARITY_WEIGHTS[cat] || 2), 0);
+      let rand = Math.random() * totalWeight;
+      let chosenCat = catsWithQuestions[0];
+      for (const cat of catsWithQuestions) {
+        const weight = CATEGORY_RARITY_WEIGHTS[cat] || 2;
+        if (rand < weight) {
+          chosenCat = cat;
+          break;
+        }
+        rand -= weight;
+      }
+      const pool = byCat[chosenCat] || unseen;
+      picked = pool[Math.floor(Math.random() * pool.length)];
+    } else {
+      picked = unseen[Math.floor(Math.random() * unseen.length)];
+    }
+
     const pickedCategory = isPof(picked) ? 'pile_ou_face' : (picked as Question).category;
     tx.set(progressRef, { questionIds: [...newSeenIds, picked.id], updatedAt: new Date() });
     tx.set(slotRef, {
@@ -184,19 +224,19 @@ const CATEGORY_NAMES: Record<string, string> = {
   defi: 'Défi',
 };
 
-const NEXT_CATEGORY_MAP: Record<string, string | null> = {
-  amour: 'fun',
-  fun: 'profond',
-  profond: 'intime',
-  intime: 'pile_ou_face',
-  pile_ou_face: 'famille',
-  famille: 'debat',
-  debat: 'futur',
-  futur: 'souvenir',
-  souvenir: 'reve',
-  reve: 'quotidien',
-  quotidien: 'defi',
-  defi: null,
+const CATEGORY_REQUIREMENTS: Record<string, string | null> = {
+  amour: null,
+  fun: 'fun',
+  profond: 'profond',
+  intime: 'intime',
+  pile_ou_face: 'pile_ou_face',
+  famille: 'famille',
+  debat: 'debat',
+  futur: 'futur',
+  souvenir: 'souvenir',
+  reve: 'reve',
+  quotidien: 'quotidien',
+  defi: 'defi',
 };
 
 async function completeUnlimitedQuestion(
@@ -205,7 +245,7 @@ async function completeUnlimitedQuestion(
   category: string | undefined,
   uid: string,
   partnerUid: string
-): Promise<{ justReachedTen?: boolean; nextCategory?: string } | void> {
+): Promise<{ justReachedTen?: boolean; unlockedCategory?: string } | void> {
   if (!cId) throw new Error('Missing coupleId');
   const slotRef = doc(db, 'couples', cId, 'daily', slot);
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
@@ -256,7 +296,6 @@ async function completeUnlimitedQuestion(
     });
 
     let justReachedTen = false;
-    let nextCategory: string | undefined = undefined;
 
     if (resolvedCategory) {
       const currentStats = walletSnap?.exists() ? (walletSnap.data().unlimitedStats || {}) : {};
@@ -271,11 +310,10 @@ async function completeUnlimitedQuestion(
 
       if (newCount === 10) {
         justReachedTen = true;
-        nextCategory = NEXT_CATEGORY_MAP[resolvedCategory] || undefined;
       }
     }
 
-    return { justReachedTen, nextCategory };
+    return { justReachedTen, unlockedCategory: resolvedCategory };
   });
 }
 
@@ -309,7 +347,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
   // Vrai quand le partenaire a déjà cliqué "Suivante" pour ce slot
   const [partnerMovedToNext, setPartnerMovedToNext] = useState(false);
-  const [celebration, setCelebration]               = useState<{ categoryName: string; nextCategoryName?: string } | null>(null);
+  const [celebration, setCelebration]               = useState<{ categoryName: string } | null>(null);
 
   const isSubmittedRef = useRef(false);
   useEffect(() => { isSubmittedRef.current = isSubmitted; }, [isSubmitted]);
@@ -393,23 +431,18 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
         // --- VÉRIFICATION DE VERROUILLAGE DES THÈMES ---
         if (categoryFilter) {
-        const CATEGORY_REQUIREMENTS: Record<string, string | null> = {
-          amour: null, fun: 'amour', profond: 'fun', intime: 'profond',
-          pile_ou_face: 'intime', famille: 'pile_ou_face', debat: 'famille',
-          futur: 'debat', souvenir: 'futur', reve: 'souvenir',
-          quotidien: 'reve', defi: 'quotidien'
-        };
-        const req = CATEGORY_REQUIREMENTS[categoryFilter];
-        if (req) {
-          const walletSnap = await getDoc(doc(db, 'couples', coupleKey, 'economy', 'wallet'));
-          const reqCount = walletSnap.exists() ? (walletSnap.data().unlimitedStats?.[req] || 0) : 0;
-          if (reqCount < 10) {
-            Alert.alert("Accès refusé", "Tu dois répondre à au moins 10 questions de la catégorie précédente !");
-            router.replace('/dashboard');
-            return;
+          const req = CATEGORY_REQUIREMENTS[categoryFilter];
+          if (req) {
+            const walletSnap = await getDoc(doc(db, 'couples', coupleKey, 'economy', 'wallet'));
+            const reqCount = walletSnap.exists() ? (walletSnap.data().unlimitedStats?.[req] || 0) : 0;
+            if (reqCount < 10) {
+              Alert.alert("Thème verrouillé", `Tu dois répondre à 10 questions de ce thème en mode Illimité pour le débloquer ! (${reqCount}/10)`);
+              router.replace('/dashboard');
+              return;
+            }
           }
         }
-        }
+        // ------------------------------------------------
         // ------------------------------------------------
 
         const [pDoc, currentIdx] = await Promise.all([
@@ -471,10 +504,9 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
             setPartnerAnswer(decrypted);
             const resolvedCat = categoryFilter || (question && isPof(question) ? 'pile_ou_face' : (question as Question)?.category);
             void completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid).then((res) => {
-              if (res && res.justReachedTen) {
+              if (res && res.justReachedTen && res.unlockedCategory) {
                 setCelebration({
-                  categoryName: CATEGORY_NAMES[resolvedCat || 'amour'] || 'cette catégorie',
-                  nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
+                  categoryName: CATEGORY_NAMES[res.unlockedCategory] || res.unlockedCategory,
                 });
               }
             }).catch(() => {});
@@ -538,10 +570,9 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
           setPartnerAnswer(decryptedPartner);
         }
         const res = await completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid);
-        if (res && typeof res === 'object' && res.justReachedTen) {
+        if (res && typeof res === 'object' && res.justReachedTen && res.unlockedCategory) {
           setCelebration({
-            categoryName: CATEGORY_NAMES[resolvedCat || 'amour'] || 'cette catégorie',
-            nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
+            categoryName: CATEGORY_NAMES[res.unlockedCategory] || res.unlockedCategory,
           });
         }
         updateWalletStreak(cId).catch(console.error);
@@ -562,10 +593,9 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
           setPartnerAnswer(decryptedPartner);
           const resolvedCat = categoryFilter || (question && isPof(question) ? 'pile_ou_face' : (question as Question)?.category);
           const res = await completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid).catch(() => {});
-          if (res && typeof res === 'object' && res.justReachedTen) {
+          if (res && typeof res === 'object' && res.justReachedTen && res.unlockedCategory) {
             setCelebration({
-              categoryName: CATEGORY_NAMES[resolvedCat || 'amour'] || 'cette catégorie',
-              nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
+              categoryName: CATEGORY_NAMES[res.unlockedCategory] || res.unlockedCategory,
             });
           }
           updateWalletStreak(cId).catch(console.error);
@@ -821,17 +851,15 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         <View style={styles.modalOverlay}>
           <Animated.View entering={FadeInUp.duration(350)} style={styles.modalContent}>
             <Text style={{ fontSize: 50, textAlign: 'center', marginBottom: 12 }}>🎉</Text>
-            <Text style={styles.modalTitle}>Palier franchi !</Text>
+            <Text style={styles.modalTitle}>Thème Débloqué !</Text>
             <Text style={styles.modalText}>
               Vous avez répondu ensemble à 10 questions du thème <Text style={{ fontWeight: 'bold' }}>{celebration?.categoryName}</Text> !
             </Text>
-            {celebration?.nextCategoryName && (
-              <View style={styles.unlockedBadge}>
-                <Text style={styles.unlockedBadgeText}>
-                  ✨ Le thème « {celebration.nextCategoryName} » est maintenant débloqué !
-                </Text>
-              </View>
-            )}
+            <View style={styles.unlockedBadge}>
+              <Text style={styles.unlockedBadgeText}>
+                ✨ Le thème « {celebration?.categoryName} » est maintenant débloqué sur votre accueil !
+              </Text>
+            </View>
             <Pressable style={styles.modalConfirmBtn} onPress={() => setCelebration(null)}>
               <Text style={styles.modalConfirmBtnText}>Génial ! 🚀</Text>
             </Pressable>

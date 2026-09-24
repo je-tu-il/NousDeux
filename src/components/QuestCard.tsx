@@ -90,7 +90,13 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
   const isUnclaimed = progress.unclaimedTiers?.includes(viewTier.tier);
   const myUid = store.uid;
   const claimedByUsers = progress.claimedBy?.[viewTier.tier] ?? [];
-  const hasUserClaimed = myUid ? claimedByUsers.includes(myUid) : false;
+  const [optimisticClaimedTiers, setOptimisticClaimedTiers] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setOptimisticClaimedTiers({});
+  }, [progress]);
+
+  const hasUserClaimed = (myUid ? claimedByUsers.includes(myUid) : false) || Boolean(optimisticClaimedTiers[viewTier.tier]);
   const partnerClaimed = myUid ? claimedByUsers.some(id => id !== myUid) : claimedByUsers.length > 0;
   const isWaitingForPartner = isUnclaimed && hasUserClaimed;
   const hasBeenClaimed = isViewTierDone && !isUnclaimed;
@@ -109,9 +115,16 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
 
   const handleClaim = async () => {
     if (!onClaim || !isUnclaimed || hasUserClaimed) return;
+    const tier = viewTier.tier;
+    setOptimisticClaimedTiers((prev) => ({ ...prev, [tier]: true }));
     setLoadingClaim(true);
-    await onClaim(quest.id, viewTier.tier, viewTier.reward);
-    setLoadingClaim(false);
+    try {
+      await onClaim(quest.id, tier, viewTier.reward);
+    } catch {
+      setOptimisticClaimedTiers((prev) => ({ ...prev, [tier]: false }));
+    } finally {
+      setLoadingClaim(false);
+    }
   };
 
   // Carte verte si le palier visé est terminé (que ce soit claimé ou non)

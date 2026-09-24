@@ -71,3 +71,13 @@ test('unlimited questions progression strictly requires both partners to have an
   );
 });
 
+test('QuestCard and quests.tsx implement single-tap optimistic claim without double click', async () => {
+  const cardSrc = await read('src/components/QuestCard.tsx');
+  const questsSrc = await read('src/app/quests.tsx');
+
+  assert.match(cardSrc, /optimisticClaimedTiers/, 'QuestCard must have optimisticClaimedTiers state');
+  assert.match(cardSrc, /Boolean\(optimisticClaimedTiers\[viewTier\.tier\]\)/, 'hasUserClaimed must check optimisticClaimedTiers');
+  assert.match(questsSrc, /setProgressMap\(\(prev\)\s*=>/, 'quests.tsx must optimistically update progressMap in handleClaim');
+  assert.match(questsSrc, /onSnapshot\(doc\(db,\s*`couples\/\$\{cId\}\/quests\/progress`\)/, 'quests.tsx must listen to quests progress in real time');
+});
+

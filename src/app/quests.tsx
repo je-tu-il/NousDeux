@@ -7,7 +7,7 @@
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -70,11 +70,6 @@ export default function QuestsScreen() {
       const cId = await getCoupleId(myUid);
       if (cId) {
         setCoupleId(cId);
-        const cached = questProgressCache.get(cId);
-        if (cached) {
-          setProgressMap(cached);
-          setLoading(false);
-        }
         const userSnap = await getDoc(doc(db, 'users', myUid));
         const userData = userSnap.data();
         const startDate = userData?.linkedAt || new Date().toISOString();
@@ -96,6 +91,7 @@ export default function QuestsScreen() {
 
   useEffect(() => {
     let isCancelled = false;
+    let unsubSnapshot: (() => void) | null = null;
     const load = async () => {
       if (!myUid) return;
       try {
@@ -114,10 +110,20 @@ export default function QuestsScreen() {
           setDoc(doc(db, 'users', myUid), { linkedAt: startDate }, { merge: true }).catch(() => {});
         }
         await updateCoupleDurationQuest(cId, startDate);
-        const progress = await getQuestProgress(cId);
+
         if (isCancelled) return;
-        questProgressCache.set(cId, progress);
-        setProgressMap(progress || {});
+        unsubSnapshot = onSnapshot(doc(db, `couples/${cId}/quests/progress`), (snap) => {
+          if (snap.exists()) {
+            const data = snap.data() as QuestProgressMap;
+            questProgressCache.set(cId, data);
+            setProgressMap(data);
+          }
+          setLoading(false);
+          setRefreshing(false);
+        }, () => {
+          setLoading(false);
+          setRefreshing(false);
+        });
       } catch (e) {
         console.error('[Quests]', e);
       } finally {
@@ -128,22 +134,55 @@ export default function QuestsScreen() {
       }
     };
     void load();
-    return () => { isCancelled = true; };
+    return () => {
+      isCancelled = true;
+      if (unsubSnapshot) unsubSnapshot();
+    };
   }, [myUid]);
 
   const [unlockedCosmetic, setUnlockedCosmetic] = useState<Cosmetic | null>(null);
 
   const handleClaim = async (questId: string, tierLevel: QuestTier, reward: number) => {
-    if (!coupleId) return;
-    if (!store.uid) return;
-    const success = await claimQuestReward(coupleId, questId, tierLevel, reward, store.uid);
-    await fetchQuests();
-    if (success) {
-      // Check if a cosmetic was unlocked
-      const cosmetic = COSMETICS.find(c => c.unlock.type === 'quest' && c.unlock.questId === questId && c.unlock.tier === tierLevel);
-      if (cosmetic) {
-        setUnlockedCosmetic(cosmetic);
+    if (!coupleId || !store.uid) return;
+    const uid = store.uid;
+
+    // Mise à jour optimiste immédiate en local pour passer en "En attente du partenaire" instantanément
+    setProgressMap((prev) => {
+      const currentEntry = prev[questId] || { current: 0, tier: null };
+      const currentClaimed = currentEntry.claimedBy?.[tierLevel] || [];
+      const updatedClaimers = currentClaimed.includes(uid) ? currentClaimed : [...currentClaimed, uid];
+      const updatedMap: QuestProgressMap = {
+        ...prev,
+        [questId]: {
+          ...currentEntry,
+          claimedBy: {
+            ...currentEntry.claimedBy,
+            [tierLevel]: updatedClaimers,
+          },
+        },
+      };
+      questProgressCache.set(coupleId, updatedMap);
+      return updatedMap;
+    });
+
+    try {
+      const success = await claimQuestReward(coupleId, questId, tierLevel, reward, uid);
+      const freshProgress = await getQuestProgress(coupleId);
+      questProgressCache.set(coupleId, freshProgress);
+      setProgressMap(freshProgress || {});
+
+      if (success) {
+        // Check if a cosmetic was unlocked
+        const cosmetic = COSMETICS.find(c => c.unlock.type === 'quest' && c.unlock.questId === questId && c.unlock.tier === tierLevel);
+        if (cosmetic) {
+          setUnlockedCosmetic(cosmetic);
+        }
       }
+    } catch (e) {
+      console.error('[Quests claim]', e);
+      const freshProgress = await getQuestProgress(coupleId);
+      questProgressCache.set(coupleId, freshProgress);
+      setProgressMap(freshProgress || {});
     }
   };
 
