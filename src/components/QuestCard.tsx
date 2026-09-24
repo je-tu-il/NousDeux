@@ -94,7 +94,7 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
 
   useEffect(() => {
     setOptimisticClaimedTiers({});
-  }, [progress]);
+  }, [myUid]);
 
   const hasUserClaimed = (myUid ? claimedByUsers.includes(myUid) : false) || Boolean(optimisticClaimedTiers[viewTier.tier]);
   const partnerClaimed = myUid ? claimedByUsers.some(id => id !== myUid) : claimedByUsers.length > 0;

@@ -38,9 +38,12 @@ import {
     WalletData,
     computeStreakCached,
     getUserProfile,
+    getWallet,
     purchaseItem,
     saveUserProfile
 } from '../lib/economy';
+import GoogleAdBanner from '../components/GoogleAdBanner';
+import RewardedAdButton from '../components/RewardedAdButton';
 import { db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
 
@@ -373,6 +376,18 @@ export default function ShopScreen() {
           </Pressable>
         </View>
 
+        {/* Bouton Publicité Récompensée (+15 Pétales) */}
+        <View style={{ paddingTop: 8 }}>
+          <RewardedAdButton
+            coupleId={coupleId}
+            onRewardEarned={() => {
+              if (coupleId) {
+                getWallet(coupleId).then(setWallet).catch(() => {});
+              }
+            }}
+          />
+        </View>
+
         {/* Onglets */}
         <View style={styles.tabs}>
           {(['backgrounds', 'borders', 'tags'] as TabType[]).map(tab => (
@@ -398,6 +413,7 @@ export default function ShopScreen() {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={<GoogleAdBanner style={{ marginVertical: 16 }} />}
         />
       </View>
 

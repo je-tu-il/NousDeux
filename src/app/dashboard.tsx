@@ -2,6 +2,7 @@ import CoinWallet from '@/components/CoinWallet';
 import DailyClaim from '@/components/DailyClaim';
 import PixelAvatar from '@/components/PixelAvatar';
 import StreakCalendar from '@/components/StreakCalendar';
+import GoogleAdBanner from '@/components/GoogleAdBanner';
 import { Colors } from '@/constants/Colors';
 import { Cosmetic, COSMETICS, getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
 import { cacheWallet, computeStreakCached, getCachedWallet, getUserProfile, getWallet, invalidateStreakCache, syncUnlimitedStats, updateWalletStreak, UserProfile } from '@/lib/economy';
@@ -620,6 +621,9 @@ export default function DashboardScreen() {
               );
             })}
           </View>
+
+          {/* Espace publicitaire discret */}
+          <GoogleAdBanner style={{ marginTop: 24, marginBottom: 8 }} />
 
         </View>
         </ScrollView>
