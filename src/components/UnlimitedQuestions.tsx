@@ -258,7 +258,7 @@ async function completeUnlimitedQuestion(
     let justReachedTen = false;
     let nextCategory: string | undefined = undefined;
 
-    if (resolvedCategory && !slotData.countedForStats) {
+    if (resolvedCategory) {
       const currentStats = walletSnap?.exists() ? (walletSnap.data().unlimitedStats || {}) : {};
       const currentCount = currentStats[resolvedCategory] || 0;
       const newCount = currentCount + 1;
@@ -469,6 +469,16 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
           setPartnerHasAnswered(true);
           if (isSubmittedRef.current) {
             setPartnerAnswer(decrypted);
+            const resolvedCat = categoryFilter || (question && isPof(question) ? 'pile_ou_face' : (question as Question)?.category);
+            void completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid).then((res) => {
+              if (res && res.justReachedTen) {
+                setCelebration({
+                  categoryName: CATEGORY_NAMES[resolvedCat || 'amour'] || 'cette catégorie',
+                  nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
+                });
+              }
+            }).catch(() => {});
+            updateWalletStreak(cId).catch(console.error);
           }
         }
       } else {
@@ -482,7 +492,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
       }
     });
     return () => unsub();
-  }, [myUid, partnerUid, slotKey, cId]);
+  }, [myUid, partnerUid, slotKey, cId, question, categoryFilter]);
 
   // ── Soumettre ma réponse — stockage chiffré temporaire ───────────────────
   const handleSubmit = async (choice?: string) => {
@@ -520,22 +530,21 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
       const resolvedCat = categoryFilter || (question && isPof(question) ? 'pile_ou_face' : (question as Question)?.category);
 
-      if (partnerHasAnswered) {
-        const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
-        if (pAns.exists()) {
-          const decryptedPartner = await safeDecrypt(pAns.data(), cId);
-          if (decryptedPartner && decryptedPartner.length > 0) {
-            setPartnerAnswer(decryptedPartner);
-          }
-          const res = await completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid);
-          if (res && typeof res === 'object' && res.justReachedTen) {
-            setCelebration({
-              categoryName: CATEGORY_NAMES[resolvedCat || 'amour'] || 'cette catégorie',
-              nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
-            });
-          }
-          updateWalletStreak(cId).catch(console.error);
+      const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
+      if (pAns.exists()) {
+        setPartnerHasAnswered(true);
+        const decryptedPartner = await safeDecrypt(pAns.data(), cId);
+        if (decryptedPartner && decryptedPartner.length > 0) {
+          setPartnerAnswer(decryptedPartner);
         }
+        const res = await completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid);
+        if (res && typeof res === 'object' && res.justReachedTen) {
+          setCelebration({
+            categoryName: CATEGORY_NAMES[resolvedCat || 'amour'] || 'cette catégorie',
+            nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
+          });
+        }
+        updateWalletStreak(cId).catch(console.error);
       }
     } catch (e) {
       console.error(e);

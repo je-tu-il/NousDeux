@@ -631,7 +631,7 @@ export default function DashboardScreen() {
                         <Text style={{ fontSize: 11, fontWeight: '700', color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', marginTop: 2 }}>
                           Complété ✓
                         </Text>
-                      ) : (cat.requires === null && ((wallet as any)?.unlimitedStats?.[cat.id] || 0) === 0) ? null : (
+                      ) : (
                         <Text style={{ fontSize: 11, fontWeight: '700', color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', marginTop: 2 }}>
                           {`${(wallet as any)?.unlimitedStats?.[cat.id] || 0}/10`}
                         </Text>
