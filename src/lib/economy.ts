@@ -1,12 +1,19 @@
 import { collection, doc, getDoc, getDocs, increment, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { getById } from '../data/questions';
 import { QUESTS, Quest, QuestEvent, QuestTierLevel } from '../data/quests';
 import { db } from './firebase';
 
-export type WalletData = { petals: number; streak: number; lastClaimDate: string; totalEarned: number; dailyClaims?: Record<string, string> };
+export type WalletData = { petals: number; streak: number; lastClaimDate: string; totalEarned: number; dailyClaims?: Record<string, string>; lastOperationIds?: string[] };
 export type InventoryData = { backgrounds: string[]; borders: string[]; tags: string[]; avatarParts: string[] };
 export type ItemType = 'background' | 'border' | 'tag' | 'avatarPart';
 export type QuestTier = QuestTierLevel;
-export type QuestProgressEntry = { current: number; tier: QuestTier | null; completedAt?: string; unclaimedTiers?: QuestTierLevel[]; };
+export type QuestProgressEntry = {
+  current: number;
+  tier: QuestTier | null;
+  completedAt?: string;
+  unclaimedTiers?: QuestTierLevel[];
+  claimedBy?: Partial<Record<QuestTierLevel, string[]>>;
+};
 export type QuestProgressMap = Record<string, QuestProgressEntry>;
 export type AvatarConfig = { body: string; skin: string; hair: string; hairColor: string; eyes: string; mouth: string; accessory: string; hat: string; outfit: string };
 export type UserProfile = { selectedBackground: string; selectedBorder: string; selectedTag: string; avatar: AvatarConfig };
@@ -44,6 +51,7 @@ function getLocalDateKey(): string {
 }
 
 export async function computeStreak(cId: string): Promise<number> {
+  if (!cId) throw new Error('Missing coupleId');
   const today = new Date();
   const dailySnapshot = await getDocs(collection(db, 'couples', cId, 'daily'));
   const completedDays = new Set<string>();
@@ -89,22 +97,77 @@ export async function computeStreakCached(cId: string, force = false): Promise<n
 }
 
 export async function syncUnlimitedStats(cId: string): Promise<Record<string, number>> {
+  if (!cId) throw new Error('Missing coupleId');
   const dailySnapshot = await getDocs(collection(db, 'couples', cId, 'daily'));
   const stats: Record<string, number> = {};
   dailySnapshot.docs.forEach((dailyDoc) => {
     const data = dailyDoc.data();
-    if (data.mode === 'unlimited' && data.category && data.category !== 'all' && data.bothAnswered === true) {
-      stats[data.category] = (stats[data.category] ?? 0) + 1;
+    if (data.bothAnswered === true || data.countedForStats === true || data.hasAnswer === true) {
+      let cat = data.category;
+      if (!cat || cat === 'all') {
+        cat = data.questionCategory || (data.questionId ? getById(data.questionId)?.category : undefined);
+      }
+      if (!cat && data.questionId) {
+        cat = getById(data.questionId)?.category || 'quotidien';
+      } else if (!cat && !data.mode) {
+        cat = 'quotidien';
+      }
+      if (cat && cat !== 'all') {
+        stats[cat] = (stats[cat] ?? 0) + 1;
+      }
     }
   });
   await setDoc(doc(db, `couples/${cId}/economy/wallet`), { unlimitedStats: stats }, { merge: true });
   return stats;
 }
 
+const STREAK_UNLOCKS = [
+  { id: 'bg_streak_3', type: 'backgrounds', days: 3 },
+  { id: 'bg_streak_7', type: 'backgrounds', days: 7 },
+  { id: 'bg_streak_14', type: 'backgrounds', days: 14 },
+  { id: 'bg_streak_30', type: 'backgrounds', days: 30 },
+  { id: 'bg_streak_60', type: 'backgrounds', days: 60 },
+  { id: 'bd_streak_7', type: 'borders', days: 7 },
+  { id: 'bd_streak_14', type: 'borders', days: 14 },
+  { id: 'bd_streak_30', type: 'borders', days: 30 },
+  { id: 'bd_streak_60', type: 'borders', days: 60 },
+] as const;
+
+export async function syncStreakCosmetics(cId: string, streak: number): Promise<void> {
+  if (!cId || streak <= 0) return;
+  try {
+    const invRef = doc(db, `couples/${cId}/inventory/cosmetics`);
+    const invSnap = await getDoc(invRef);
+    let invData: InventoryData = invSnap.exists()
+      ? (invSnap.data() as InventoryData)
+      : { backgrounds: [], borders: [], tags: [], avatarParts: [] };
+
+    let updated = false;
+    for (const item of STREAK_UNLOCKS) {
+      if (streak >= item.days) {
+        const list = invData[item.type] || [];
+        if (!list.includes(item.id)) {
+          invData = { ...invData, [item.type]: [...list, item.id] };
+          updated = true;
+        }
+      }
+    }
+    if (updated) {
+      await setDoc(invRef, invData, { merge: true });
+    }
+  } catch (err) {
+    console.error('Failed to sync streak cosmetics:', err);
+  }
+}
+
 export async function updateWalletStreak(cId: string): Promise<number> {
+  if (!cId) throw new Error('Missing coupleId');
   const streak = await computeStreak(cId);
   await setDoc(doc(db, `couples/${cId}/economy/wallet`), { streak }, { merge: true });
   streakCache.set(cId, streak);
+  if (streak > 0) {
+    await syncStreakCosmetics(cId, streak);
+  }
   return streak;
 }
 function getLocalYesterdayKey(): string {
@@ -115,6 +178,7 @@ function getLocalYesterdayKey(): string {
 
 // Retourne le wallet du couple, crée-le si inexistant
 export async function getWallet(cId: string): Promise<WalletData> {
+  if (!cId) throw new Error('Missing coupleId');
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
   const snap = await getDoc(walletRef);
   if (snap.exists()) {
@@ -128,7 +192,8 @@ export async function getWallet(cId: string): Promise<WalletData> {
   return defaultWallet;
 }
 
-export async function claimDaily(cId: string, uid: string, amountFromWheel?: number): Promise<{ petals: number; balance: number; totalEarned: number; alreadyClaimed: boolean }> {
+export async function claimDaily(cId: string, uid: string, amountFromWheel?: number, operationId?: string): Promise<{ petals: number; balance: number; totalEarned: number; alreadyClaimed: boolean }> {
+  if (!cId) throw new Error('Missing coupleId');
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
   
   return await runTransaction(db, async (transaction) => {
@@ -140,6 +205,16 @@ export async function claimDaily(cId: string, uid: string, amountFromWheel?: num
       data = { petals: 0, streak: 0, lastClaimDate: '', totalEarned: 0 };
     } else {
       data = snap.data() as WalletData;
+    }
+
+    // Si une operationId est fournie, protéger l'opération contre les réexécutions
+    if (operationId && (data.lastOperationIds ?? []).includes(operationId)) {
+      return {
+        petals: 0,
+        balance: data.petals || 0,
+        totalEarned: data.totalEarned || 0,
+        alreadyClaimed: true,
+      };
     }
 
     if (data.dailyClaims?.[uid] === today) {
@@ -156,11 +231,13 @@ export async function claimDaily(cId: string, uid: string, amountFromWheel?: num
       ? Math.round(amountFromWheel)
       : calculateDailyPetals(currentStreak);
     
+    const newLastOps = operationId ? [...(data.lastOperationIds ?? []), operationId].slice(-200) : (data.lastOperationIds ?? []);
     const newData = {
       petals: (data.petals || 0) + earned,
       totalEarned: (data.totalEarned || 0) + earned,
       lastClaimDate: today,
       dailyClaims: { ...(data.dailyClaims || {}), [uid]: today },
+      lastOperationIds: newLastOps,
     };
 
     transaction.set(walletRef, newData, { merge: true });
@@ -177,6 +254,7 @@ export async function claimDaily(cId: string, uid: string, amountFromWheel?: num
 
 // Dépense des pétales. Retourne false si solde insuffisant.
 export async function spendPetals(cId: string, amount: number): Promise<boolean> {
+  if (!cId) throw new Error('Missing coupleId');
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
   
   return await runTransaction(db, async (transaction) => {
@@ -194,11 +272,37 @@ export async function spendPetals(cId: string, amount: number): Promise<boolean>
 }
 
 // Crédite des pétales bonus (question complétée)
-export async function awardBonusPetals(cId: string, amount: number): Promise<void> {
+// Ajout d'une option idempotence via operationId pour éviter double-crédit
+export async function awardBonusPetals(cId: string, amount: number, operationId?: string): Promise<void> {
+  if (!cId) throw new Error('Missing coupleId');
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
-  await updateDoc(walletRef, {
-    petals: increment(amount),
-    totalEarned: increment(amount)
+
+  // Si aucun operationId fourni, faire l'incrément simple atomique
+  if (!operationId) {
+    await updateDoc(walletRef, {
+      petals: increment(amount),
+      totalEarned: increment(amount)
+    });
+    return;
+  }
+
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(walletRef);
+    const data: WalletData = snap.exists() ? (snap.data() as WalletData) : { petals: 0, streak: 0, lastClaimDate: '', totalEarned: 0 };
+
+    const seen = data.lastOperationIds ?? [];
+    if (seen.includes(operationId)) {
+      // Déjà appliqué
+      return;
+    }
+
+    const newSeen = [...seen, operationId].slice(-200); // garder une fenêtre raisonnable
+
+    transaction.set(walletRef, {
+      petals: (data.petals || 0) + amount,
+      totalEarned: (data.totalEarned || 0) + amount,
+      lastOperationIds: newSeen
+    }, { merge: true });
   });
 }
 
@@ -207,6 +311,7 @@ export async function awardBonusPetals(cId: string, amount: number): Promise<voi
 // Un achat effectué par l'un des membres est immédiatement disponible pour les deux.
 // L'équipement (quel cosmétic est actif) est individuel via userProfiles/{uid}.
 export async function getInventory(cId: string): Promise<InventoryData> {
+  if (!cId) throw new Error('Missing coupleId');
   const invRef = doc(db, `couples/${cId}/inventory/cosmetics`);
   const snap = await getDoc(invRef);
   if (snap.exists()) {
@@ -219,6 +324,7 @@ export async function getInventory(cId: string): Promise<InventoryData> {
 
 // Achète un item du shop
 export async function purchaseItem(cId: string, itemId: string, itemType: ItemType, price: number): Promise<{ success: boolean; reason?: string }> {
+  if (!cId) throw new Error('Missing coupleId');
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
   const invRef = doc(db, `couples/${cId}/inventory/cosmetics`);
   
@@ -257,6 +363,7 @@ export async function purchaseItem(cId: string, itemId: string, itemType: ItemTy
 
 // Lit la progression des quêtes
 export async function getQuestProgress(cId: string): Promise<QuestProgressMap> {
+  if (!cId) throw new Error('Missing coupleId');
   const ref = doc(db, `couples/${cId}/quests/progress`);
   const snap = await getDoc(ref);
   if (snap.exists()) {
@@ -267,6 +374,7 @@ export async function getQuestProgress(cId: string): Promise<QuestProgressMap> {
 
 // Vérifie et met à jour les quêtes après un événement
 export async function checkQuests(cId: string, event: QuestEvent, value: number = 1): Promise<{ completed: Quest[] }> {
+  if (!cId) throw new Error('Missing coupleId');
   const progressRef = doc(db, `couples/${cId}/quests/progress`);
   
   return await runTransaction(db, async (transaction) => {
@@ -282,7 +390,7 @@ export async function checkQuests(cId: string, event: QuestEvent, value: number 
         if (!progress[quest.id]) {
           progress[quest.id] = { current: 0, tier: null };
         }
-        
+
         progress[quest.id].current += value;
         updated = true;
         
@@ -324,8 +432,40 @@ export async function checkQuests(cId: string, event: QuestEvent, value: number 
   });
 }
 
+export async function updateCoupleDurationQuest(cId: string, coupleDate?: string): Promise<void> {
+  if (!coupleDate) return;
+  // Parse YYYY-MM-DD as a local calendar date; parsing it as UTC can shift
+  // the day around midnight and produce an incorrect duration.
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(coupleDate);
+  const start = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(coupleDate);
+  if (Number.isNaN(start.getTime())) return;
+  // The quest has no tier beyond one year. Capping here also prevents a
+  // malformed legacy/default date from turning a new couple into a 9000-day
+  // couple.
+  const days = Math.min(365, Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000)));
+  const progress = await getQuestProgress(cId);
+  const current = progress.couple_duration?.current ?? 0;
+  if (current > days) {
+    const progressRef = doc(db, `couples/${cId}/quests/progress`);
+    const validTiers = QUESTS.find(q => q.id === 'couple_duration')?.tiers || [];
+    const validUnclaimed = (progress.couple_duration?.unclaimedTiers || []).filter(t => {
+      const tierDef = validTiers.find(x => x.tier === t);
+      return tierDef ? days >= tierDef.threshold : false;
+    });
+    await updateDoc(progressRef, {
+      'couple_duration.current': days,
+      'couple_duration.unclaimedTiers': validUnclaimed
+    });
+  } else if (days > current) {
+    await checkQuests(cId, 'couple_duration', days - current);
+  }
+}
+
 // Réclame la récompense d'un palier de quête
-export async function claimQuestReward(cId: string, questId: string, tier: QuestTierLevel, reward: number): Promise<boolean> {
+export async function claimQuestReward(cId: string, questId: string, tier: QuestTierLevel, reward: number, uid: string): Promise<boolean> {
+  if (!cId) throw new Error('Missing coupleId');
   const progressRef = doc(db, `couples/${cId}/quests/progress`);
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
   
@@ -339,8 +479,26 @@ export async function claimQuestReward(cId: string, questId: string, tier: Quest
     if (!questProg || !questProg.unclaimedTiers || !questProg.unclaimedTiers.includes(tier)) {
       return false; // Déjà réclamé ou pas atteint
     }
-    
-    // Retirer le palier des unclaimed
+
+    const claimedBy = questProg.claimedBy ?? {};
+    const tierClaimers = claimedBy[tier] ?? [];
+    if (tierClaimers.includes(uid)) return false;
+    const updatedClaimers = [...tierClaimers, uid];
+    claimedBy[tier] = updatedClaimers;
+    questProg.claimedBy = claimedBy;
+
+    // Le palier reste visible après la première réclamation. Il est retiré
+    // et payé uniquement lorsque les deux membres l'ont réclamé.
+    const members = cId.includes(`_${uid}`)
+      ? cId.split(`_${uid}`).filter(Boolean)
+      : cId.startsWith(`${uid}_`)
+        ? [cId.slice(uid.length + 1)]
+        : [];
+    const bothClaimed = updatedClaimers.length >= 2 || members.some(member => updatedClaimers.includes(member));
+    if (!bothClaimed) {
+      transaction.set(progressRef, progress, { merge: true });
+      return false;
+    }
     questProg.unclaimedTiers = questProg.unclaimedTiers.filter(t => t !== tier);
     
     transaction.set(progressRef, progress, { merge: true });
@@ -387,7 +545,7 @@ export async function getUserProfile(uid: string, createIfMissing: boolean = fal
   if (createIfMissing) {
     try {
       await setDoc(ref, defaultProfile);
-    } catch (e) {
+    } catch {
       console.warn('Could not create missing profile, returning default');
     }
   }

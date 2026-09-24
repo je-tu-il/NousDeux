@@ -57,6 +57,7 @@ export default function DashboardScreen() {
   const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
   const [unlockedItems, setUnlockedItems] = useState<Cosmetic[]>([]);
   const [wallet, setWallet] = useState<any>(null);
+  const [hasQuestRewards, setHasQuestRewards] = useState(false);
   const [partnerAnsweredCategories, setPartnerAnsweredCategories] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -77,7 +78,7 @@ export default function DashboardScreen() {
     checkStreakUnlock();
   }, [wallet?.streak]);
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(Boolean(store.uid));
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const pulseAnim = useSharedValue(1);
 
@@ -89,7 +90,6 @@ export default function DashboardScreen() {
     );
 
     if (!store.uid) {
-      setIsLoading(false);
       router.replace('/onboarding/login');
       return;
     }
@@ -98,6 +98,14 @@ export default function DashboardScreen() {
     const unsub = onSnapshot(doc(db, 'users', store.uid), async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+
+        const currentAvatar = data.avatarUrl || data.avatar || null;
+        if (currentAvatar && store.avatar !== currentAvatar) {
+          store.setAvatar(currentAvatar);
+        }
+        if (data.pseudo && store.pseudo !== data.pseudo) {
+          store.setPseudo(data.pseudo);
+        }
 
         if (!data.linkedTo) {
           if (partnerUnsub) {
@@ -115,36 +123,34 @@ export default function DashboardScreen() {
           router.replace('/onboarding/date');
           return;
         }
-        if (!data.coupleDate) {
-          setPartnerLeft(false);
-          setIsLoading(false);
-          return;
-        }
-
         // We set up a realtime listener for the partner document
         if (!partnerUnsub) {
           partnerUnsub = onSnapshot(doc(db, 'users', data.linkedTo), (pSnap) => {
             if (pSnap.exists()) {
               const pData = pSnap.data();
-              // The current user's linkedTo is the source of truth for this
-              // screen. Do not hide a real partner because the reverse link is
-              // temporarily stale on one device.
-              store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
-              setPartner({
-                pseudo: pData.pseudo,
-                avatarUrl: pData.avatarUrl,
-                coupleDate: data.coupleDate,
-                age: pData.age,
-                coupleId: [store.uid!, data.linkedTo].sort().join('_'),
-              });
-              setPartnerLeft(false);
+              // Vérification réciproque : si le partenaire a délié son compte, repasser en mode solo
+              if (pData.linkedTo && pData.linkedTo === store.uid) {
+                store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
+                setPartner({
+                  pseudo: pData.pseudo,
+                  avatarUrl: pData.avatarUrl,
+                  coupleDate: data.coupleDate,
+                  age: pData.age,
+                  coupleId: [store.uid!, data.linkedTo].sort().join('_'),
+                });
+                setPartnerLeft(false);
+              } else {
+                store.clearPartnerCache();
+                setPartner(null);
+                setPartnerLeft(true);
+              }
             } else {
-              // Keep the cached partner while Firestore reconnects. A missing
-              // snapshot is not enough evidence that the account was deleted.
-              setIsLoading(false);
+              store.clearPartnerCache();
+              setPartner(null);
+              setPartnerLeft(true);
             }
             setIsLoading(false);
-          }, (error) => {
+          }, () => {
             setIsLoading(false);
           });
         }
@@ -249,8 +255,6 @@ export default function DashboardScreen() {
     syncUnlimitedStats(coupleId).then((stats) => {
       setWallet((current: any) => current ? { ...current, unlimitedStats: stats } : current);
     }).catch(() => {});
-    const cachedWallet = getCachedWallet(coupleId);
-    if (cachedWallet) setWallet(cachedWallet);
     const walletRef = doc(db, `couples/${coupleId}/economy/wallet`);
     const unsub = onSnapshot(walletRef, async (docSnap) => {
       if (docSnap.exists()) {
@@ -271,6 +275,17 @@ export default function DashboardScreen() {
       }
     });
     return () => unsub();
+  }, [partner?.coupleId]);
+
+  useEffect(() => {
+    if (!partner?.coupleId) return;
+    return onSnapshot(doc(db, `couples/${partner.coupleId}/quests/progress`), (snap) => {
+      const data = snap.exists() ? snap.data() : {};
+      setHasQuestRewards(Object.values(data).some((entry) => {
+        const quest = entry as { unclaimedTiers?: string[] };
+        return (quest.unclaimedTiers?.length ?? 0) > 0;
+      }));
+    }, () => setHasQuestRewards(false));
   }, [partner?.coupleId]);
 
   const pulseStyle = useAnimatedStyle(() => ({
@@ -302,7 +317,7 @@ export default function DashboardScreen() {
           <View style={styles.modalContent}>
             <Text style={{ fontSize: 24, textAlign: 'center', marginBottom: 10 }}>🎯</Text>
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 10 }}>Nouveauté Débloquée !</Text>
-            <Text style={{ fontSize: 14, color: theme.tabIconDefault, textAlign: 'center', marginBottom: 20 }}>Ton streak de {wallet?.streak} jours t'a permis de débloquer :</Text>
+            <Text style={{ fontSize: 14, color: theme.tabIconDefault, textAlign: 'center', marginBottom: 20 }}>Ton streak de {wallet?.streak} jours t’a permis de débloquer :</Text>
             
             {unlockedItems.map(item => (
               <View key={item.id} style={{ alignItems: 'center', marginBottom: 15, padding: 10, backgroundColor: 'rgba(255,154,139,0.1)', borderRadius: 16, width: '100%' }}>
@@ -407,7 +422,7 @@ export default function DashboardScreen() {
               {renderAvatar(store.avatar, store.pseudo || 'Moi', false, myProfile)}
               <View style={{ marginLeft: 15, flex: 1 }}>
                 <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }} numberOfLines={1}>{store.pseudo}</Text>
-                {myProfile?.selectedTag && getCosmeticById(myProfile.selectedTag) && (
+                {myProfile?.selectedTag && myProfile.selectedTag !== 'tag_free_0' && getCosmeticById(myProfile.selectedTag) && (
                   <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 }} numberOfLines={1}>
                     {getCosmeticById(myProfile.selectedTag)?.emoji} {getCosmeticById(myProfile.selectedTag)?.name}
                   </Text>
@@ -442,7 +457,7 @@ export default function DashboardScreen() {
                   <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>Entrer un code partenaire</Text>
                 </Pressable>
               )}
-              {partner && !partnerLeft && partnerProfile?.selectedTag && getCosmeticById(partnerProfile.selectedTag) && (
+              {partner && !partnerLeft && partnerProfile?.selectedTag && partnerProfile.selectedTag !== 'tag_free_0' && getCosmeticById(partnerProfile.selectedTag) && (
                 <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 106, 136, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 106, 136, 0.3)' }}>
                   <Text style={{ fontSize: 13, color: '#FF6A88', fontWeight: '800' }} numberOfLines={1}>
                     {getCosmeticById(partnerProfile.selectedTag)?.emoji} {getCosmeticById(partnerProfile.selectedTag)?.name}
@@ -463,7 +478,7 @@ export default function DashboardScreen() {
         </View>
 
         {/* --- WIDGETS LIGNE --- */}
-        <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 20, gap: 12 }}>
+        <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 20, gap: 12, alignItems: 'stretch' }}>
           {/* ROULETTE */}
           {partner?.coupleId && store.uid && (
             <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1 }}>
@@ -484,7 +499,7 @@ export default function DashboardScreen() {
           {partner?.coupleId && (
             <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ flex: 1.2 }}>
               <Link href="/calendar" asChild>
-                <Pressable style={{ flex: 1 }}>
+                <Pressable style={{ flex: 1, height: '100%' }}>
                   <StreakCalendar coupleId={partner.coupleId} compact={true} currentStreak={wallet?.streak} darkMode={store.isDarkMode} />
                 </Pressable>
               </Link>
@@ -500,7 +515,10 @@ export default function DashboardScreen() {
               <Link href="/quests" style={[styles.smallCard, { backgroundColor: store.isDarkMode ? 'rgba(28,18,5,0.88)' : 'rgba(255,247,237,0.85)', borderColor: 'rgba(234,179,8,0.3)' }]}>
                 <Trophy color="#B45309" size={28} />
                 <View>
-                  <Text style={[styles.smallCardTitle, { color: theme.text }]}>Quêtes</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.smallCardTitle, { color: theme.text }]}>Quêtes</Text>
+                    {hasQuestRewards && <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: '#EF4444' }} />}
+                  </View>
                   <Text style={{ fontSize: 12, color: '#B45309', fontWeight: 'bold' }}>Récompenses</Text>
                 </View>
               </Link>
@@ -548,55 +566,57 @@ export default function DashboardScreen() {
 
           <View style={styles.categoryGrid}>
             {[
-              { id: 'amour', title: 'Amour', icon: <Heart color="#EF4444" size={24} />, bg: 'rgba(239,68,68,0.25)', bgDark: 'rgba(239,68,68,0.45)', border: 'rgba(239,68,68,0.5)', requires: null, rarity: 'Commun' },
-              { id: 'fun', title: 'Fun', icon: <Smile color="#F59E0B" size={24} />, bg: 'rgba(245,158,11,0.25)', bgDark: 'rgba(245,158,11,0.45)', border: 'rgba(245,158,11,0.5)', requires: 'amour', rarity: 'Commun' },
-              { id: 'profond', title: 'Profond', icon: <Brain color="#3B82F6" size={24} />, bg: 'rgba(59,130,246,0.25)', bgDark: 'rgba(59,130,246,0.45)', border: 'rgba(59,130,246,0.5)', requires: 'fun', rarity: 'Commun' },
-              { id: 'intime', title: 'Intime', icon: <Flame color="#BE185D" size={24} />, bg: 'rgba(236,72,153,0.25)', bgDark: 'rgba(236,72,153,0.45)', border: 'rgba(236,72,153,0.5)', requires: 'profond', rarity: 'Rare' },
-              { id: 'pile_ou_face', title: 'Tu préfères', icon: <Split color="#0EA5E9" size={24} />, bg: 'rgba(14,165,233,0.25)', bgDark: 'rgba(14,165,233,0.45)', border: 'rgba(14,165,233,0.5)', requires: 'intime', rarity: 'Rare' },
-              { id: 'famille', title: 'Famille', icon: <Home color="#10B981" size={24} />, bg: 'rgba(16,185,129,0.25)', bgDark: 'rgba(16,185,129,0.45)', border: 'rgba(16,185,129,0.5)', requires: 'pile_ou_face', rarity: 'Rare' },
-              { id: 'debat', title: 'Débat', icon: <MessageCircle color="#8B5CF6" size={24} />, bg: 'rgba(139,92,246,0.25)', bgDark: 'rgba(139,92,246,0.45)', border: 'rgba(139,92,246,0.5)', requires: 'famille', rarity: 'Rare' },
-              { id: 'futur', title: 'Futur', icon: <Rocket color="#6366F1" size={24} />, bg: 'rgba(99,102,241,0.25)', bgDark: 'rgba(99,102,241,0.45)', border: 'rgba(99,102,241,0.5)', requires: 'debat', rarity: 'Épique' },
-              { id: 'souvenir', title: 'Souvenir', icon: <Camera color="#14B8A6" size={24} />, bg: 'rgba(20,184,166,0.25)', bgDark: 'rgba(20,184,166,0.45)', border: 'rgba(20,184,166,0.5)', requires: 'futur', rarity: 'Épique' },
-              { id: 'reve', title: 'Rêve', icon: <Star color="#FCD34D" size={24} />, bg: 'rgba(252,211,77,0.25)', bgDark: 'rgba(252,211,77,0.45)', border: 'rgba(252,211,77,0.5)', requires: 'souvenir', rarity: 'Légendaire' },
-              { id: 'quotidien', title: 'Quotidien', icon: <Coffee color="#A8A29E" size={24} />, bg: 'rgba(168,162,158,0.25)', bgDark: 'rgba(168,162,158,0.45)', border: 'rgba(168,162,158,0.5)', requires: 'reve', rarity: 'Légendaire' },
-              { id: 'defi', title: 'Défi', icon: <Trophy color="#F97316" size={24} />, bg: 'rgba(249,115,22,0.25)', bgDark: 'rgba(249,115,22,0.45)', border: 'rgba(249,115,22,0.5)', requires: 'quotidien', rarity: 'Légendaire' },
+              { id: 'amour', title: 'Amour', icon: <Heart color="#EF4444" size={24} />, bg: 'rgba(254,242,242,0.95)', bgDark: 'rgba(50,20,20,0.92)', border: 'rgba(239,68,68,0.7)', requires: null, rarity: 'Commun' },
+              { id: 'fun', title: 'Fun', icon: <Smile color="#F59E0B" size={24} />, bg: 'rgba(254,243,199,0.95)', bgDark: 'rgba(50,38,15,0.92)', border: 'rgba(245,158,11,0.7)', requires: 'amour', rarity: 'Commun' },
+              { id: 'profond', title: 'Profond', icon: <Brain color="#3B82F6" size={24} />, bg: 'rgba(239,246,255,0.95)', bgDark: 'rgba(20,30,55,0.92)', border: 'rgba(59,130,246,0.7)', requires: 'fun', rarity: 'Commun' },
+              { id: 'intime', title: 'Intime', icon: <Flame color="#BE185D" size={24} />, bg: 'rgba(253,242,248,0.95)', bgDark: 'rgba(50,15,35,0.92)', border: 'rgba(236,72,153,0.7)', requires: 'profond', rarity: 'Rare' },
+              { id: 'pile_ou_face', title: 'Tu préfères', icon: <Split color="#0EA5E9" size={24} />, bg: 'rgba(240,249,255,0.95)', bgDark: 'rgba(15,35,50,0.92)', border: 'rgba(14,165,233,0.7)', requires: 'intime', rarity: 'Rare' },
+              { id: 'famille', title: 'Famille', icon: <Home color="#10B981" size={24} />, bg: 'rgba(236,253,245,0.95)', bgDark: 'rgba(15,45,30,0.92)', border: 'rgba(16,185,129,0.7)', requires: 'pile_ou_face', rarity: 'Rare' },
+              { id: 'debat', title: 'Débat', icon: <MessageCircle color="#8B5CF6" size={24} />, bg: 'rgba(245,243,255,0.95)', bgDark: 'rgba(35,20,55,0.92)', border: 'rgba(139,92,246,0.7)', requires: 'famille', rarity: 'Rare' },
+              { id: 'futur', title: 'Futur', icon: <Rocket color="#6366F1" size={24} />, bg: 'rgba(238,242,255,0.95)', bgDark: 'rgba(25,25,60,0.92)', border: 'rgba(99,102,241,0.7)', requires: 'debat', rarity: 'Épique' },
+              { id: 'souvenir', title: 'Souvenir', icon: <Camera color="#14B8A6" size={24} />, bg: 'rgba(240,253,250,0.95)', bgDark: 'rgba(15,45,45,0.92)', border: 'rgba(20,184,166,0.7)', requires: 'futur', rarity: 'Épique' },
+              { id: 'reve', title: 'Rêve', icon: <Star color="#F59E0B" size={24} />, bg: 'rgba(254,252,232,0.95)', bgDark: 'rgba(50,45,15,0.92)', border: 'rgba(252,211,77,0.8)', requires: 'souvenir', rarity: 'Légendaire' },
+              { id: 'quotidien', title: 'Quotidien', icon: <Coffee color="#78716C" size={24} />, bg: 'rgba(245,245,244,0.95)', bgDark: 'rgba(40,38,36,0.92)', border: 'rgba(168,162,158,0.7)', requires: 'reve', rarity: 'Légendaire' },
+              { id: 'defi', title: 'Défi', icon: <Trophy color="#F97316" size={24} />, bg: 'rgba(255,247,237,0.95)', bgDark: 'rgba(55,25,10,0.92)', border: 'rgba(249,115,22,0.7)', requires: 'quotidien', rarity: 'Légendaire' },
             ].map((cat, index) => {
               // Vérifier si la catégorie requise a atteint 10 questions
               const reqCount = cat.requires ? ((wallet as any)?.unlimitedStats?.[cat.requires] || 0) : 10;
               const isLocked = cat.requires !== null && reqCount < 10;
-              const cardBg = store.isDarkMode
-                ? cat.bgDark.replace(/0\.45\)/, '0.72)')
-                : cat.bg.replace(/0\.25\)/, '0.52)');
+              const cardBg = store.isDarkMode ? cat.bgDark : cat.bg;
               
               return (
                 <Animated.View key={cat.id} entering={FadeInUp.delay(300 + index * 25).duration(350)} style={styles.categoryCardWrapper}>
                   {isLocked ? (
                     <Pressable 
-                      style={[styles.categoryCard, { backgroundColor: store.isDarkMode ? 'rgba(38,28,27,0.88)' : '#F3F4F6', borderColor: store.isDarkMode ? 'rgba(80,60,58,0.6)' : '#E5E7EB' }]}
+                      style={[styles.categoryCard, { backgroundColor: store.isDarkMode ? 'rgba(38,28,27,0.95)' : 'rgba(245,245,247,0.95)', borderColor: store.isDarkMode ? 'rgba(80,60,58,0.8)' : '#D1D5DB' }]}
                       onPress={() => {
-                        const requiredCategory = [
-                          { id: 'amour', title: 'Amour' },
-                          { id: 'fun', title: 'Fun' },
-                          { id: 'profond', title: 'Profond' },
-                          { id: 'intime', title: 'Intime' },
-                          { id: 'pile_ou_face', title: 'Tu préfères' },
-                          { id: 'famille', title: 'Famille' },
-                          { id: 'debat', title: 'Débat' },
-                          { id: 'futur', title: 'Futur' },
-                          { id: 'souvenir', title: 'Souvenir' },
-                          { id: 'reve', title: 'Rêve' },
-                          { id: 'quotidien', title: 'Quotidien' },
-                        ].find(item => item.id === cat.requires)?.title ?? cat.requires;
-                        setAlertMessage(`Il faut répondre à 10 questions de la catégorie "${requiredCategory}" pour débloquer ce thème !`);
+                        const requiredCategory = cat.requires
+                          ? [
+                              { id: 'amour', title: 'Amour' },
+                              { id: 'fun', title: 'Fun' },
+                              { id: 'profond', title: 'Profond' },
+                              { id: 'intime', title: 'Intime' },
+                              { id: 'pile_ou_face', title: 'Tu préfères' },
+                              { id: 'famille', title: 'Famille' },
+                              { id: 'debat', title: 'Débat' },
+                              { id: 'futur', title: 'Futur' },
+                              { id: 'souvenir', title: 'Souvenir' },
+                              { id: 'reve', title: 'Rêve' },
+                              { id: 'quotidien', title: 'Quotidien' },
+                            ].find(item => item.id === cat.requires)?.title ?? cat.requires
+                          : null;
+                        setAlertMessage(
+                          `Le thème "${cat.title}" est verrouillé. Il faut répondre à 10 questions de "${requiredCategory}" pour le débloquer !`,
+                        );
                       }}
                     >
-                      <View style={{ opacity: 0.4, alignItems: 'center' }}>
+                      <View style={{ opacity: 0.65, alignItems: 'center' }}>
                         {cat.icon}
                         <Text style={styles.categoryCardTitle}>{cat.title}</Text>
                       </View>
-                      <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: store.isDarkMode ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.6)', borderRadius: 20 }}>
-                        <Lock color={store.isDarkMode ? '#80716F' : '#9CA3AF'} size={28} />
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: store.isDarkMode ? '#80716F' : '#6B7280', marginTop: 4 }}>{reqCount}/10</Text>
+                      <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: store.isDarkMode ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.7)', borderRadius: 20 }}>
+                        <Lock color={store.isDarkMode ? '#A89997' : '#6B7280'} size={28} />
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: store.isDarkMode ? '#A89997' : '#4B5563', marginTop: 4 }}>{reqCount}/10</Text>
                       </View>
                     </Pressable>
                   ) : (
@@ -607,6 +627,15 @@ export default function DashboardScreen() {
                       {cat.icon}
                       {partnerAnsweredCategories.has(cat.id) && <View style={styles.partnerAnswerDot} />}
                       <Text style={styles.categoryCardTitle}>{cat.title}</Text>
+                      {((wallet as any)?.unlimitedStats?.[cat.id] || 0) >= 10 ? (
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', marginTop: 2 }}>
+                          Complété ✓
+                        </Text>
+                      ) : (cat.requires === null && ((wallet as any)?.unlimitedStats?.[cat.id] || 0) === 0) ? null : (
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', marginTop: 2 }}>
+                          {`${(wallet as any)?.unlimitedStats?.[cat.id] || 0}/10`}
+                        </Text>
+                      )}
                     </Link>
                   )}
                 </Animated.View>
@@ -658,7 +687,7 @@ export default function DashboardScreen() {
                 </View>
 
                 <Text style={styles.modalPseudo}>{partner.pseudo}</Text>
-                {partnerProfile?.selectedTag && getCosmeticById(partnerProfile.selectedTag) && (
+                {partnerProfile?.selectedTag && partnerProfile.selectedTag !== 'tag_free_0' && getCosmeticById(partnerProfile.selectedTag) && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,106,136,0.1)', alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginBottom: 10 }}>
                     <Text style={{ fontSize: 16, marginRight: 6 }}>{getCosmeticById(partnerProfile.selectedTag)?.emoji}</Text>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#FF6A88' }}>{getCosmeticById(partnerProfile.selectedTag)?.name}</Text>
@@ -692,7 +721,7 @@ export default function DashboardScreen() {
               style={{ backgroundColor: '#FF6A88', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, alignSelf: 'center' }} 
               onPress={() => setAlertMessage(null)}
             >
-              <Text style={{ color: 'white', fontWeight: 'bold' }}>J'ai compris</Text>
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>J’ai compris</Text>
             </Pressable>
           </View>
         </View>
@@ -764,7 +793,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
   categoryCardWrapper: { width: '48%', marginBottom: 12 },
-  categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5 },
+  categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1.5, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },
   categoryCardTitle: { fontSize: 15, fontWeight: '700', color: theme.text },
   partnerAnswerDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#16A34A', borderWidth: 3, borderColor: '#FFFFFF', position: 'absolute', top: 5, right: 5, shadowColor: '#16A34A', shadowOpacity: 0.55, shadowRadius: 5, elevation: 5 },
   settingsButton: { padding: 10 },

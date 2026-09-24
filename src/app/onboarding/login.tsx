@@ -2,12 +2,13 @@ import { Colors } from '@/constants/Colors';
 import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Link, router } from 'expo-router';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { browserLocalPersistence, getRedirectResult, GoogleAuthProvider, setPersistence, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { CheckSquare, Square } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import UIModal, { UIModalType } from '@/components/UIModal';
 
 export default function LoginScreen() {
   const theme = Colors.light;
@@ -16,75 +17,146 @@ export default function LoginScreen() {
   const setAge = useOnboardingStore((state) => state.setAge);
   const setAvatar = useOnboardingStore((state) => state.setAvatar);
   const setSynced = useOnboardingStore((state) => state.setSynced);
+  const setMyCode = useOnboardingStore((state) => state.setMyCode);
   const hasAcceptedTerms = useOnboardingStore((state) => state.hasAcceptedTerms);
   const setHasAcceptedTerms = useOnboardingStore((state) => state.setHasAcceptedTerms);
 
   const [accepted, setAccepted] = useState(hasAcceptedTerms);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [modalState, setModalState] = useState<{
+    visible: boolean;
+    type?: UIModalType;
+    title?: string;
+    message?: string;
+  }>({ visible: false });
+
+  const withLoginTimeout = async <T,>(promise: Promise<T>): Promise<T> => {
+    if (Platform.OS !== 'web') return promise;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const error = new Error('La fenêtre Google ne répond plus. Fermez-la puis réessayez.');
+        error.name = 'auth-popup-timeout';
+        reject(error);
+      }, 120000);
+    });
+    try {
+      return await Promise.race([promise, timeout]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  };
+
+  const completeLogin = async (user: { uid: string; displayName: string | null; photoURL?: string | null }) => {
+    setUid(user.uid);
+    setHasAcceptedTerms(true);
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setPseudo(data.pseudo || '');
+        setAge(data.age || '');
+        const av = data.avatarUrl || data.avatar || user.photoURL || null;
+        setAvatar(av);
+        if (!data.avatarUrl && user.photoURL) {
+          setDoc(doc(db, 'users', user.uid), { avatarUrl: user.photoURL }, { merge: true }).catch(() => {});
+        }
+        try {
+          const { getUserProfile } = await import('@/lib/economy');
+          const p = await getUserProfile(user.uid);
+          if (p?.avatar) useOnboardingStore.getState().setAvatarConfig(p.avatar);
+          if (p?.selectedBackground) {
+            useOnboardingStore.getState().setSelectedCosmetics(p.selectedBackground, p.selectedBorder, p.selectedTag);
+          }
+        } catch {}
+
+        if (data.pairingCode) {
+          setMyCode(data.pairingCode);
+        }
+        if (data.linkedTo && !data.needsDate) {
+          setSynced(true);
+          router.replace('/dashboard');
+          return;
+        }
+        if (data.linkedTo && data.needsDate) {
+          setSynced(true);
+          router.replace('/onboarding/date');
+          return;
+        }
+        if (data.pseudo && data.age) {
+          router.replace('/dashboard');
+          return;
+        }
+        if (data.pseudo) {
+          router.replace('/onboarding/age');
+          return;
+        }
+      }
+      if (user.displayName && !useOnboardingStore.getState().pseudo) {
+        setPseudo(user.displayName.split(' ')[0]);
+      }
+      router.replace('/onboarding/pseudo');
+    } catch (error: any) {
+      setLoginError(`Connexion réussie, mais le profil est inaccessible : ${error?.message ?? 'erreur Firestore'}`);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
 
   useEffect(() => {
-    if (useOnboardingStore.getState().uid) {
-      if (useOnboardingStore.getState().isSynced) {
-        router.replace('/dashboard');
-      } else {
-        router.replace('/onboarding/pseudo');
-      }
-    }
+    if (Platform.OS !== 'web') return;
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) void completeLogin(result.user);
+      })
+      .catch((error: any) => {
+        setLoginError(`La connexion Google a échoué : ${error?.message ?? 'erreur inconnue'}`);
+        setIsSigningIn(false);
+      });
   }, []);
 
   const handleGoogleLogin = async () => {
     if (!accepted) {
-      alert('Veuillez accepter les CGU et la Politique de confidentialité pour continuer.');
+      setModalState({
+        visible: true,
+        type: 'warning',
+        title: 'Conditions requises',
+        message: 'Veuillez accepter les CGU et la Politique de confidentialité pour continuer.',
+      });
       return;
     }
+    setLoginError(null);
+    setIsSigningIn(true);
     try {
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      setUid(user.uid);
-      setHasAcceptedTerms(true);
-
-      const fetchProfile = async () => {
-        try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setPseudo(data.pseudo || "");
-            setAge(data.age || "");
-            setAvatar(data.avatarUrl || null);
-            if (data.linkedTo && !data.needsDate) {
-              setSynced(true);
-              return '/dashboard';
-            }
-            if (data.linkedTo && data.needsDate) {
-              setSynced(true);
-              return '/onboarding/date';
-            }
-            return data.pseudo ? '/onboarding/sync' : null;
-          }
-        } catch (e) {
-          console.error(e);
-        }
-        return null;
-      };
-
-      const redirectPath = await fetchProfile();
-
-      if (redirectPath) {
-        router.replace(redirectPath as any);
-      } else {
-        // Fallback uniquement pour un nouveau profil sans donnees.
-        if (user.displayName && !useOnboardingStore.getState().pseudo) {
-          setPseudo(user.displayName.split(' ')[0]);
-        }
-        router.replace('/onboarding/pseudo');
+      provider.setCustomParameters({ prompt: 'select_account' });
+      if (Platform.OS === 'web') {
+        await setPersistence(auth, browserLocalPersistence);
       }
+      const result = await withLoginTimeout(signInWithPopup(auth, provider));
+      await completeLogin(result.user);
     } catch (error: any) {
       // L'utilisateur a fermé la popup volontairement — pas une erreur bloquante
       if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+        setIsSigningIn(false);
         return;
       }
-      alert("Erreur de connexion : " + error.message);
+      if (error?.name === 'auth-popup-timeout') {
+        setLoginError(error.message);
+      } else if (Platform.OS === 'web' && ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment'].includes(error?.code)) {
+        try {
+          const redirectProvider = new GoogleAuthProvider();
+          redirectProvider.setCustomParameters({ prompt: 'select_account' });
+          await signInWithRedirect(auth, redirectProvider);
+          return;
+        } catch (redirectError: any) {
+          setLoginError(`La redirection Google a échoué : ${redirectError?.message ?? 'erreur inconnue'}`);
+        }
+      } else {
+        setLoginError(`Erreur de connexion : ${error?.message ?? 'erreur inconnue'}`);
+      }
+      setIsSigningIn(false);
     }
   };
 
@@ -110,7 +182,7 @@ export default function LoginScreen() {
               ? <CheckSquare color={theme.tint} size={22} />
               : <Square color="#A99693" size={22} />}
             <Text style={styles.consentText}>
-              J'accepte les conditions générales et la politique de confidentialité de NousDeux.
+              {"J'accepte les conditions générales et la politique de confidentialité de NousDeux."}
             </Text>
           </Pressable>
 
@@ -127,17 +199,27 @@ export default function LoginScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.buttonContainer}>
+          {loginError && <Text style={styles.errorText}>{loginError}</Text>}
           <Pressable
             style={({ pressed }) => [
               styles.googleButton,
-              { opacity: pressed ? 0.8 : accepted ? 1 : 0.5 }
+              { opacity: pressed || isSigningIn ? 0.6 : accepted ? 1 : 0.5 }
             ]}
             onPress={handleGoogleLogin}
+            disabled={!accepted || isSigningIn}
           >
-            <Text style={styles.googleButtonText}>Continuer avec Google</Text>
+            <Text style={styles.googleButtonText}>{isSigningIn ? 'Connexion en cours...' : 'Continuer avec Google'}</Text>
           </Pressable>
         </Animated.View>
       </View>
+
+      <UIModal
+        visible={modalState.visible}
+        onClose={() => setModalState({ visible: false })}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+      />
     </ImageBackground>
   );
 }
@@ -163,4 +245,5 @@ const styles = StyleSheet.create({
   buttonContainer: { alignItems: 'center' },
   googleButton: { backgroundColor: 'white', paddingVertical: 18, paddingHorizontal: 32, borderRadius: 30, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
   googleButtonText: { color: '#444', fontSize: 18, fontWeight: 'bold' },
+  errorText: { color: '#B91C1C', backgroundColor: 'rgba(254,226,226,0.92)', padding: 12, borderRadius: 12, marginBottom: 16, textAlign: 'center', lineHeight: 19 },
 });

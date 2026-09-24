@@ -1,12 +1,11 @@
 import { getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
+import { doc, getDoc } from 'firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ImageBackground, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
-
-import { LogBox } from 'react-native';
+import { ImageBackground, LogBox, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 const originalError = console.error;
 console.error = (...args) => {
@@ -19,11 +18,30 @@ LogBox.ignoreLogs(['M_ID']);
 export default function RootLayout() {
   const { width: windowWidth } = useWindowDimensions();
   const [FloatingChat, setFloatingChat] = useState<React.ComponentType | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [firebaseUser, setFirebaseUser] = useState(auth.currentUser);
   const segments = useSegments();
   const router = useRouter();
   const uid = useOnboardingStore((state) => state.uid);
   const pseudo = useOnboardingStore((state) => state.pseudo);
   const age = useOnboardingStore((state) => state.age);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.documentElement.lang = 'fr';
+      document.documentElement.setAttribute('xml:lang', 'fr');
+      document.documentElement.setAttribute('translate', 'no');
+      document.documentElement.classList.add('notranslate');
+      document.body?.setAttribute('translate', 'no');
+      document.body?.classList.add('notranslate');
+      if (!document.querySelector('meta[name="google"][content="notranslate"]')) {
+        const meta = document.createElement('meta');
+        meta.name = 'google';
+        meta.content = 'notranslate';
+        document.head.appendChild(meta);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const clearDeletedSession = async () => {
@@ -38,15 +56,52 @@ export default function RootLayout() {
       if (Platform.OS === 'web') window.location.reload();
     };
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (!user && useOnboardingStore.getState().uid) {
-        void clearDeletedSession();
-      } else if (user) {
-        void user.reload().catch((error: any) => {
-          if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-user-token') {
-            void clearDeletedSession();
+      setFirebaseUser(user);
+      const syncAuthState = async () => {
+        if (!user && useOnboardingStore.getState().uid) {
+          await clearDeletedSession();
+        } else if (user) {
+          // Firebase Auth is the source of truth after a refresh/reconnection.
+          // The persisted Zustand UID can be empty or stale while Auth is restoring.
+          const store = useOnboardingStore.getState();
+          if (store.uid !== user.uid) store.setUid(user.uid);
+          try {
+            await user.reload();
+          } catch (error: any) {
+            if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-user-token') {
+              void clearDeletedSession();
+              return;
+            }
           }
-        });
-      }
+          // Synchroniser le profil Firestore pour éviter de forcer l'onboarding sur un nouveau navigateur
+          try {
+            const userSnap = await getDoc(doc(db, 'users', user.uid));
+            if (userSnap.exists()) {
+              const uData = userSnap.data();
+              if (uData.pseudo && store.pseudo !== uData.pseudo) store.setPseudo(uData.pseudo);
+              if (uData.age && store.age !== uData.age) store.setAge(uData.age);
+              const avatarToSet = uData.avatarUrl || uData.avatar || null;
+              if (store.avatar !== avatarToSet) store.setAvatar(avatarToSet);
+              if (uData.pairingCode && store.myCode !== uData.pairingCode) store.setMyCode(uData.pairingCode);
+              store.setSynced(Boolean(uData.linkedTo));
+            }
+            try {
+              const { getUserProfile } = await import('@/lib/economy');
+              const p = await getUserProfile(user.uid);
+              if (p) {
+                if (p.selectedBackground) store.setSelectedCosmetics(p.selectedBackground, p.selectedBorder, p.selectedTag);
+                if (p.avatar) store.setAvatarConfig(p.avatar);
+              }
+            } catch (errProfile) {
+              console.error('Erreur chargement userProfile :', errProfile);
+            }
+          } catch (err) {
+            console.error('Erreur chargement profil Firestore :', err);
+          }
+        }
+        setAuthReady(true);
+      };
+      void syncAuthState();
     });
     return unsubscribe;
   }, []);
@@ -72,7 +127,7 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (!segments.length) return;
+    if (!authReady || !segments.length) return;
 
     const currentRoute = segments[segments.length - 1];
     const fullPath = segments.join('/');
@@ -84,28 +139,38 @@ export default function RootLayout() {
       return;
     }
 
-    // Protection globale : obliger le login si pas de UID
-    // Les pages légales et contact sont accessibles sans connexion
-    const publicRoutes = ['login', 'terms', 'privacy', 'contact', 'pseudo', 'age', 'avatar', 'date', 'sync'];
-    if (!uid && !publicRoutes.includes(currentRoute)) {
+    // Sans session Firebase, seul l'écran de connexion (et ses pages
+    // d'information) est accessible. L'UID persistant du store ne suffit pas.
+    const publicRoutes = ['login', 'terms', 'privacy', 'contact'];
+    if (!firebaseUser && !publicRoutes.includes(currentRoute)) {
       router.replace('/onboarding/login');
       return;
     }
 
-    // Empêcher le retour en arrière sur les écrans d'onboarding de base si on a déjà passé cette étape
-    if (uid && pseudo && age) {
-      if (['login', 'pseudo', 'age'].includes(currentRoute)) {
-        router.replace('/dashboard');
-        return;
-      }
-    } else if (uid) {
-      // Si on est connecté mais profil incomplet
-      if (currentRoute === 'login') {
+    if (firebaseUser && !uid) {
+      return;
+    }
+
+    const isOnboarding = segments[0] === 'onboarding';
+
+    // Empêcher de rester sur login une fois le profil déjà authentifié et rempli
+    if (firebaseUser && pseudo && age && currentRoute === 'login') {
+      router.replace('/dashboard');
+      return;
+    }
+
+    // Un profil connecté tentant d'accéder aux routes privées doit d'abord compléter ses informations
+    if (!isOnboarding && firebaseUser) {
+      if (!pseudo) {
         router.replace('/onboarding/pseudo');
         return;
       }
+      if (!age) {
+        router.replace('/onboarding/age');
+        return;
+      }
     }
-  }, [segments, uid, pseudo, age]);
+  }, [authReady, firebaseUser, segments, uid, pseudo, age]);
 
   const store = useOnboardingStore();
   const isDark = store.isDarkMode;
@@ -131,7 +196,6 @@ export default function RootLayout() {
         <LinearGradient colors={bgColors as [string, string]} style={StyleSheet.absoluteFill}>
           <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
             <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }} />
-            {FloatingChat ? <FloatingChat /> : null}
           </View>
         </LinearGradient>
       ) : (
@@ -146,11 +210,11 @@ export default function RootLayout() {
         >
           <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
             <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }} />
-            {FloatingChat ? <FloatingChat /> : null}
           </View>
         </ImageBackground>
       )}
       </View>
+      {FloatingChat ? <FloatingChat /> : null}
     </View>
   );
 }

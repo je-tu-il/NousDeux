@@ -27,6 +27,7 @@ import {
     useWindowDimensions
 } from 'react-native';
 import CoinWallet from '../components/CoinWallet';
+import UIModal, { UIModalType } from '../components/UIModal';
 import { BACKGROUNDS, BORDERS, Cosmetic, TAGS, UnlockCondition, isOwned, parseGradientColors } from '../data/cosmetics';
 import { QUESTS } from '../data/quests';
 import {
@@ -35,6 +36,7 @@ import {
     QuestProgressMap,
     UserProfile,
     WalletData,
+    computeStreakCached,
     getUserProfile,
     purchaseItem,
     saveUserProfile
@@ -94,6 +96,12 @@ export default function ShopScreen() {
   const [isPurchasing,  setIsPurchasing]  = useState(false);
   const [userProfile,   setUserProfile]   = useState<UserProfile | null>(null);
   const [showComingSoon, setShowComingSoon] = useState(false);
+  const [modalState, setModalState] = useState<{
+    visible: boolean;
+    type?: UIModalType;
+    title?: string;
+    message?: string;
+  }>({ visible: false });
 
   const fetchShopData = useCallback(async () => {
     if (!myUid) return;
@@ -128,7 +136,13 @@ export default function ShopScreen() {
   useEffect(() => {
     if (!coupleId) return;
     const unsubWallet = onSnapshot(doc(db, `couples/${coupleId}/economy/wallet`), (docSnap) => {
-      if (docSnap.exists()) setWallet(docSnap.data() as WalletData);
+      if (docSnap.exists()) {
+        const data = docSnap.data() as WalletData;
+        setWallet(data);
+        void computeStreakCached(coupleId, true).then((streak) => {
+          setWallet((current) => current ? { ...current, streak } : current);
+        });
+      }
     });
     const unsubInventory = onSnapshot(doc(db, `couples/${coupleId}/inventory/cosmetics`), (docSnap) => {
       if (docSnap.exists()) setInventory(docSnap.data() as InventoryData);
@@ -147,7 +161,12 @@ export default function ShopScreen() {
     if (!selectedItem || !coupleId || !wallet) return;
     const price = getPrice(selectedItem.unlock);
     if (wallet.petals < price) {
-      Alert.alert('Fonds insuffisants', `Il te faut ${price} 🌸 mais tu n'as que ${wallet.petals} 🌸.`);
+      setModalState({
+        visible: true,
+        type: 'funds',
+        title: 'Pétales insuffisantes',
+        message: `Il te faut ${price} 🌸 mais vous n'avez que ${wallet.petals} 🌸 dans la cagnotte du couple.`,
+      });
       return;
     }
 
@@ -159,10 +178,20 @@ export default function ShopScreen() {
         await fetchShopData();
         setSelectedItem(null);
       } else {
-        Alert.alert('Erreur', result.reason ?? 'Transaction échouée.');
+        setModalState({
+          visible: true,
+          type: 'error',
+          title: 'Achat impossible',
+          message: result.reason ?? 'Transaction échouée.',
+        });
       }
     } catch {
-      Alert.alert('Erreur', 'Une erreur est survenue.');
+      setModalState({
+        visible: true,
+        type: 'error',
+        title: 'Erreur',
+        message: 'Une erreur est survenue lors de l\'achat. Vérifie ta connexion.',
+      });
     } finally {
       setIsPurchasing(false);
     }
@@ -187,8 +216,11 @@ export default function ShopScreen() {
       (item.type === 'tag' && userProfile?.selectedTag === item.id);
 
     const onSelect = async () => {
+      // Selecting the currently equipped default/free item must never open
+      // the purchase dialog, even while the inventory listener is loading.
+      if (isEquipped) return;
       if (owned) {
-        if (!isEquipped && myUid) {
+        if (myUid) {
           const updates: Partial<UserProfile> = {};
           if (item.type === 'background') updates.selectedBackground = item.id;
           if (item.type === 'border') updates.selectedBorder = item.id;
@@ -243,7 +275,7 @@ export default function ShopScreen() {
           {item.type === 'tag' && (
             <View style={styles.tagPreviewBox}>
               <Text style={styles.tagEmoji}>{item.emoji ?? '🏷️'}</Text>
-              <Text style={styles.tagName} numberOfLines={1}>{item.name}</Text>
+              {windowWidth >= 360 && <Text style={styles.tagName} numberOfLines={1}>{item.name}</Text>}
             </View>
           )}
 
@@ -260,10 +292,12 @@ export default function ShopScreen() {
         </View>
 
         {/* Nom */}
-        <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+        {windowWidth >= 360 && <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>}
 
         {/* Badge prix/statut */}
-        {item.id === 'tag_free_0' ? (
+        {windowWidth < 360 ? (
+          <View style={styles.compactStatus}><Text style={styles.compactStatusText}>{owned ? '✓' : isLocked ? '🔒' : '🌸'}</Text></View>
+        ) : item.id === 'tag_free_0' ? (
           <View style={[styles.badgeFree, isEquipped && { backgroundColor: '#4CAF50' }]}>
             <Text style={[styles.badgeFreeText, isEquipped && { color: 'white' }]}>
               {isEquipped ? 'Équipé ✅' : 'Défaut'}
@@ -514,6 +548,14 @@ export default function ShopScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <UIModal
+        visible={modalState.visible}
+        onClose={() => setModalState({ visible: false })}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+      />
       </View>
     </ImageBackground>
   );
@@ -623,6 +665,8 @@ const getStyles = (theme: any) => StyleSheet.create({
   badgeStreakText:  { color: '#1976D2', fontSize: 11, fontWeight: '700' },
   badgeLocked:      { backgroundColor: '#F3F0FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   badgeLockedText:  { color: '#7C3AED', fontSize: 11, fontWeight: '700' },
+  compactStatus: { minHeight: 18, alignItems: 'center', justifyContent: 'center' },
+  compactStatusText: { fontSize: 14 },
 
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',

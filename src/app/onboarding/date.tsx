@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, ImageBackground, Platform, Pressable, TextInput
 import { router, useSegments } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import Animated, { FadeInDown, FadeInUp, withRepeat, withTiming, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
-import { ArrowRight, CalendarDays, Loader2 } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, CalendarDays, Loader2 } from 'lucide-react-native';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
@@ -20,8 +20,8 @@ export default function DateScreen() {
   // partnerUid stocké en state pour être accessible dans handleSubmit
   const [partnerUid, setPartnerUid] = useState<string | null>(null);
 
-  const theme    = Colors.light;
   const store    = useOnboardingStore((s) => s);
+  const theme    = store.isDarkMode ? Colors.dark : Colors.light;
   const myUid    = store.uid;
   const segments = useSegments();
   const redirectGuardRef = useRef<string | null>(null);
@@ -54,14 +54,14 @@ export default function DateScreen() {
     if (myProposed === partnerProposed) {
       setSuccess(true);
       const batch = writeBatch(db);
-      if (myUid) batch.update(doc(db, 'users', myUid), { coupleDate: myProposed, proposedDate: deleteField(), needsDate: deleteField() });
-      batch.update(doc(db, 'users', pUid), { coupleDate: myProposed, proposedDate: deleteField(), needsDate: deleteField() });
+      if (myUid) batch.update(doc(db, 'users', myUid), { coupleDate: myProposed, proposedDate: deleteField(), needsDate: deleteField(), dateMismatch: deleteField() });
+      batch.update(doc(db, 'users', pUid), { coupleDate: myProposed, proposedDate: deleteField(), needsDate: deleteField(), dateMismatch: deleteField() });
       await batch.commit();
       setTimeout(() => redirectOnce('/dashboard'), 2000);
     } else {
       const batch = writeBatch(db);
-      if (myUid) batch.update(doc(db, 'users', myUid), { proposedDate: deleteField() });
-      batch.update(doc(db, 'users', pUid), { proposedDate: deleteField() });
+      if (myUid) batch.update(doc(db, 'users', myUid), { proposedDate: deleteField(), dateMismatch: true });
+      batch.update(doc(db, 'users', pUid), { proposedDate: deleteField(), dateMismatch: true });
       await batch.commit();
       setWaiting(false);
       waitingRef.current = false;
@@ -75,6 +75,7 @@ export default function DateScreen() {
     if (!myUid) { router.replace('/onboarding/login'); return; }
 
     let unsubPartner: (() => void) | undefined;
+    let unsubMe: (() => void) | undefined;
 
     const setupListener = async () => {
       const myDoc = await getDoc(doc(db, 'users', myUid));
@@ -90,6 +91,10 @@ export default function DateScreen() {
       // Si coupleDate déjà présente → dashboard directement (pas de suppression!)
       if (data.coupleDate && !data.needsDate) { redirectOnce('/dashboard'); return; }
 
+      if (data.dateMismatch) {
+        setError("Ton partenaire n'a pas mis la même date !\nÊtes-vous sûrs de la date où vous vous êtes mis ensemble ?");
+      }
+
       // Restauration de l'état "en attente" après un refresh
       if (data.proposedDate) {
         setWaiting(true);
@@ -102,6 +107,21 @@ export default function DateScreen() {
           setDay(String(parseInt(parts[2], 10)));
         }
       }
+
+      // Listener sur mon propre doc pour recevoir dateMismatch ou validation du partenaire
+      unsubMe = onSnapshot(doc(db, 'users', myUid), (mySnap) => {
+        if (!mySnap.exists()) return;
+        const myData = mySnap.data();
+        if (myData.coupleDate && !myData.needsDate) {
+          setSuccess(true);
+          setTimeout(() => redirectOnce('/dashboard'), 2000);
+        } else if (myData.dateMismatch) {
+          setWaiting(false);
+          waitingRef.current = false;
+          setDay(''); setMonth(''); setYear('');
+          setError("Ton partenaire n'a pas mis la même date !\nÊtes-vous sûrs de la date où vous vous êtes mis ensemble ?");
+        }
+      });
 
       // Listener sur le doc du partenaire
       unsubPartner = onSnapshot(doc(db, 'users', pUid), async (partnerSnap) => {
@@ -119,7 +139,10 @@ export default function DateScreen() {
     };
 
     setupListener();
-    return () => { if (unsubPartner) unsubPartner(); };
+    return () => {
+      if (unsubPartner) unsubPartner();
+      if (unsubMe) unsubMe();
+    };
   }, [myUid]);
 
   // ── Validation + soumission ───────────────────────────────────────────────
@@ -143,21 +166,18 @@ export default function DateScreen() {
     try {
       const proposed = `${yearNum}-${monthNum.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
 
-      // 1. Écrire ma proposition
-      await updateDoc(doc(db, 'users', myUid), { proposedDate: proposed });
+      // 1. Écrire ma proposition et réinitialiser dateMismatch
+      await updateDoc(doc(db, 'users', myUid), { proposedDate: proposed, dateMismatch: deleteField() });
       setWaiting(true);
       waitingRef.current = true;
 
-      // 2. ⚠️ CORRECTION CLÉ : vérifier IMMÉDIATEMENT si le partenaire a déjà proposé
-      //    (le listener ne refired pas si le doc du partenaire n'a pas changé depuis le montage)
+      // 2. Vérifier IMMÉDIATEMENT si le partenaire a déjà proposé
       const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
       if (partnerDoc.exists()) {
         const pData = partnerDoc.data();
         if (pData.proposedDate) {
-          // Partenaire a déjà proposé → comparer maintenant, sans attendre le listener
           await compareProposals(proposed, pData.proposedDate, partnerUid);
         }
-        // Sinon : on attend que le partenaire confirme (le listener gère ça)
       }
     } catch (error: any) {
       setError(error.message);
@@ -171,10 +191,26 @@ export default function DateScreen() {
   return (
     <ImageBackground
       source={require('../../../assets/images/romantic_calendar_bg.png')}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: store.isDarkMode ? '#1A1514' : '#FFF5F2' }]}
       resizeMode="cover"
     >
       <View style={styles.keyboardView}>
+        {/* Header avec bouton retour */}
+        <View style={styles.header}>
+          <Pressable
+            style={styles.backBtn}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/onboarding/sync');
+              }
+            }}
+          >
+            <ArrowLeft color={theme.text} size={28} />
+          </Pressable>
+        </View>
+
         <View style={styles.content}>
           <Animated.View entering={FadeInDown.duration(800)}>
             <CalendarDays color={theme.tint} size={60} style={{ alignSelf: 'center', marginBottom: 20 }} />
@@ -249,9 +285,11 @@ export default function DateScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%' },
-  keyboardView: { flex: 1, padding: 30, width: '100%', maxWidth: 500, alignSelf: 'center' },
-  content: { flex: 1, justifyContent: 'center' },
+  container: { flex: 1, width: '100%', minHeight: '100vh' as any },
+  keyboardView: { flex: 1, minHeight: '100%', padding: 30, paddingBottom: 60, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  header: { width: '100%', flexDirection: 'row', alignItems: 'center', paddingTop: Platform.OS === 'ios' ? 20 : 10, marginBottom: 10 },
+  backBtn: { padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.4)' },
+  content: { flexGrow: 1, justifyContent: 'center', paddingBottom: 24 },
   title: { fontSize: 32, fontWeight: '900', marginBottom: 15, textAlign: 'center' },
   subtitle: { fontSize: 16, opacity: 0.8, textAlign: 'center', marginBottom: 40, lineHeight: 24, fontWeight: '600' },
   pickerContainer: { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 24, padding: 20, marginBottom: 40, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },

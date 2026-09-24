@@ -1,12 +1,10 @@
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Colors } from '@/constants/Colors';
 import React, { useEffect, useState, memo } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, withRepeat, withSequence } from 'react-native-reanimated';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Quest } from '../data/quests';
+import { Quest, QuestTierLevel } from '../data/quests';
 import { QuestProgressEntry } from '../lib/economy';
-import { QuestTierLevel } from '../data/quests';
 
 interface QuestCardProps {
   quest: Quest;
@@ -32,8 +30,11 @@ function nextTierIndex(completedTier: string | null): number {
 
 export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted }: QuestCardProps) {
   const store = useOnboardingStore((state) => state);
+  const { width } = useWindowDimensions();
+  const compact = width < 390;
+  const iconOnly = width < 320;
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
-  const styles = getStyles(theme);
+  const styles = getStyles(theme, store.isDarkMode);
   const completedTier = progress.tier ?? null;
   const naturallyNextIdx = nextTierIndex(completedTier);
   const isFullyDone = naturallyNextIdx === -1;
@@ -87,6 +88,11 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
   const isViewTierDone = currentAmount >= targetAmount;
   
   const isUnclaimed = progress.unclaimedTiers?.includes(viewTier.tier);
+  const myUid = store.uid;
+  const claimedByUsers = progress.claimedBy?.[viewTier.tier] ?? [];
+  const hasUserClaimed = myUid ? claimedByUsers.includes(myUid) : false;
+  const partnerClaimed = myUid ? claimedByUsers.some(id => id !== myUid) : claimedByUsers.length > 0;
+  const isWaitingForPartner = isUnclaimed && hasUserClaimed;
   const hasBeenClaimed = isViewTierDone && !isUnclaimed;
   
   const ts = TIER_STYLE[viewTier.tier];
@@ -102,14 +108,19 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
   const barStyle = useAnimatedStyle(() => ({ width: `${barWidth.value}%` }));
 
   const handleClaim = async () => {
-    if (!onClaim || !isUnclaimed) return;
+    if (!onClaim || !isUnclaimed || hasUserClaimed) return;
     setLoadingClaim(true);
     await onClaim(quest.id, viewTier.tier, viewTier.reward);
     setLoadingClaim(false);
   };
 
   // Carte verte si le palier visé est terminé (que ce soit claimé ou non)
-  const cardDoneStyle = isViewTierDone ? { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' } : {};
+  const cardDoneStyle = isViewTierDone
+    ? {
+        backgroundColor: store.isDarkMode ? 'rgba(20,83,45,0.42)' : '#F0FDF4',
+        borderColor: store.isDarkMode ? '#166534' : '#BBF7D0',
+      }
+    : {};
 
   return (
     <Animated.View style={[styles.card, cardDoneStyle, highlightStyle]}>
@@ -118,12 +129,12 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
       <View style={styles.topRow}>
         <View style={styles.titleArea}>
           <Text style={styles.icon}>{quest.icon}</Text>
-          <Text style={styles.description} numberOfLines={2}>
-            {quest.description} ({targetAmount})
-          </Text>
+          {!iconOnly && <Text style={styles.description} numberOfLines={compact ? 1 : 2}>
+            {compact ? quest.name : `${quest.description} (${targetAmount})`}
+          </Text>}
         </View>
-        <View style={styles.rewardBadge}>
-          <Text style={styles.rewardText}>+{viewTier.reward} 🌸</Text>
+        <View style={[styles.rewardBadge, { backgroundColor: store.isDarkMode ? 'rgba(255,154,139,0.16)' : '#F9F4F2' }]}>
+          <Text style={[styles.rewardText, { color: store.isDarkMode ? '#FFB8AD' : '#FF6A88' }]}>+{viewTier.reward} 🌸</Text>
         </View>
       </View>
 
@@ -165,10 +176,22 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
           })}
         </View>
 
-        {isUnclaimed && (
+        {isUnclaimed && !hasUserClaimed && (
           <Pressable style={styles.claimBtn} onPress={handleClaim} disabled={loadingClaim}>
-            {loadingClaim ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.claimBtnText}>Récupérer</Text>}
+            {loadingClaim ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.claimBtnText}>
+                {partnerClaimed ? 'Récupérer ✨' : 'Récupérer'}
+              </Text>
+            )}
           </Pressable>
+        )}
+
+        {isWaitingForPartner && (
+          <View style={styles.pendingBadge}>
+            <Text style={styles.pendingText}>⏳ En attente du partenaire</Text>
+          </View>
         )}
         
         {hasBeenClaimed && (
@@ -181,9 +204,9 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
   );
 });
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.card,
     borderRadius: 14, padding: 14, marginBottom: 10,
     shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
@@ -199,7 +222,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   rewardText:  { fontSize: 13, fontWeight: '800', color: '#FF6A88' },
 
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  track: { flex: 1, height: 8, backgroundColor: '#F0EAE8', borderRadius: 4, overflow: 'hidden' },
+  track: { flex: 1, height: 8, backgroundColor: isDark ? '#3A2F35' : '#F0EAE8', borderRadius: 4, overflow: 'hidden' },
   fill:  { height: '100%', borderRadius: 4 },
   count: { fontSize: 12, fontWeight: '700', color: theme.text, minWidth: 40, textAlign: 'right' },
 
@@ -208,7 +231,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   roadmap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   milestone: {
     padding: 6, borderRadius: 10,
-    borderWidth: 2, borderColor: 'transparent', backgroundColor: '#F9F4F2',
+    borderWidth: 2, borderColor: 'transparent', backgroundColor: isDark ? '#302329' : '#F9F4F2',
     position: 'relative'
   },
   milestoneEmoji: { fontSize: 16 },
@@ -221,7 +244,8 @@ const getStyles = (theme: any) => StyleSheet.create({
   claimBtn: { backgroundColor: '#22c55e', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   claimBtnText: { color: 'white', fontWeight: '800', fontSize: 12 },
   
-  claimedBadge: { backgroundColor: '#e2e8f0', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
-  claimedText: { color: '#64748b', fontWeight: '700', fontSize: 12 }
+  claimedBadge: { backgroundColor: isDark ? '#3A2F35' : '#e2e8f0', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  claimedText: { color: isDark ? '#D8C9CE' : '#64748b', fontWeight: '700', fontSize: 12 },
+  pendingBadge: { backgroundColor: isDark ? 'rgba(251,191,36,0.15)' : '#FEF3C7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  pendingText: { color: isDark ? '#FBBF24' : '#B45309', fontWeight: '700', fontSize: 11, textAlign: 'center' }
 });
-

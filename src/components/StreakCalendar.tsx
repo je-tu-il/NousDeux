@@ -1,7 +1,7 @@
 import { collection, getDocs } from 'firebase/firestore';
 import { Flame } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { db } from '../lib/firebase';
 
 const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -109,7 +109,8 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
 
   // ── Streak mini-bar (fenêtre glissante) ─────────────────────────────────────
   const displayedStreak = currentStreak ?? streak;
-  const daysToShow = Math.min(Math.max(displayedStreak, 1), 7);
+  const daysToShow = Math.min(Math.max(displayedStreak, 7), 30);
+  const scrollViewRef = useRef<ScrollView>(null);
   const miniDays: string[] = [];
   for (let i = -(daysToShow - 1); i <= 0; i++) {
     const d = new Date();
@@ -117,21 +118,47 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
     miniDays.push(toKey(d.getFullYear(), d.getMonth(), d.getDate()));
   }
 
+  const scrollToToday = () => {
+    if (scrollViewRef.current) {
+      try {
+        scrollViewRef.current.scrollToEnd({ animated: false });
+      } catch {}
+      if (Platform.OS === 'web') {
+        const el = (scrollViewRef.current as any)?.getScrollableNode?.() || (scrollViewRef.current as any);
+        if (el && typeof el.scrollLeft !== 'undefined') {
+          el.scrollLeft = el.scrollWidth;
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!loading) {
+      scrollToToday();
+      const t1 = setTimeout(scrollToToday, 40);
+      const t2 = setTimeout(scrollToToday, 200);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+  }, [loading, miniDays.length]);
+
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, compact && styles.compactContainer]}>
         <ActivityIndicator color="#FF9A8B" size="small" />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, darkMode && { backgroundColor: 'rgba(29, 22, 22, 0.92)' }]}>
+    <View style={[styles.container, compact && styles.compactContainer, darkMode && styles.darkContainer]}>
       {/* ── Compteur streak ── */}
       <View style={styles.streakRow}>
         <Flame color="#FF6B35" size={24} fill="#FF6B35" />
         <Text style={styles.streakNumber}>{displayedStreak}</Text>
-        <Text numberOfLines={1} adjustsFontSizeToFit style={styles.streakLabel}>
+        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.streakLabel, darkMode && { color: '#F3E8E2' }]}>
           {displayedStreak === 0
             ? 'Nouveau streak !'
             : displayedStreak === 1
@@ -141,7 +168,16 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
       </View>
 
       {/* ── Mini-bar glissante (toujours visible pour garder la hauteur) ── */}
-      <View style={styles.miniRow}>
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentOffset={{ x: 10000, y: 0 }}
+        contentContainerStyle={styles.miniRow}
+        style={styles.miniScrollView}
+        onContentSizeChange={scrollToToday}
+        onLayout={scrollToToday}
+      >
         {miniDays.map((key) => {
           const isToday  = key === today;
           const isActive = activeDays.has(key);
@@ -150,18 +186,18 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
           const label    = DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1];
           return (
             <View key={key} style={styles.miniDayCol}>
-              <Text style={[styles.miniLabel, isToday && styles.miniLabelToday]}>{label}</Text>
+              <Text style={[styles.miniLabel, isToday && styles.miniLabelToday, darkMode && { color: '#D4B8B4' }]}>{label}</Text>
               <View style={[styles.miniCircle, isActive && styles.miniActive, isToday && !isActive && styles.miniToday]}>
                 {isActive
                   ? <Text style={styles.miniCheck}>✓</Text>
-                  : <Text style={[styles.miniNum, isToday && { color: '#FF9A8B', fontWeight: '800' }]}>
+                  : <Text style={[styles.miniNum, isToday && { color: '#FF6B35', fontWeight: '800' }, darkMode && !isToday && { color: '#D4B8B4' }]}>
                       {dayNum}
                     </Text>}
               </View>
             </View>
           );
         })}
-      </View>
+      </ScrollView>
 
       {showFullCalendar && (
         <View style={styles.recordBox}>
@@ -182,26 +218,40 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'rgba(220,215,215,0.84)',
+    backgroundColor: '#FFF0EB',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 106, 136, 0.35)',
     borderRadius: 20,
     padding: 16,
     marginBottom: 20,
     shadowColor: '#FF9A8B',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.16,
     shadowRadius: 10,
     elevation: 3,
+    overflow: 'hidden',
+  },
+  darkContainer: {
+    backgroundColor: 'rgba(42, 26, 26, 0.95)',
+    borderColor: 'rgba(255, 106, 136, 0.3)',
+  },
+  compactContainer: {
+    // Aligne la mini-carte sur la hauteur de la roulette du Dashboard.
+    minHeight: 116,
+    marginBottom: 0,
+    overflow: 'hidden',
   },
   streakRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   streakNumber: { fontSize: 30, fontWeight: '900', color: '#FF6B35' },
   streakLabel: { fontSize: 14, fontWeight: '600', color: '#4A3B39', opacity: 0.7, flexShrink: 1 },
 
-  miniRow: { flexDirection: 'row', justifyContent: 'flex-start', gap: 6, marginBottom: 4 },
+  miniScrollView: { width: '100%', overflow: 'hidden' },
+  miniRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, paddingHorizontal: 4 },
   miniDayCol: { alignItems: 'center', gap: 4 },
   miniLabel: { fontSize: 10, fontWeight: '600', color: '#A99693' },
   miniLabelToday: { color: '#FF9A8B', fontWeight: '800' },
-  miniCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.04)', alignItems: 'center', justifyContent: 'center' },
-  miniActive: { backgroundColor: '#FF9A8B' },
+  miniCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255, 154, 139, 0.12)', alignItems: 'center', justifyContent: 'center' },
+  miniActive: { backgroundColor: '#FF6B35' },
   miniToday: { borderWidth: 2, borderColor: '#FF9A8B' },
   miniNum: { fontSize: 11, fontWeight: '600', color: '#A99693' },
   miniCheck: { fontSize: 13, fontWeight: '900', color: 'white' },

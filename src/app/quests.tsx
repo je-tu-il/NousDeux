@@ -5,10 +5,9 @@
  * Layout : maxWidth 500 centré
  */
 
-import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -25,13 +24,14 @@ import {
 } from 'react-native';
 import QuestCard from '../components/QuestCard';
 import { Colors } from '../constants/Colors';
-import { Cosmetic, COSMETICS, parseGradientColors } from '../data/cosmetics';
+import { Cosmetic, COSMETICS, getCosmeticById, getCosmeticImage, parseGradientColors } from '../data/cosmetics';
 import { QUESTS } from '../data/quests';
-import { claimQuestReward, getQuestProgress, QuestProgressMap, QuestTier } from '../lib/economy';
-import { db } from '../lib/firebase';
+import { claimQuestReward, getQuestProgress, QuestProgressMap, QuestTier, updateCoupleDurationQuest } from '../lib/economy';
+import { auth, db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
 
 const TIER_RANK: Record<string, number> = { platinum: 4, gold: 3, silver: 2, bronze: 1 };
+const questProgressCache = new Map<string, QuestProgressMap>();
 
 async function getCoupleId(uid: string): Promise<string | null> {
   try {
@@ -39,6 +39,7 @@ async function getCoupleId(uid: string): Promise<string | null> {
     if (snap.exists() && snap.data().linkedTo) {
       return [uid, snap.data().linkedTo].sort().join('_');
     }
+
     return null;
   } catch {
     return null;
@@ -54,20 +55,35 @@ export default function QuestsScreen() {
   const backgroundSource = getCosmeticImage(background, store.isDarkMode) || (store.isDarkMode
     ? require('../../assets/images/nousdeux_dark_background.png')
     : require('../../assets/images/nousdeux_warm_background.png'));
-  const myUid = store.uid;
+  const myUid = store.uid || auth.currentUser?.uid;
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading]     = useState(Boolean(myUid));
   const [refreshing, setRefreshing] = useState(false);
   const [progressMap, setProgressMap] = useState<QuestProgressMap>({});
   const [coupleId, setCoupleId] = useState<string | null>(null);
 
   const fetchQuests = useCallback(async () => {
-    if (!myUid) return;
+    if (!myUid) {
+      return;
+    }
     try {
       const cId = await getCoupleId(myUid);
       if (cId) {
         setCoupleId(cId);
+        const cached = questProgressCache.get(cId);
+        if (cached) {
+          setProgressMap(cached);
+          setLoading(false);
+        }
+        const userSnap = await getDoc(doc(db, 'users', myUid));
+        const userData = userSnap.data();
+        const startDate = userData?.linkedAt || new Date().toISOString();
+        if (!userData?.linkedAt) {
+          setDoc(doc(db, 'users', myUid), { linkedAt: startDate }, { merge: true }).catch(() => {});
+        }
+        await updateCoupleDurationQuest(cId, startDate);
         const progress = await getQuestProgress(cId);
+        questProgressCache.set(cId, progress);
         setProgressMap(progress || {});
       }
     } catch (e) {
@@ -78,16 +94,51 @@ export default function QuestsScreen() {
     }
   }, [myUid]);
 
-  useEffect(() => { fetchQuests(); }, [fetchQuests]);
+  useEffect(() => {
+    let isCancelled = false;
+    const load = async () => {
+      if (!myUid) return;
+      try {
+        const cId = await getCoupleId(myUid);
+        if (!cId || isCancelled) return;
+        setCoupleId(cId);
+        const cached = questProgressCache.get(cId);
+        if (cached && !isCancelled) {
+          setProgressMap(cached);
+          setLoading(false);
+        }
+        const userSnap = await getDoc(doc(db, 'users', myUid));
+        const userData = userSnap.data();
+        const startDate = userData?.linkedAt || new Date().toISOString();
+        if (!userData?.linkedAt) {
+          setDoc(doc(db, 'users', myUid), { linkedAt: startDate }, { merge: true }).catch(() => {});
+        }
+        await updateCoupleDurationQuest(cId, startDate);
+        const progress = await getQuestProgress(cId);
+        if (isCancelled) return;
+        questProgressCache.set(cId, progress);
+        setProgressMap(progress || {});
+      } catch (e) {
+        console.error('[Quests]', e);
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    };
+    void load();
+    return () => { isCancelled = true; };
+  }, [myUid]);
 
   const [unlockedCosmetic, setUnlockedCosmetic] = useState<Cosmetic | null>(null);
 
   const handleClaim = async (questId: string, tierLevel: QuestTier, reward: number) => {
     if (!coupleId) return;
-    const success = await claimQuestReward(coupleId, questId, tierLevel, reward);
+    if (!store.uid) return;
+    const success = await claimQuestReward(coupleId, questId, tierLevel, reward, store.uid);
+    await fetchQuests();
     if (success) {
-      await fetchQuests(); // Re-fetch to update progressMap UI
-      
       // Check if a cosmetic was unlocked
       const cosmetic = COSMETICS.find(c => c.unlock.type === 'quest' && c.unlock.questId === questId && c.unlock.tier === tierLevel);
       if (cosmetic) {
@@ -315,7 +366,3 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   btnConfirmText: { color: 'white', fontWeight: '800', fontSize: 15 },
 });
-
-
-
-

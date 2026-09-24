@@ -43,21 +43,8 @@ function coupleId(uid1: string, uid2: string): string {
   return [uid1, uid2].sort().join('_');
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  amour: 'Amour',
-  fun: 'Fun',
-  profond: 'Profond',
-  intime: 'Intime',
-  famille: 'Famille',
-  debat: 'Débat',
-  futur: 'Futur',
-  souvenir: 'Souvenir',
-  reve: 'Rêve',
-  quotidien: 'Quotidien',
-  defi: 'Défi',
-};
-
 async function pickDailyQuestion(cId: string, slotKey: string): Promise<string> {
+  if (!cId) throw new Error('Missing coupleId');
   return runTransaction(db, async (tx) => {
     const slotRef = doc(db, 'couples', cId, 'daily', slotKey);
     const slotDoc = await tx.get(slotRef);
@@ -69,7 +56,14 @@ async function pickDailyQuestion(cId: string, slotKey: string): Promise<string> 
 
     const scheduled = getScheduledQuestionId(slotKey);
     if (scheduled && getById(scheduled)) {
-      tx.set(slotRef, { questionId: scheduled, createdAt: new Date() });
+      const q = getById(scheduled)!;
+      tx.set(slotRef, {
+        questionId: scheduled,
+        createdAt: new Date(),
+        mode: 'daily',
+        category: q.category || 'quotidien',
+        questionCategory: q.category || 'quotidien',
+      });
       return scheduled;
     }
 
@@ -81,7 +75,13 @@ async function pickDailyQuestion(cId: string, slotKey: string): Promise<string> 
     if (unseen.length === 0) { unseen = [...QUESTIONS]; newSeenIds = []; }
     const picked = unseen[Math.floor(Math.random() * unseen.length)];
     tx.set(progressRef, { questionIds: [...newSeenIds, picked.id], updatedAt: new Date() });
-    tx.set(slotRef, { questionId: picked.id, createdAt: new Date() });
+    tx.set(slotRef, {
+      questionId: picked.id,
+      createdAt: new Date(),
+      mode: 'daily',
+      category: picked.category || 'quotidien',
+      questionCategory: picked.category || 'quotidien',
+    });
     return picked.id;
   });
 }
@@ -90,20 +90,26 @@ async function pickDailyQuestion(cId: string, slotKey: string): Promise<string> 
 async function safeDecrypt(data: Record<string, any>, cId: string): Promise<string> {
   if (data.ciphertext && data.iv) {
     try {
-      return await decryptText({ ciphertext: data.ciphertext, iv: data.iv }, cId);
-    } catch {
-      return data.text ?? '';
+      const decrypted = await decryptText({ ciphertext: data.ciphertext, iv: data.iv }, cId);
+      if (decrypted && decrypted.trim().length > 0) {
+        return decrypted.trim();
+      }
+    } catch (e) {
+      console.warn('safeDecrypt decryptText error:', e);
     }
   }
-  return data.text ?? '';
+  if (data.text && typeof data.text === 'string' && data.text.trim().length > 0) {
+    return data.text.trim();
+  }
+  return '';
 }
 
 // ─── composant ───────────────────────────────────────────────────────────────
 
 export default function Daylink() {
-  const theme  = Colors.light;
   const { width: windowWidth } = useWindowDimensions();
   const store  = useOnboardingStore((s) => s);
+  const theme  = store.isDarkMode ? Colors.dark : Colors.light;
   const myUid  = store.uid;
   const pseudo = store.pseudo ?? 'Moi';
 
@@ -112,6 +118,7 @@ export default function Daylink() {
   const [question, setQuestion]             = useState<Question | null>(null);
   const [loadingQuestion, setLoading]       = useState(true);
   const [loadError, setLoadError]           = useState<string | null>(null);
+  const [needsPartner, setNeedsPartner]     = useState(false);
   const [partnerUid, setPartnerUid]         = useState<string | null>(null);
   const [partnerPseudo, setPartnerPseudo]   = useState('Partenaire');
   const [cId, setCId]                       = useState('');
@@ -135,11 +142,16 @@ export default function Daylink() {
       if (!firebaseUid) return;
       setLoading(true);
       setLoadError(null);
+      setNeedsPartner(false);
       try {
         const myDocSnap = await getDoc(doc(db, 'users', firebaseUid));
         if (!myDocSnap.exists()) throw new Error('Profil utilisateur introuvable.');
         const pUid = myDocSnap.data().linkedTo as string | undefined;
-        if (!pUid) throw new Error('Le compte partenaire n’est pas encore synchronisé.');
+        if (!pUid) {
+          setNeedsPartner(true);
+          setLoading(false);
+          return;
+        }
         setPartnerUid(pUid);
 
         const coupleKey = coupleId(firebaseUid, pUid);
@@ -161,19 +173,28 @@ export default function Daylink() {
         setQuestion(getById(questionId) ?? null);
 
         if (myAns.exists()) {
-          setIsSubmitted(true);
-          isSubmittedRef.current = true;
-          setMyAnswer(await safeDecrypt(myAns.data(), coupleKey));
+          const decryptedMy = await safeDecrypt(myAns.data(), coupleKey);
+          if (decryptedMy && decryptedMy.length > 0) {
+            setMyAnswer(decryptedMy);
+            setIsSubmitted(true);
+            isSubmittedRef.current = true;
+            void checkQuests(coupleKey, 'question_answered', 1);
+          }
         }
 
         if (pAns.exists()) {
-          setPartnerHasAnswered(true);
-          if (isSubmittedRef.current) {
-            setPartnerAnswer(await safeDecrypt(pAns.data(), coupleKey));
+          const decryptedPartner = await safeDecrypt(pAns.data(), coupleKey);
+          if (decryptedPartner && decryptedPartner.length > 0) {
+            setPartnerHasAnswered(true);
+            if (isSubmittedRef.current) {
+              setPartnerAnswer(decryptedPartner);
+            }
           }
         }
       } catch (error) {
-        console.error('Daylink load failed:', error);
+        if (!(error instanceof Error && error.message === 'TIMEOUT')) {
+          console.warn('Daylink load failed:', error);
+        }
         if (!cancelled) {
           const code = typeof error === 'object' && error !== null && 'code' in error
             ? String((error as { code?: unknown }).code)
@@ -208,9 +229,12 @@ export default function Daylink() {
     const ref = doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid);
     const unsub = onSnapshot(ref, async (snap) => {
       if (snap.exists()) {
-        setPartnerHasAnswered(true);
-        if (isSubmittedRef.current) {
-          setPartnerAnswer(await safeDecrypt(snap.data(), cId));
+        const decrypted = await safeDecrypt(snap.data(), cId);
+        if (decrypted && decrypted.length > 0) {
+          setPartnerHasAnswered(true);
+          if (isSubmittedRef.current) {
+            setPartnerAnswer(decrypted);
+          }
         }
       } else {
         setPartnerHasAnswered(false);
@@ -226,27 +250,43 @@ export default function Daylink() {
 
   // ── Soumettre ma réponse — stockage chiffré temporaire ───────────────────
   const handleSubmit = async () => {
-    if (!myAnswer.trim() || !myUid || !partnerUid || !question || !cId) return;
+    const cleanAnswer = myAnswer.trim();
+    if (!cleanAnswer || cleanAnswer.length === 0 || !myUid || !partnerUid || !question || !cId || savingAnswer || isSubmitted) return;
     setSavingAnswer(true);
     try {
       // Chiffrement avant envoi — admin ne peut pas lire
-      const encrypted = await encryptText(myAnswer.trim(), cId);
+      let docData: Record<string, any> = { submittedAt: serverTimestamp() };
+      try {
+        const encrypted = await encryptText(cleanAnswer, cId);
+        docData = { ...docData, ...encrypted };
+      } catch (err) {
+        console.warn('encryptText fallback in Daylink:', err);
+        docData.text = cleanAnswer;
+      }
+      if (!docData.ciphertext) {
+        docData.text = cleanAnswer;
+      }
+
       await setDoc(
         doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid),
-        { ...encrypted, submittedAt: serverTimestamp() }
+        docData
       );
+      setMyAnswer(cleanAnswer);
       setIsSubmitted(true);
       isSubmittedRef.current = true;
 
-        if (partnerHasAnswered) {
-          const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
-          if (pAns.exists()) {
+      if (partnerHasAnswered) {
+        const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
+        if (pAns.exists()) {
+          const decryptedPartner = await safeDecrypt(pAns.data(), cId);
+          if (decryptedPartner && decryptedPartner.length > 0) {
             checkQuests(cId, 'both_active', 1).catch(e => console.error(e));
-            setPartnerAnswer(await safeDecrypt(pAns.data(), cId));
+            setPartnerAnswer(decryptedPartner);
             await updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true });
             updateWalletStreak(cId).catch(console.error);
           }
         }
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -259,10 +299,13 @@ export default function Daylink() {
     if (!partnerHasAnswered || !isSubmitted || !myUid || !partnerUid || !cId) return;
     getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid)).then(async (snap) => {
       if (snap.exists()) {
-        setPartnerAnswer(await safeDecrypt(snap.data(), cId));
-        updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true }).then(() => {
-          updateWalletStreak(cId).catch(console.error);
-        }).catch(() => {});
+        const decryptedPartner = await safeDecrypt(snap.data(), cId);
+        if (decryptedPartner && decryptedPartner.length > 0) {
+          setPartnerAnswer(decryptedPartner);
+          updateDoc(doc(db, 'couples', cId, 'daily', slotKey), { bothAnswered: true }).then(() => {
+            updateWalletStreak(cId).catch(console.error);
+          }).catch(() => {});
+        }
       }
     });
   }, [partnerHasAnswered, isSubmitted]);
@@ -281,12 +324,20 @@ export default function Daylink() {
   if (!question) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 30 }]}>
-        <Text style={{ color: theme.text, textAlign: 'center', opacity: 0.6 }}>
-          {loadError ?? 'Impossible de charger la question.'}{'\n'}Vérifie ta connexion.
+        <View style={[styles.noticeCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <Heart color={theme.tint} size={28} fill={theme.tint} />
+        <Text style={{ color: theme.text, textAlign: 'center', opacity: 0.8 }}>
+          {needsPartner
+            ? 'Tu dois être synchronisé avec un partenaire pour répondre à la question du jour.'
+            : `${loadError ?? 'Impossible de charger la question.'}`}
         </Text>
-        <Pressable onPress={() => router.replace('/daylink')} style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: theme.tint }}>
-          <Text style={{ color: 'white', fontWeight: '700' }}>Réessayer</Text>
+        <Pressable
+          onPress={() => router.replace(needsPartner ? '/onboarding/sync' : '/daylink')}
+          style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: theme.tint }}
+        >
+          <Text style={{ color: 'white', fontWeight: '700' }}>{needsPartner ? 'Synchroniser mon couple' : 'Réessayer'}</Text>
         </Pressable>
+        </View>
       </View>
     );
   }
@@ -308,26 +359,31 @@ export default function Daylink() {
         </LinearGradient>
 
         <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.categoryLabel, { color: theme.tint }]}>
-            Thème : {CATEGORY_LABELS[question.category] ?? question.category}
-          </Text>
           <View style={styles.statusRow}>
             <View style={[styles.pill, isSubmitted ? styles.pillDone : styles.pillWaiting]}>
+              <Text
+                style={[styles.pillText, { color: isSubmitted ? '#22c55e' : '#9CA3AF' }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {pseudo}
+              </Text>
               {isSubmitted
                 ? <CheckCircle2 color="#22c55e" size={14} />
                 : <Clock color="#9CA3AF" size={14} />}
-              <Text style={[styles.pillText, { color: isSubmitted ? '#22c55e' : '#9CA3AF' }]}>
-                {pseudo} {isSubmitted ? '✓' : '...'}
-              </Text>
             </View>
 
             <View style={[styles.pill, partnerHasAnswered ? styles.pillDone : styles.pillWaiting]}>
+              <Text
+                style={[styles.pillText, { color: partnerHasAnswered ? '#22c55e' : '#9CA3AF' }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {partnerPseudo}
+              </Text>
               {partnerHasAnswered
                 ? <CheckCircle2 color="#22c55e" size={14} />
                 : <Clock color="#9CA3AF" size={14} />}
-              <Text style={[styles.pillText, { color: partnerHasAnswered ? '#22c55e' : '#9CA3AF' }]}>
-                {partnerPseudo} {partnerHasAnswered ? '✓' : '...'}
-              </Text>
             </View>
           </View>
 
@@ -356,9 +412,12 @@ export default function Daylink() {
                 {myAnswer.length} / 2000
               </Text>
               <Pressable
-                style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 }]}
+                style={({ pressed }) => [
+                  styles.button,
+                  { backgroundColor: theme.tint, opacity: pressed || !myAnswer.trim() || savingAnswer ? 0.7 : 1 }
+                ]}
                 onPress={handleSubmit}
-                disabled={savingAnswer}
+                disabled={!myAnswer.trim() || savingAnswer || isSubmitted}
               >
                 {savingAnswer
                   ? <ActivityIndicator color="white" />
@@ -374,11 +433,11 @@ export default function Daylink() {
               </View>
 
               {/* Réponse du partenaire — visible quand les 2 ont répondu */}
-              {partnerAnswer !== null ? (
+              {partnerAnswer && partnerAnswer.trim().length > 0 ? (
                 <Animated.View entering={FadeInUp.duration(600)} style={styles.revealBox}>
                   <View style={styles.revealHeader}>
                     <Unlock color={theme.gradientEnd} size={18} />
-                    <Text style={[styles.revealTitle, { color: theme.gradientEnd }]}>
+                    <Text style={[styles.revealTitle, { color: theme.gradientEnd }]} numberOfLines={1} ellipsizeMode="tail">
                       {partnerPseudo} a répondu !
                     </Text>
                   </View>
@@ -387,7 +446,7 @@ export default function Daylink() {
               ) : (
                 <View style={styles.waitingBox}>
                   <ActivityIndicator color={theme.tint} size="small" />
-                  <Text style={{ color: '#A99693', fontSize: 14, fontStyle: 'italic' }}>
+                  <Text style={{ color: '#A99693', fontSize: 14, fontStyle: 'italic', flexShrink: 1 }} numberOfLines={2} ellipsizeMode="tail">
                     En attente de {partnerPseudo}...
                   </Text>
                 </View>
@@ -402,6 +461,7 @@ export default function Daylink() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 20 },
+  noticeCard: { width: '100%', maxWidth: 420, alignItems: 'center', gap: 14, padding: 24, borderRadius: 20, borderWidth: 1 },
   card: {
     borderRadius: 24, borderWidth: 1, overflow: 'hidden',
     shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 },
@@ -414,11 +474,11 @@ const styles = StyleSheet.create({
   headerTitle: { color: 'white', fontSize: 22, fontWeight: '800', letterSpacing: 1 },
   content: { padding: 24, flexShrink: 1 },
   categoryLabel: { fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 },
-  statusRow: { flexDirection: 'row', gap: 10, marginBottom: 20, justifyContent: 'center' },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  statusRow: { flexDirection: 'row', gap: 10, marginBottom: 20, justifyContent: 'center', minWidth: 0 },
+  pill: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   pillDone: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: '#22c55e' },
   pillWaiting: { backgroundColor: 'rgba(156,163,175,0.1)', borderColor: '#9CA3AF' },
-  pillText: { fontSize: 12, fontWeight: '600' },
+  pillText: { flex: 1, minWidth: 0, fontSize: 12, fontWeight: '600' },
   question: { fontSize: 20, fontWeight: '600', textAlign: 'center', marginBottom: 24, lineHeight: 28 },
   input: { borderWidth: 1.5, padding: 16, borderRadius: 16, minHeight: 120, fontSize: 16, marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.5)' },
   button: {

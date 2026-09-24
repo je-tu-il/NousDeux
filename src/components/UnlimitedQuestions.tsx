@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
-    KeyboardAvoidingView, Platform,
+    KeyboardAvoidingView, Modal, Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -37,6 +37,7 @@ import {
     setDoc,
     updateDoc,
     increment,
+    arrayUnion,
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Colors } from '../constants/Colors';
@@ -48,7 +49,7 @@ import { POF_QUESTIONS } from '../data/pileouface';
 import type { Question } from '../data/questions';
 import { QUESTIONS } from '../data/questions';
 import { decryptText, encryptText } from '../lib/crypto';
-import { updateWalletStreak } from '../lib/economy';
+import { checkQuests, updateWalletStreak } from '../lib/economy';
 
 type AnyQuestion = Question | PileOuFaceQuestion;
 
@@ -80,6 +81,7 @@ function indexKey(uid: string, categoryFilter?: string): string {
 }
 
 async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?: string): Promise<string> {
+  if (!cId) throw new Error('Missing coupleId');
   return runTransaction(db, async (tx) => {
     const slotRef     = doc(db, 'couples', cId, 'daily', slot);
     const progressRef = doc(db, 'couples', cId, 'progress', 'seen');
@@ -113,18 +115,26 @@ async function pickUnlimitedQuestion(cId: string, slot: string, categoryFilter?:
 
     const picked = unseen[Math.floor(Math.random() * unseen.length)];
     tx.set(progressRef, { questionIds: [...newSeenIds, picked.id], updatedAt: new Date() });
-    tx.set(slotRef, { questionId: picked.id, createdAt: new Date(), mode: 'unlimited', category: categoryFilter || 'all' });
+    tx.set(slotRef, {
+      questionId: picked.id,
+      createdAt: new Date(),
+      mode: 'unlimited',
+      category: categoryFilter || picked.category || 'all',
+      questionCategory: picked.category,
+    });
     return picked.id;
   });
 }
 
 async function readCurrentIndex(cId: string, uid: string, categoryFilter?: string): Promise<number> {
+  if (!cId) throw new Error('Missing coupleId');
   const snap = await getDoc(doc(db, 'couples', cId, 'progress', 'indexes'));
   if (snap.exists()) return snap.data()[indexKey(uid, categoryFilter)] ?? 0;
   return 0;
 }
 
 async function saveCurrentIndex(cId: string, uid: string, index: number, categoryFilter?: string): Promise<void> {
+  if (!cId) throw new Error('Missing coupleId');
   await setDoc(doc(db, 'couples', cId, 'progress', 'indexes'), { [indexKey(uid, categoryFilter)]: index }, { merge: true });
 }
 
@@ -132,53 +142,111 @@ async function saveCurrentIndex(cId: string, uid: string, index: number, categor
 async function safeDecrypt(data: Record<string, any>, cId: string): Promise<string> {
   if (data.ciphertext && data.iv) {
     try {
-      return await decryptText({ ciphertext: data.ciphertext, iv: data.iv }, cId);
-    } catch {
-      return data.text ?? data.choice ?? '';
+      const decrypted = await decryptText({ ciphertext: data.ciphertext, iv: data.iv }, cId);
+      if (decrypted && decrypted.trim().length > 0) {
+        return decrypted.trim();
+      }
+    } catch (e) {
+      console.warn('Unlimited safeDecrypt error:', e);
     }
   }
-  return data.text ?? data.choice ?? '';
+  const fallback = data.text ?? data.choice;
+  if (fallback && typeof fallback === 'string' && fallback.trim().length > 0) {
+    return fallback.trim();
+  }
+  return '';
 }
 
 /**
  * Efface les réponses des deux partenaires (appelé quand les 2 ont avancé).
  */
 async function deleteSlotAnswers(cId: string, slot: string, myUid: string, pUid: string): Promise<void> {
+  if (!cId) throw new Error('Missing coupleId');
   await Promise.all([
     deleteDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', myUid)).catch(() => {}),
     deleteDoc(doc(db, 'couples', cId, 'daily', slot, 'answers', pUid)).catch(() => {}),
   ]);
 }
 
-async function completeUnlimitedQuestion(cId: string, slot: string, category: string | undefined, uid: string, partnerUid: string): Promise<void> {
+const CATEGORY_NAMES: Record<string, string> = {
+  amour: 'Amour',
+  fun: 'Fun',
+  profond: 'Profond',
+  intime: 'Intime',
+  pile_ou_face: 'Tu préfères',
+  famille: 'Famille',
+  debat: 'Débat',
+  futur: 'Futur',
+  souvenir: 'Souvenir',
+  reve: 'Rêve',
+  quotidien: 'Quotidien',
+  defi: 'Défi',
+};
+
+const NEXT_CATEGORY_MAP: Record<string, string | null> = {
+  amour: 'fun',
+  fun: 'profond',
+  profond: 'intime',
+  intime: 'pile_ou_face',
+  pile_ou_face: 'famille',
+  famille: 'debat',
+  debat: 'futur',
+  futur: 'souvenir',
+  souvenir: 'reve',
+  reve: 'quotidien',
+  quotidien: 'defi',
+  defi: null,
+};
+
+async function completeUnlimitedQuestion(cId: string, slot: string, category: string | undefined, uid: string, partnerUid: string): Promise<{ justReachedTen?: boolean; nextCategory?: string } | void> {
+  if (!cId) throw new Error('Missing coupleId');
   const slotRef = doc(db, 'couples', cId, 'daily', slot);
   const walletRef = doc(db, `couples/${cId}/economy/wallet`);
   const myAnswerRef = doc(db, 'couples', cId, 'daily', slot, 'answers', uid);
   const partnerAnswerRef = doc(db, 'couples', cId, 'daily', slot, 'answers', partnerUid);
 
-  await runTransaction(db, async (tx) => {
+  return await runTransaction(db, async (tx) => {
     const slotSnap = await tx.get(slotRef);
     const myAnswer = await tx.get(myAnswerRef);
     const partnerAnswer = await tx.get(partnerAnswerRef);
-    if (category) await tx.get(walletRef);
     if (!slotSnap.exists() || slotSnap.data().bothAnswered === true || !myAnswer.exists() || !partnerAnswer.exists()) return;
 
+    const slotData = slotSnap.data();
+    const resolvedCategory = (category && category !== 'all')
+      ? category
+      : (slotData.questionCategory || (slotData.questionId ? getById(slotData.questionId)?.category : undefined) || (slotData.category !== 'all' ? slotData.category : undefined));
+
+    let walletSnap: any = null;
+    if (resolvedCategory) walletSnap = await tx.get(walletRef);
+
     tx.update(slotRef, { bothAnswered: true });
-    if (category) {
-      tx.set(walletRef, { unlimitedStats: { [category]: increment(1) } }, { merge: true });
+    let justReachedTen = false;
+    let nextCategory: string | undefined = undefined;
+
+    if (resolvedCategory) {
+      const currentCount = walletSnap?.exists() ? (walletSnap.data().unlimitedStats?.[resolvedCategory] || 0) : 0;
+      const newCount = currentCount + 1;
+      tx.set(walletRef, { unlimitedStats: { [resolvedCategory]: increment(1) } }, { merge: true });
+      if (newCount === 10) {
+        justReachedTen = true;
+        nextCategory = NEXT_CATEGORY_MAP[resolvedCategory] || undefined;
+      }
     }
+    return { justReachedTen, nextCategory };
   });
 }
 
 export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?: string }) {
-  const theme  = Colors.light;
   const store  = useOnboardingStore((s) => s);
+  const theme  = store.isDarkMode ? Colors.dark : Colors.light;
+  const styles = getStyles(theme);
   const myUid  = store.uid;
   const pseudo = store.pseudo ?? 'Moi';
 
   const [question, setQuestion]             = useState<AnyQuestion | null>(null);
   const [loadingQuestion, setLoading]       = useState(true);
   const [loadError, setLoadError]           = useState<string | null>(null);
+  const [needsPartner, setNeedsPartner]     = useState(false);
   const [partnerUid, setPartnerUid]         = useState<string | null>(null);
   const [partnerPseudo, setPartnerPseudo]   = useState('Partenaire');
   const [cId, setCId]                       = useState('');
@@ -198,6 +266,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
   // Vrai quand le partenaire a déjà cliqué "Suivante" pour ce slot
   const [partnerMovedToNext, setPartnerMovedToNext] = useState(false);
+  const [celebration, setCelebration]               = useState<{ categoryName: string; nextCategoryName?: string } | null>(null);
 
   const isSubmittedRef = useRef(false);
   useEffect(() => { isSubmittedRef.current = isSubmitted; }, [isSubmitted]);
@@ -267,7 +336,13 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         const myDoc = await getDoc(doc(db, 'users', firebaseUid));
         if (!myDoc.exists()) throw new Error('Profil utilisateur introuvable.');
         const pUid = myDoc.data().linkedTo as string | undefined;
-        if (!pUid) throw new Error('Le compte partenaire n’est pas encore synchronisé.');
+        if (!pUid) {
+          if (!cancelled) {
+            setNeedsPartner(true);
+            setLoading(false);
+          }
+          return;
+        }
         setPartnerUid(pUid);
 
         const coupleKey = coupleId(firebaseUid, pUid);
@@ -339,12 +414,19 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         // Le partenaire a avancé à la question suivante
         if (data.movedToNext) {
           setPartnerMovedToNext(true);
-          // Ne pas écraser partnerHasAnswered — il avait bien répondu
+          const decrypted = await safeDecrypt(data, cId);
+          if (decrypted && decrypted.length > 0) {
+            setPartnerHasAnswered(true);
+            setPartnerAnswer(decrypted);
+          }
           return;
         }
-        setPartnerHasAnswered(true);
-        if (isSubmittedRef.current) {
-          setPartnerAnswer(await safeDecrypt(data, cId));
+        const decrypted = await safeDecrypt(data, cId);
+        if (decrypted && decrypted.length > 0) {
+          setPartnerHasAnswered(true);
+          if (isSubmittedRef.current) {
+            setPartnerAnswer(decrypted);
+          }
         }
       } else {
         setPartnerHasAnswered(false);
@@ -361,27 +443,53 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
   // ── Soumettre ma réponse — stockage chiffré temporaire ───────────────────
   const handleSubmit = async (choice?: string) => {
-    const finalAnswer = choice || myAnswer;
-    if (!finalAnswer.trim() || !myUid || !partnerUid || !question || !slotKey || !cId) return;
+    const finalAnswer = (choice || myAnswer).trim();
+    if (!finalAnswer || finalAnswer.length === 0 || !myUid || !partnerUid || !question || !slotKey || !cId || savingAnswer || isSubmitted) return;
 
     setSavingAnswer(true);
     if (choice) setMyAnswer(choice);
+    else setMyAnswer(finalAnswer);
 
     try {
       // Chiffrement AES-GCM avant envoi
-      const encrypted = await encryptText(finalAnswer.trim(), cId);
-      await setDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid), {
-        ...encrypted,
+      let docData: Record<string, any> = {
         submittedAt: serverTimestamp(),
-      });
+      };
+      try {
+        const encrypted = await encryptText(finalAnswer, cId);
+        docData = { ...docData, ...encrypted };
+      } catch (err) {
+        console.warn('encryptText fallback in UnlimitedQuestions:', err);
+        docData.text = finalAnswer;
+      }
+      if (!docData.ciphertext) {
+        docData.text = finalAnswer;
+      }
+      if (choice) {
+        docData.choice = choice;
+      }
+
+      await setDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid), docData);
       setIsSubmitted(true);
       isSubmittedRef.current = true;
+      void checkQuests(cId, 'question_answered', 1);
+      void checkQuests(cId, 'bonus_question', 1);
 
       if (partnerHasAnswered) {
         const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
         if (pAns.exists()) {
-          setPartnerAnswer(await safeDecrypt(pAns.data(), cId));
-          await completeUnlimitedQuestion(cId, slotKey, categoryFilter, myUid, partnerUid);
+          const decryptedPartner = await safeDecrypt(pAns.data(), cId);
+          if (decryptedPartner && decryptedPartner.length > 0) {
+            setPartnerAnswer(decryptedPartner);
+          }
+          const currentCat = categoryFilter || question.category;
+          const res = await completeUnlimitedQuestion(cId, slotKey, currentCat, myUid, partnerUid);
+          if (res && typeof res === 'object' && res.justReachedTen) {
+            setCelebration({
+              categoryName: CATEGORY_NAMES[currentCat || 'amour'] || 'cette catégorie',
+              nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
+            });
+          }
           updateWalletStreak(cId).catch(console.error);
         }
       }
@@ -396,9 +504,19 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     if (!partnerHasAnswered || !isSubmitted || !myUid || !partnerUid || !slotKey || !cId) return;
     getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid)).then(async (snap) => {
       if (snap.exists()) {
-        setPartnerAnswer(await safeDecrypt(snap.data(), cId));
-        completeUnlimitedQuestion(cId, slotKey, categoryFilter, myUid, partnerUid).catch(() => {});
-        updateWalletStreak(cId).catch(console.error);
+        const decryptedPartner = await safeDecrypt(snap.data(), cId);
+        if (decryptedPartner && decryptedPartner.length > 0) {
+          setPartnerAnswer(decryptedPartner);
+          const currentCat = categoryFilter || question?.category;
+          const res = await completeUnlimitedQuestion(cId, slotKey, currentCat, myUid, partnerUid).catch(() => {});
+          if (res && typeof res === 'object' && res.justReachedTen) {
+            setCelebration({
+              categoryName: CATEGORY_NAMES[currentCat || 'amour'] || 'cette catégorie',
+              nextCategoryName: res.nextCategory ? CATEGORY_NAMES[res.nextCategory] : undefined,
+            });
+          }
+          updateWalletStreak(cId).catch(console.error);
+        }
       }
     });
   }, [partnerHasAnswered, isSubmitted]);
@@ -409,7 +527,6 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     setLoadingNext(true);
 
     const myAnsRef = doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid);
-    const pAnsRef  = doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid);
 
     // Si le partenaire a déjà marqué movedToNext → les 2 ont avancé → on supprime
     if (partnerMovedToNext) {
@@ -434,7 +551,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator color="#A855F7" size="large" />
-        <Text style={{ color: '#4A3B39', marginTop: 16, opacity: 0.6 }}>Chargement...</Text>
+        <Text style={{ color: theme.text, marginTop: 16, opacity: 0.75 }}>Chargement...</Text>
       </View>
     );
   }
@@ -442,15 +559,22 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   if (!question) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 30 }]}>
-        <Text style={{ color: '#4A3B39', textAlign: 'center', opacity: 0.6 }}>
-          {loadError ?? 'Impossible de charger une question.'}
-        </Text>
-        <Pressable
-          onPress={() => router.replace(categoryFilter ? `/unlimited?category=${encodeURIComponent(categoryFilter)}` : '/unlimited')}
-          style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: '#A855F7' }}
-        >
-          <Text style={{ color: 'white', fontWeight: '700' }}>Réessayer</Text>
-        </Pressable>
+        <View style={[styles.noticeCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <Heart color={theme.tint} size={28} fill={theme.tint} />
+          <Text style={{ color: theme.text, textAlign: 'center', opacity: 0.8 }}>
+            {needsPartner
+              ? 'Tu dois être synchronisé avec un partenaire pour accéder aux questions.'
+              : `${loadError ?? 'Impossible de charger les questions. Vérifie la synchronisation et réessaie.'}`}
+          </Text>
+          <Pressable
+            onPress={() => router.replace(needsPartner ? '/onboarding/sync' : (categoryFilter ? `/unlimited?category=${encodeURIComponent(categoryFilter)}` : '/unlimited'))}
+            style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: theme.tint }}
+          >
+            <Text style={{ color: 'white', fontWeight: '700' }}>
+              {needsPartner ? 'Synchroniser mon couple' : 'Réessayer'}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -481,16 +605,30 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     }
   };
 
-  const displayedCategory = isPofQuestion ? 'pile_ou_face' : question.category;
+  const displayedCategory = categoryFilter ? (isPofQuestion ? 'pile_ou_face' : categoryFilter) : undefined;
   const catInfo = getCategoryInfo(displayedCategory);
+  const currentQuestionCat = isPofQuestion ? 'pile_ou_face' : (question as Question).category;
+  const currentQuestionCatInfo = getCategoryInfo(currentQuestionCat);
+
+  const headerColors = categoryFilter
+    ? (catInfo.colors as [string, string])
+    : (['#A855F7', '#D946EF'] as [string, string]);
+
+  const headerIcon = categoryFilter
+    ? catInfo.icon
+    : <InfinityIcon color="white" size={22} />;
+
+  const headerTitle = categoryFilter
+    ? catInfo.title
+    : `ILLIMITÉ · ${currentQuestionCatInfo.title}`;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInUp.duration(600).springify()} layout={Layout.springify()} style={styles.card}>
-          <LinearGradient colors={catInfo.colors as [string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
-            {catInfo.icon}
-            <Text style={styles.headerTitle}>{catInfo.title}</Text>
+          <LinearGradient colors={headerColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
+            {headerIcon}
+            <Text style={styles.headerTitle}>{headerTitle}</Text>
             <View style={styles.badge}>
               <Text style={styles.badgeText}>Q.{questionIndex + 1}</Text>
             </View>
@@ -514,17 +652,17 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
               <Animated.View entering={FadeIn.delay(200)}>
                 {isPofQuestion ? (
                   <View style={styles.optionsRow}>
-                    <Pressable style={({ pressed }) => [styles.optionBtn, { opacity: pressed ? 0.8 : 1 }]} onPress={() => handleSubmit('A')} disabled={savingAnswer}>
+                    <Pressable style={({ pressed }) => [styles.optionBtn, { opacity: pressed || savingAnswer || isSubmitted ? 0.7 : 1 }]} onPress={() => handleSubmit('A')} disabled={savingAnswer || isSubmitted}>
                       <Text style={styles.optionBtnText}>{question.optionA}</Text>
                     </Pressable>
-                    <Pressable style={({ pressed }) => [styles.optionBtn, { opacity: pressed ? 0.8 : 1, backgroundColor: '#0EA5E9' }]} onPress={() => handleSubmit('B')} disabled={savingAnswer}>
+                    <Pressable style={({ pressed }) => [styles.optionBtn, { opacity: pressed || savingAnswer || isSubmitted ? 0.7 : 1, backgroundColor: '#0EA5E9' }]} onPress={() => handleSubmit('B')} disabled={savingAnswer || isSubmitted}>
                       <Text style={styles.optionBtnText}>{question.optionB}</Text>
                     </Pressable>
                   </View>
                 ) : (
                   <>
                     <TextInput
-                      style={[styles.input, { borderColor: '#E9D5FF', color: '#4A3B39', backgroundColor: 'rgba(0,0,0,0.02)' }]}
+                      style={[styles.input, { borderColor: '#E9D5FF', color: theme.text, backgroundColor: store.isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.02)' }]}
                       placeholder="Ta réponse..."
                       placeholderTextColor="#A99693"
                       value={myAnswer}
@@ -544,9 +682,9 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
                       {myAnswer.length} / 2000
                     </Text>
                     <Pressable
-                      style={({ pressed }) => [styles.submitButton, { backgroundColor: catInfo.colors[0], opacity: pressed || !myAnswer.trim() || savingAnswer ? 0.7 : 1 }]}
+                      style={({ pressed }) => [styles.submitButton, { backgroundColor: catInfo.colors[0], opacity: pressed || !myAnswer.trim() || savingAnswer || isSubmitted ? 0.7 : 1 }]}
                       onPress={() => handleSubmit()}
-                      disabled={!myAnswer.trim() || savingAnswer}
+                      disabled={!myAnswer.trim() || savingAnswer || isSubmitted}
                     >
                       {savingAnswer ? <ActivityIndicator color="white" /> : <Text style={styles.submitButtonText}>Valider ma réponse</Text>}
                     </Pressable>
@@ -562,14 +700,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
                 </View>
 
                 {/* Réponse partenaire — visible quand les 2 ont répondu */}
-                {partnerMovedToNext ? (
-                  // Partenaire déjà à la question suivante
-                  <Animated.View entering={FadeInUp.duration(400)} style={[styles.movedOnBox]}>
-                    <Text style={styles.movedOnEmoji}>👟</Text>
-                    <Text style={styles.movedOnTitle}>{partnerPseudo} est déjà à la suivante !</Text>
-                    <Text style={styles.movedOnSub}>Avance pour rejoindre {partnerPseudo}.</Text>
-                  </Animated.View>
-                ) : partnerAnswer !== null ? (
+                {partnerAnswer !== null ? (
                   <Animated.View entering={FadeInUp.duration(500)} style={[styles.revealBox, isPofQuestion && { borderLeftColor: '#38BDF8', backgroundColor: 'rgba(56,189,248,0.05)' }]}>
                     <View style={styles.revealHeader}>
                       <Unlock color={isPofQuestion ? '#38BDF8' : '#D946EF'} size={16} />
@@ -577,11 +708,27 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
                     </View>
                     <Text style={styles.partnerText}>{getPofText(partnerAnswer)}</Text>
                   </Animated.View>
+                ) : partnerMovedToNext ? (
+                  // Partenaire déjà à la question suivante mais sans réponse reçue
+                  <Animated.View entering={FadeInUp.duration(400)} style={[styles.movedOnBox]}>
+                    <Text style={styles.movedOnEmoji}>👟</Text>
+                    <Text style={styles.movedOnTitle}>{partnerPseudo} est déjà à la suivante !</Text>
+                    <Text style={styles.movedOnSub}>Avance pour rejoindre {partnerPseudo}.</Text>
+                  </Animated.View>
                 ) : (
                   <View style={styles.waitingBox}>
                     <ActivityIndicator color={isPofQuestion ? '#0EA5E9' : '#A855F7'} size="small" />
-                    <Text style={{ color: '#A99693', fontSize: 14, fontStyle: 'italic' }}>{partnerPseudo} n'a pas encore répondu...</Text>
+                    <Text style={{ color: '#A99693', fontSize: 14, fontStyle: 'italic' }}>{partnerPseudo} n’a pas encore répondu...</Text>
                   </View>
+                )}
+
+                {/* Si le partenaire est déjà à la suivante ET qu'on a sa réponse, afficher aussi le bandeau indicatif sous la réponse */}
+                {partnerMovedToNext && partnerAnswer !== null && (
+                  <Animated.View entering={FadeInUp.duration(400)} style={[styles.movedOnBox, { marginTop: 12 }]}>
+                    <Text style={styles.movedOnEmoji}>👟</Text>
+                    <Text style={styles.movedOnTitle}>{partnerPseudo} est déjà à la suivante !</Text>
+                    <Text style={styles.movedOnSub}>Avance pour rejoindre {partnerPseudo}.</Text>
+                  </Animated.View>
                 )}
 
                 {/* Bouton suivant — n'apparaît que quand les 2 ont répondu */}
@@ -600,12 +747,12 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
                       <>
                         <Text style={styles.nextButtonText}>
                           {partnerMovedToNext
-                            ? `Rejoindre ${partnerPseudo} →`
+                            ? `Rejoindre ${partnerPseudo}`
                             : bothAnswered
                               ? 'Question suivante'
                               : `En attente de ${partnerPseudo}...`}
                         </Text>
-                        {(bothAnswered || partnerMovedToNext) && <ChevronRight color="white" size={20} />}
+                        {bothAnswered && !partnerMovedToNext && <ChevronRight color="white" size={20} />}
                       </>
                     )}
                   </Pressable>
@@ -615,13 +762,37 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
           </View>
         </Animated.View>
       </ScrollView>
+
+      {/* Modal Célébration Déblocage de Catégorie */}
+      <Modal visible={!!celebration} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <Animated.View entering={FadeInUp.duration(350)} style={styles.modalContent}>
+            <Text style={{ fontSize: 50, textAlign: 'center', marginBottom: 12 }}>🎉</Text>
+            <Text style={styles.modalTitle}>Palier franchi !</Text>
+            <Text style={styles.modalText}>
+              Vous avez répondu ensemble à 10 questions du thème <Text style={{ fontWeight: 'bold' }}>{celebration?.categoryName}</Text> !
+            </Text>
+            {celebration?.nextCategoryName && (
+              <View style={styles.unlockedBadge}>
+                <Text style={styles.unlockedBadgeText}>
+                  ✨ Le thème « {celebration.nextCategoryName} » est maintenant débloqué !
+                </Text>
+              </View>
+            )}
+            <Pressable style={styles.modalConfirmBtn} onPress={() => setCelebration(null)}>
+              <Text style={styles.modalConfirmBtnText}>Génial ! 🚀</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: typeof Colors.light | typeof Colors.dark) => StyleSheet.create({
   container: { flex: 1 },
-  card: { borderRadius: 24, borderWidth: 1, borderColor: 'rgba(168,85,247,0.25)', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.95)', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
+  noticeCard: { width: '100%', maxWidth: 420, alignItems: 'center', gap: 14, padding: 24, borderRadius: 20, borderWidth: 1 },
+  card: { borderRadius: 24, borderWidth: 1, borderColor: 'rgba(168,85,247,0.25)', overflow: 'hidden', backgroundColor: theme.card, shadowColor: '#A855F7', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
   headerGradient: { padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   headerTitle: { color: 'white', fontSize: 20, fontWeight: '800', letterSpacing: 1 },
   badge: { backgroundColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, marginLeft: 8 },
@@ -632,7 +803,7 @@ const styles = StyleSheet.create({
   pillDone: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: '#22c55e' },
   pillWaiting: { backgroundColor: 'rgba(156,163,175,0.1)', borderColor: '#9CA3AF' },
   pillText: { fontSize: 12, fontWeight: '600' },
-  question: { fontSize: 19, fontWeight: '600', textAlign: 'center', marginBottom: 24, lineHeight: 28, color: '#4A3B39' },
+  question: { fontSize: 19, fontWeight: '600', textAlign: 'center', marginBottom: 24, lineHeight: 28, color: theme.text },
   input: { minHeight: 120, borderWidth: 1, borderRadius: 16, padding: 16, fontSize: 16, textAlignVertical: 'top', marginBottom: 16, lineHeight: 24 },
   submitButton: { backgroundColor: '#A855F7', padding: 16, borderRadius: 16, alignItems: 'center' },
   submitButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
@@ -641,12 +812,12 @@ const styles = StyleSheet.create({
   optionBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold', textAlign: 'center', lineHeight: 22 },
   myAnswerBox: { borderWidth: 1.5, borderColor: '#A855F7', borderRadius: 16, padding: 16, marginBottom: 16, backgroundColor: 'rgba(168,85,247,0.05)' },
   myAnswerLabel: { fontSize: 11, fontWeight: '800', color: '#A855F7', marginBottom: 6, letterSpacing: 0.5 },
-  myAnswerText: { fontSize: 16, fontWeight: '700', color: '#4A3B39', lineHeight: 24, textAlign: 'center' },
+  myAnswerText: { fontSize: 16, fontWeight: '700', color: theme.text, lineHeight: 24, textAlign: 'center' },
   waitingBox: { alignItems: 'center', gap: 10, paddingVertical: 16 },
   revealBox: { padding: 18, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: '#D946EF', backgroundColor: 'rgba(217,70,239,0.05)', marginBottom: 4 },
   revealHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   revealTitle: { fontSize: 15, fontWeight: 'bold', color: '#A855F7' },
-  partnerText: { fontSize: 17, fontWeight: '700', lineHeight: 25, color: '#4A3B39', textAlign: 'center' },
+  partnerText: { fontSize: 17, fontWeight: '700', lineHeight: 25, color: theme.text, textAlign: 'center' },
   nextButton: { flexDirection: 'row', padding: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#A855F7', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10 },
   nextButtonDisabled: { backgroundColor: '#E9D5FF', shadowOpacity: 0 },
   nextButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
@@ -654,4 +825,12 @@ const styles = StyleSheet.create({
   movedOnEmoji: { fontSize: 28 },
   movedOnTitle: { fontSize: 15, fontWeight: '700', color: '#A855F7', textAlign: 'center' },
   movedOnSub: { fontSize: 12, color: '#A99693', fontStyle: 'italic', textAlign: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { width: '100%', maxWidth: 360, backgroundColor: theme.card, borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#A855F7', shadowOpacity: 0.3, shadowRadius: 20, elevation: 10, borderWidth: 1, borderColor: 'rgba(168,85,247,0.3)' },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: theme.text, marginBottom: 8, textAlign: 'center' },
+  modalText: { fontSize: 14, color: theme.text, opacity: 0.85, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  unlockedBadge: { backgroundColor: 'rgba(168,85,247,0.12)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(168,85,247,0.35)', marginBottom: 20, width: '100%' },
+  unlockedBadgeText: { color: '#A855F7', fontWeight: '800', fontSize: 13, textAlign: 'center' },
+  modalConfirmBtn: { backgroundColor: '#A855F7', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 18, width: '100%', alignItems: 'center' },
+  modalConfirmBtnText: { color: 'white', fontWeight: '800', fontSize: 15 },
 });

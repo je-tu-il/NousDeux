@@ -29,8 +29,7 @@ export default function AgeScreen() {
     if (uid) {
       setDoc(doc(db, "users", uid), {
         pseudo,
-        age: finalAge,
-        linkedTo: null
+        age: finalAge
       }, { merge: true }).catch(error => {
         console.error("Erreur de sauvegarde :", error);
       });
@@ -104,5 +103,4 @@ const styles = StyleSheet.create({
   footer: { alignItems: 'center', paddingBottom: Platform.OS === 'web' ? 40 : 60 },
   nextButton: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 15, elevation: 10 },
 });
-
 

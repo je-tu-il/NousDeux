@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import {
     collection,
+    deleteDoc,
     doc,
     getDoc,
     getDocs,
@@ -33,6 +34,7 @@ import {
     RefreshCw,
     Search,
     Send,
+    Trash2,
     Users,
     Wrench,
     X,
@@ -54,18 +56,29 @@ import { COSMETICS } from '../data/cosmetics';
 import { QUESTIONS } from '../data/questions';
 import { QUESTS } from '../data/quests';
 import { checkQuests, claimQuestReward, computeStreak, ItemType, purchaseItem, saveUserProfile } from '../lib/economy';
-import { db } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useOnboardingStore } from '../store/onboardingStore';
+import { ADMIN_UIDS_LIST, isUserAdmin } from '../constants/admins';
 
-// ─── Admin UIDs ───────────────────────────────────────────────────────────────
-const ADMIN_UIDS = [
-  '0SDwLPRnKRaq0SMn0RkjEfWTugl1',
-  'rfI3GYRmLPcMCCwejgnF22yy1ni2',
-];
+const ADMIN_UIDS = ADMIN_UIDS_LIST;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = 'stats' | 'couples' | 'alerts' | 'debug' | 'messages';
+type Tab = 'stats' | 'users' | 'couples' | 'alerts' | 'debug' | 'messages';
+
+export interface AdminUserData {
+  uid: string;
+  pseudo: string;
+  email?: string;
+  age?: number;
+  linkedTo?: string | null;
+  partnerPseudo?: string | null;
+  coupleDate?: string | null;
+  pairingCode?: string | null;
+  createdAt?: any;
+  photoUrl?: string | null;
+}
 
 type ContactStatus = 'unread' | 'read' | 'replied';
 type ContactCategory = 'bug' | 'suggestion' | 'account' | 'other';
@@ -149,16 +162,145 @@ const STATUS_META: Record<ContactStatus, { label: string; color: string }> = {
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
-async function fetchAllCouples(): Promise<{ couples: CoupleData[], totalUsers: number }> {
+async function deleteCouplePermanently(cId: string, memberUids?: string[]): Promise<void> {
+  // 1. Supprimer les documents de configuration / progression
+  await deleteDoc(doc(db, `couples/${cId}/economy/wallet`)).catch(() => {});
+  await deleteDoc(doc(db, `couples/${cId}/inventory/cosmetics`)).catch(() => {});
+  await deleteDoc(doc(db, `couples/${cId}/quests/progress`)).catch(() => {});
+  await deleteDoc(doc(db, `couples/${cId}/progress/seen`)).catch(() => {});
+  await deleteDoc(doc(db, `couples/${cId}/progress/indexes`)).catch(() => {});
+
+  // 2. Supprimer les messages de messagerie
+  try {
+    const msgsSnap = await getDocs(collection(db, `couples/${cId}/messages`));
+    await Promise.all(msgsSnap.docs.map(d => deleteDoc(d.ref)));
+  } catch {}
+
+  // 3. Supprimer les slots daily et leurs réponses
+  try {
+    const dailySnap = await getDocs(collection(db, `couples/${cId}/daily`));
+    for (const d of dailySnap.docs) {
+      try {
+        const answersSnap = await getDocs(collection(db, `couples/${cId}/daily/${d.id}/answers`));
+        await Promise.all(answersSnap.docs.map(a => deleteDoc(a.ref)));
+      } catch {}
+      await deleteDoc(d.ref);
+    }
+  } catch {}
+
+  // 4. Supprimer le document du couple lui-même
+  await deleteDoc(doc(db, 'couples', cId)).catch(() => {});
+
+  // 5. Délier les comptes utilisateurs s'ils pointent encore l'un vers l'autre
+  const uids = memberUids && memberUids.length > 0 ? memberUids : cId.split('_');
+  for (const uid of uids) {
+    if (!uid) continue;
+    try {
+      const uRef = doc(db, 'users', uid);
+      const uSnap = await getDoc(uRef);
+      if (uSnap.exists()) {
+        const uData = uSnap.data();
+        if (uData.linkedTo && (uids.includes(uData.linkedTo) || uData.linkedTo === uid)) {
+          await updateDoc(uRef, {
+            linkedTo: null,
+            coupleDate: null,
+            proposedDate: null,
+            needsDate: false,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur déliaison user', uid, e);
+    }
+  }
+}
+
+async function deleteUserPermanently(uid: string, linkedTo?: string | null): Promise<void> {
+  // 1. Si l'utilisateur est lié à un couple, supprimer ce couple définitivement
+  if (linkedTo) {
+    const cId = [uid, linkedTo].sort().join('_');
+    await deleteCouplePermanently(cId, [uid, linkedTo]);
+  }
+
+  // 2. Supprimer les documents de couple orphelins éventuels contenant cet UID
+  try {
+    const couplesColl = await getDocs(collection(db, 'couples'));
+    for (const cDoc of couplesColl.docs) {
+      if (cDoc.id.includes(uid)) {
+        await deleteCouplePermanently(cDoc.id);
+      }
+    }
+  } catch (e) {
+    console.warn('Erreur nettoyage couples orphelins:', e);
+  }
+
+  // 3. Déconnecter tout autre compte qui pointerait vers cet UID
+  try {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    for (const uDoc of usersSnap.docs) {
+      if (uDoc.data().linkedTo === uid) {
+        await updateDoc(uDoc.ref, {
+          linkedTo: null,
+          coupleDate: null,
+          proposedDate: null,
+          needsDate: false,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Erreur déliaison partenaires orphelins:', e);
+  }
+
+  // 4. Supprimer les codes de synchronisation créés par cet utilisateur
+  try {
+    const codesSnap = await getDocs(collection(db, 'pairing_codes'));
+    for (const cDoc of codesSnap.docs) {
+      if (cDoc.data().uid === uid || cDoc.id === uid) {
+        await deleteDoc(cDoc.ref);
+      }
+    }
+  } catch (e) {
+    console.warn('Erreur suppression pairing_codes:', e);
+  }
+
+  // 5. Supprimer le profil cosmétique de l'utilisateur
+  await deleteDoc(doc(db, 'userProfiles', uid)).catch(() => {});
+
+  // 6. Supprimer le document utilisateur
+  await deleteDoc(doc(db, 'users', uid)).catch(() => {});
+}
+
+async function fetchAllCouples(): Promise<{ couples: CoupleData[]; totalUsers: number; usersList: AdminUserData[] }> {
   // 1. Lire tous les users pour grouper les couples
   const usersSnap = await getDocs(collection(db, 'users'));
-  const userMap: Record<string, { uid: string; pseudo: string; linkedTo?: string; coupleDate?: string }> = {};
+  const userMap: Record<string, { uid: string; pseudo: string; email?: string; age?: number; linkedTo?: string; coupleDate?: string; pairingCode?: string; photoUrl?: string }> = {};
   usersSnap.forEach(d => {
     const data = d.data();
-    userMap[d.id] = { uid: d.id, pseudo: data.pseudo || d.id.slice(0, 8), linkedTo: data.linkedTo, coupleDate: data.coupleDate };
+    userMap[d.id] = {
+      uid: d.id,
+      pseudo: data.pseudo || d.id.slice(0, 8),
+      email: data.email,
+      age: data.age,
+      linkedTo: data.linkedTo,
+      coupleDate: data.coupleDate,
+      pairingCode: data.pairingCode,
+      photoUrl: data.photoUrl,
+    };
   });
   
   const totalUsers = Object.keys(userMap).length;
+
+  const usersList: AdminUserData[] = Object.values(userMap).map(u => ({
+    uid: u.uid,
+    pseudo: u.pseudo,
+    email: u.email,
+    age: u.age,
+    linkedTo: u.linkedTo,
+    partnerPseudo: u.linkedTo ? (userMap[u.linkedTo]?.pseudo || u.linkedTo.slice(0, 8) + '…') : null,
+    coupleDate: u.coupleDate,
+    pairingCode: u.pairingCode,
+    photoUrl: u.photoUrl,
+  }));
 
   // 2. Déduire les coupleIds (tri pour éviter doublons)
   const coupleIds = new Set<string>();
@@ -169,15 +311,25 @@ async function fetchAllCouples(): Promise<{ couples: CoupleData[], totalUsers: n
     }
   }
 
+  // Scanner aussi la collection couples dans Firestore pour capturer les couples orphelins / anciens
+  try {
+    const couplesCollSnap = await getDocs(collection(db, 'couples'));
+    couplesCollSnap.forEach(d => {
+      coupleIds.add(d.id);
+    });
+  } catch (err) {
+    console.warn('Erreur lecture couples Firestore:', err);
+  }
+
   // 3. Pour chaque couple, charger wallet + inventory + quests + seenQuestions
   const couples: CoupleData[] = [];
   for (const cId of coupleIds) {
-    const [uid1, uid2] = cId.split('_');
+    const parts = cId.split('_');
+    const uid1 = parts[0] || '';
+    const uid2 = parts[1] || '';
     const members = [uid1, uid2]
-      .filter(uid => userMap[uid])
-      .map(uid => ({ uid, pseudo: userMap[uid]?.pseudo || uid.slice(0, 8) }));
-
-    if (members.length === 0) continue;
+      .filter(Boolean)
+      .map(uid => ({ uid, pseudo: userMap[uid]?.pseudo || (uid.length > 8 ? uid.slice(0, 8) + '…' : uid) }));
 
     const [walletSnap, invSnap, questSnap, seenSnap] = await Promise.all([
       getDoc(doc(db, `couples/${cId}/economy/wallet`)),
@@ -186,9 +338,14 @@ async function fetchAllCouples(): Promise<{ couples: CoupleData[], totalUsers: n
       getDoc(doc(db, `couples/${cId}/progress/seen`)),
     ]);
 
+    // Ignorer si couple vide et aucun document dans Firestore
+    if (!walletSnap.exists() && !invSnap.exists() && !questSnap.exists() && !seenSnap.exists() && (!userMap[uid1]?.linkedTo || userMap[uid1]?.linkedTo !== uid2)) {
+      continue;
+    }
+
     couples.push({
       id: cId,
-      members,
+      members: members.length > 0 ? members : [{ uid: cId, pseudo: 'Ancien couple' }],
       wallet: walletSnap.exists() ? walletSnap.data() as WalletData : null,
       inventory: invSnap.exists() ? invSnap.data() as InventoryData : null,
       questProgress: questSnap.exists() ? questSnap.data() as Record<string, QuestProgressEntry> : {},
@@ -197,7 +354,11 @@ async function fetchAllCouples(): Promise<{ couples: CoupleData[], totalUsers: n
     });
   }
 
-  return { couples: couples.sort((a, b) => (b.wallet?.petals ?? 0) - (a.wallet?.petals ?? 0)), totalUsers };
+  return {
+    couples: couples.sort((a, b) => (b.wallet?.petals ?? 0) - (a.wallet?.petals ?? 0)),
+    totalUsers,
+    usersList: usersList.sort((a, b) => a.pseudo.localeCompare(b.pseudo)),
+  };
 }
 
 // ─── Composant MessageCard (messages de contact) ──────────────────────────────
@@ -258,7 +419,19 @@ function MessageCard({ msg, onMarkRead, onReply }: {
 
 // ─── Tab Stats ────────────────────────────────────────────────────────────────
 
-function StatsTab({ couples, messages, loading, totalFirebaseUsers }: { couples: CoupleData[]; messages: ContactMessage[]; loading: boolean, totalFirebaseUsers: number }) {
+function StatsTab({
+  couples,
+  messages,
+  loading,
+  totalFirebaseUsers,
+  onNavigateTab,
+}: {
+  couples: CoupleData[];
+  messages: ContactMessage[];
+  loading: boolean;
+  totalFirebaseUsers: number;
+  onNavigateTab?: (tab: Tab) => void;
+}) {
   if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color="#FF9A8B" size="large" />;
 
   const totalCouples = couples.length;
@@ -286,20 +459,36 @@ function StatsTab({ couples, messages, loading, totalFirebaseUsers }: { couples:
       {/* KPIs */}
       <View style={s.statsGrid}>
         {[
-          { label: 'Couples', value: totalCouples, icon: '💑', color: '#FF6A88' },
-          { label: 'Utilisateurs', value: totalUsers, icon: '👤', color: '#3B82F6' },
+          { label: 'Couples', value: totalCouples, icon: '💑', color: '#FF6A88', targetTab: 'couples' as Tab },
+          { label: 'Utilisateurs', value: totalUsers, icon: '👤', color: '#3B82F6', targetTab: 'users' as Tab },
           { label: 'Streak moyen', value: `${avgStreak}j`, icon: '🔥', color: '#F59E0B' },
           { label: 'Streak max', value: `${maxStreak}j`, icon: '🏆', color: '#22C55E' },
           { label: 'Pétales total', value: totalPetals.toLocaleString(), icon: '🌸', color: '#8B5CF6' },
-          { label: 'Messages non lus', value: unreadMessages, icon: '✉️', color: unreadMessages > 0 ? '#EF4444' : '#A99693' },
+          { label: 'Messages non lus', value: unreadMessages, icon: '✉️', color: unreadMessages > 0 ? '#EF4444' : '#A99693', targetTab: 'messages' as Tab },
           { label: 'Questions vues', value: totalSeenQuestions, icon: '💬', color: '#06B6D4' },
-        ].map(kpi => (
-          <View key={kpi.label} style={s.kpiCard}>
-            <Text style={s.kpiIcon}>{kpi.icon}</Text>
-            <Text style={[s.kpiValue, { color: kpi.color }]}>{kpi.value}</Text>
-            <Text style={s.kpiLabel}>{kpi.label}</Text>
-          </View>
-        ))}
+        ].map(kpi => {
+          const isClickable = Boolean(kpi.targetTab && onNavigateTab);
+          const Content = (
+            <>
+              <Text style={s.kpiIcon}>{kpi.icon}</Text>
+              <Text style={[s.kpiValue, { color: kpi.color }]}>{kpi.value}</Text>
+              <Text style={s.kpiLabel}>{kpi.label}{isClickable ? ' →' : ''}</Text>
+            </>
+          );
+          return isClickable ? (
+            <Pressable
+              key={kpi.label}
+              style={[s.kpiCard, { cursor: 'pointer' } as any]}
+              onPress={() => kpi.targetTab && onNavigateTab?.(kpi.targetTab)}
+            >
+              {Content}
+            </Pressable>
+          ) : (
+            <View key={kpi.label} style={s.kpiCard}>
+              {Content}
+            </View>
+          );
+        })}
       </View>
 
       {/* Distribution streaks */}
@@ -342,8 +531,9 @@ function StatsTab({ couples, messages, loading, totalFirebaseUsers }: { couples:
 
 function CouplePanel({ couple, onUpdated }: { couple: CoupleData; onUpdated: () => void }) {
   const [expanded, setExpanded] = useState(false);
-  const [tab, setTab] = useState<'wallet' | 'quests' | 'cosmetics' | 'questions'>('wallet');
+  const [tab, setTab] = useState<'wallet' | 'quests' | 'cosmetics' | 'questions' | 'danger'>('wallet');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Wallet édition
   const [petalDelta, setPetalDelta] = useState('');
@@ -354,6 +544,40 @@ function CouplePanel({ couple, onUpdated }: { couple: CoupleData; onUpdated: () 
   const [questEdits, setQuestEdits] = useState<Record<string, string>>({});
 
   const catStats = countByCategory(couple.seenQuestions);
+
+  const handleDeleteThisCouple = async () => {
+    const confirmMessage = `Supprimer définitivement le couple ${couple.members.map(m => m.pseudo).join(' & ')} (${couple.id}) ?\n\nToutes les données (wallet, quêtes, inventaire, messages, réponses) seront supprimées et les comptes seront déliés.`;
+
+    const proceed = Platform.OS === 'web'
+      ? (typeof window !== 'undefined' && window.confirm(confirmMessage))
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            '⚠️ Supprimer le couple',
+            confirmMessage,
+            [
+              { text: 'Annuler', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Supprimer', style: 'destructive', onPress: () => resolve(true) },
+            ]
+          );
+        });
+
+    if (!proceed) return;
+
+    setDeleting(true);
+    try {
+      await deleteCouplePermanently(couple.id, couple.members.map(m => m.uid));
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`✅ Couple supprimé : ${couple.id}`);
+      } else {
+        Alert.alert('✅ Succès', `Le couple ${couple.id} a été supprimé.`);
+      }
+      onUpdated();
+    } catch (err) {
+      Alert.alert('Erreur', String(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const saveWallet = async () => {
     setSaving(true);
@@ -491,10 +715,24 @@ function CouplePanel({ couple, onUpdated }: { couple: CoupleData; onUpdated: () 
         <View style={s.coupleBody}>
           {/* Sub-tabs */}
           <View style={s.subTabs}>
-            {(['wallet', 'quests', 'cosmetics', 'questions'] as const).map(t => (
-              <Pressable key={t} style={[s.subTab, tab === t && s.subTabActive]} onPress={() => setTab(t)}>
-                <Text style={[s.subTabTxt, tab === t && s.subTabTxtActive]}>
-                  {t === 'wallet' ? '💰 Wallet' : t === 'quests' ? '📋 Quêtes' : t === 'cosmetics' ? '🎨 Cosméts' : '💬 Questions'}
+            {(['wallet', 'quests', 'cosmetics', 'questions', 'danger'] as const).map(t => (
+              <Pressable
+                key={t}
+                style={[
+                  s.subTab,
+                  tab === t && s.subTabActive,
+                  t === 'danger' && { backgroundColor: tab === 'danger' ? '#EF4444' : 'rgba(239,68,68,0.08)' }
+                ]}
+                onPress={() => setTab(t)}
+              >
+                <Text
+                  style={[
+                    s.subTabTxt,
+                    tab === t && s.subTabTxtActive,
+                    t === 'danger' && { color: tab === 'danger' ? 'white' : '#EF4444' }
+                  ]}
+                >
+                  {t === 'wallet' ? '💰 Wallet' : t === 'quests' ? '📋 Quêtes' : t === 'cosmetics' ? '🎨 Cosméts' : t === 'questions' ? '💬 Questions' : '🗑️ Supprimer'}
                 </Text>
               </Pressable>
             ))}
@@ -686,7 +924,7 @@ function CouplePanel({ couple, onUpdated }: { couple: CoupleData; onUpdated: () 
               {/* ── Équiper un cosmétique (par user) ── */}
               <View style={{ marginBottom: 16, padding: 10, backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 12 }}>
                 <Text style={[s.editLabel, { color: '#22C55E', fontWeight: '800' }]}>👕 Équiper un cosmétique</Text>
-                <Text style={{ color: '#A99693', fontSize: 11, marginBottom: 8 }}>Change le cosmétique équipé d'un user directement.</Text>
+                <Text style={{ color: '#A99693', fontSize: 11, marginBottom: 8 }}>Change le cosmétique équipé d&apos;un user directement.</Text>
                 {couple.members.map(member => (
                   <View key={member.uid} style={{ marginBottom: 10 }}>
                     <Text style={{ fontWeight: '700', color: '#6B4C47', fontSize: 12, marginBottom: 4 }}>
@@ -732,7 +970,7 @@ function CouplePanel({ couple, onUpdated }: { couple: CoupleData; onUpdated: () 
               {/* ── Simuler un achat ── */}
               <View style={{ marginBottom: 16, padding: 10, backgroundColor: 'rgba(139,92,246,0.08)', borderRadius: 12 }}>
                 <Text style={[s.editLabel, { color: '#8B5CF6', fontWeight: '800' }]}>🛒 Simuler un achat</Text>
-                <Text style={{ color: '#A99693', fontSize: 11, marginBottom: 8 }}>Exécute purchaseItem() — déduit les pétales et ajoute à l'inventaire.</Text>
+                <Text style={{ color: '#A99693', fontSize: 11, marginBottom: 8 }}>Exécute purchaseItem() — déduit les pétales et ajoute à l&apos;inventaire.</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', gap: 4 }}>
                     {COSMETICS.filter(c => c.unlock.type === 'purchase').slice(0, 12).map(item => {
@@ -793,7 +1031,9 @@ function CouplePanel({ couple, onUpdated }: { couple: CoupleData; onUpdated: () 
                               onPress={async () => {
                                 setSaving(true);
                                 try {
-                                  const success = await claimQuestReward(couple.id, quest.id, tier as any, tierData?.reward ?? 0);
+                                  const success = auth.currentUser
+                                    ? await claimQuestReward(couple.id, quest.id, tier as any, tierData?.reward ?? 0, auth.currentUser.uid)
+                                    : false;
                                   if (success) {
                                     Alert.alert('✅ Récupéré', `${quest.name} ${tier} → +${tierData?.reward ?? 0} 🌸`);
                                     onUpdated();
@@ -890,6 +1130,30 @@ function CouplePanel({ couple, onUpdated }: { couple: CoupleData; onUpdated: () 
               })}
             </View>
           )}
+
+          {/* === SUPPRESSION DU COUPLE === */}
+          {tab === 'danger' && (
+            <View style={s.editSection}>
+              <Text style={[s.editLabel, { color: '#EF4444', fontWeight: '800' }]}>⚠️ Suppression définitive du couple</Text>
+              <Text style={{ color: '#A99693', fontSize: 12, marginBottom: 14, lineHeight: 18 }}>
+                Cette action supprimera irréversiblement toutes les données du couple (wallet, quêtes, inventaire cosmétique, questions vues, messages de chat et slots quotidiens) et réinitialisera le statut de liaison des membres dans leurs profils.
+              </Text>
+              <Pressable
+                style={[s.saveBtn, { backgroundColor: '#EF4444', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }]}
+                onPress={handleDeleteThisCouple}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <>
+                    <Trash2 size={16} color="white" />
+                    <Text style={s.saveBtnTxt}>Supprimer ce couple</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -900,6 +1164,45 @@ function CouplePanel({ couple, onUpdated }: { couple: CoupleData; onUpdated: () 
 
 function CouplesTab({ couples, loading, onRefresh }: { couples: CoupleData[]; loading: boolean; onRefresh: () => void }) {
   const [search, setSearch] = useState('');
+  const [manualId, setManualId] = useState('');
+  const [deletingManual, setDeletingManual] = useState(false);
+
+  const handleManualDelete = async () => {
+    const target = manualId.trim();
+    if (!target) return;
+
+    const confirmMessage = `Supprimer définitivement le couple "${target}" de la base Firestore ?`;
+    const proceed = Platform.OS === 'web'
+      ? (typeof window !== 'undefined' && window.confirm(confirmMessage))
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            '⚠️ Supprimer le couple',
+            confirmMessage,
+            [
+              { text: 'Annuler', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Supprimer', style: 'destructive', onPress: () => resolve(true) },
+            ]
+          );
+        });
+
+    if (!proceed) return;
+
+    setDeletingManual(true);
+    try {
+      await deleteCouplePermanently(target);
+      setManualId('');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`✅ Couple supprimé : ${target}`);
+      } else {
+        Alert.alert('✅ Succès', `Le couple ${target} a été supprimé.`);
+      }
+      onRefresh();
+    } catch (err) {
+      Alert.alert('Erreur', String(err));
+    } finally {
+      setDeletingManual(false);
+    }
+  };
 
   const filtered = couples.filter(c =>
     c.id.toLowerCase().includes(search.toLowerCase()) ||
@@ -921,6 +1224,31 @@ function CouplesTab({ couples, loading, onRefresh }: { couples: CoupleData[]; lo
           <Pressable onPress={() => setSearch('')}><X size={16} color="#A99693" /></Pressable>
         )}
       </View>
+
+      {/* Suppression manuelle d'un ancien couple par ID */}
+      <View style={{ marginHorizontal: 16, marginBottom: 12, padding: 12, backgroundColor: 'rgba(239,68,68,0.06)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' }}>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: '#EF4444', marginBottom: 6 }}>
+          🗑️ Supprimer un ancien couple par ID
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TextInput
+            style={[s.smallInput, { flex: 1, height: 38 }]}
+            value={manualId}
+            onChangeText={setManualId}
+            placeholder="ex: uidA_uidB"
+            placeholderTextColor="#C4B4B2"
+            autoCapitalize="none"
+          />
+          <Pressable
+            style={[s.saveBtn, { backgroundColor: '#EF4444', paddingHorizontal: 14, justifyContent: 'center' }]}
+            onPress={handleManualDelete}
+            disabled={deletingManual || !manualId.trim()}
+          >
+            {deletingManual ? <ActivityIndicator color="white" size="small" /> : <Text style={s.saveBtnTxt}>Supprimer</Text>}
+          </Pressable>
+        </View>
+      </View>
+
       <Text style={{ paddingHorizontal: 16, color: '#A99693', fontSize: 12, marginBottom: 4 }}>
         {filtered.length} couple{filtered.length !== 1 ? 's' : ''}
       </Text>
@@ -938,9 +1266,175 @@ function CouplesTab({ couples, loading, onRefresh }: { couples: CoupleData[]; lo
   );
 }
 
+// ─── Tab Utilisateurs ────────────────────────────────────────────────────────
+
+function UsersTab({
+  users,
+  loading,
+  onRefresh,
+}: {
+  users: AdminUserData[];
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [deletingUid, setDeletingUid] = useState<string | null>(null);
+
+  const filtered = users.filter(u => {
+    const q = search.toLowerCase();
+    return (
+      u.pseudo.toLowerCase().includes(q) ||
+      u.uid.toLowerCase().includes(q) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.partnerPseudo && u.partnerPseudo.toLowerCase().includes(q))
+    );
+  });
+
+  const handleDelete = (user: AdminUserData) => {
+    const confirmMessage = `Es-tu sûr de vouloir supprimer définitivement l'utilisateur "${user.pseudo}" (${user.uid}) ?\n\nCette action supprimera ses profils, déliera son partenaire éventuel et supprimera toutes les données de couple associées.`;
+    const performDelete = async () => {
+      setDeletingUid(user.uid);
+      try {
+        await deleteUserPermanently(user.uid, user.linkedTo);
+        if (Platform.OS === 'web') {
+          window.alert(`✅ Utilisateur "${user.pseudo}" supprimé.`);
+        } else {
+          Alert.alert('✅ Supprimé', `L'utilisateur "${user.pseudo}" a été définitivement supprimé.`);
+        }
+        onRefresh();
+      } catch (e) {
+        Alert.alert('Erreur', String(e));
+      } finally {
+        setDeletingUid(null);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMessage)) {
+        void performDelete();
+      }
+    } else {
+      Alert.alert(
+        '⚠️ Supprimer cet utilisateur ?',
+        confirmMessage,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Supprimer définitivement', style: 'destructive', onPress: () => void performDelete() },
+        ]
+      );
+    }
+  };
+
+  if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color="#FF9A8B" size="large" />;
+
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={s.searchBar}>
+        <Search size={16} color="#A99693" />
+        <TextInput
+          style={s.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Rechercher par pseudo, email, UID..."
+          placeholderTextColor="#C4B4B2"
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch('')}><X size={16} color="#A99693" /></Pressable>
+        )}
+      </View>
+
+      <FlatList
+        data={filtered}
+        keyExtractor={item => item.uid}
+        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
+        ListHeaderComponent={
+          <View style={{ marginBottom: 6 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#6B4C47' }}>
+              {filtered.length} utilisateur{filtered.length > 1 ? 's' : ''} trouvé{filtered.length > 1 ? 's' : ''} (sur {users.length})
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <View style={s.coupleCard}>
+            <View style={{ padding: 14, gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  <CircleUser size={28} color="#FF6A88" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.coupleName}>{item.pseudo}</Text>
+                    {item.email ? <Text style={{ fontSize: 12, color: '#6B4C47' }}>{item.email}</Text> : null}
+                  </View>
+                </View>
+                <View style={[s.badge, { backgroundColor: item.linkedTo ? 'rgba(34,197,94,0.12)' : 'rgba(156,163,175,0.15)' }]}>
+                  <Text style={[s.badgeTxt, { color: item.linkedTo ? '#22c55e' : '#9CA3AF' }]}>
+                    {item.linkedTo ? '❤️ En couple' : '👤 Célibataire'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ backgroundColor: '#FFF5F2', padding: 10, borderRadius: 10, gap: 4 }}>
+                <Text style={{ fontSize: 11, color: '#A99693', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                  UID : {item.uid}
+                </Text>
+                {item.age !== undefined && (
+                  <Text style={{ fontSize: 12, color: '#4A3B39' }}>Âge : {item.age} ans</Text>
+                )}
+                {item.linkedTo ? (
+                  <Text style={{ fontSize: 12, color: '#4A3B39' }}>
+                    En couple avec : <Text style={{ fontWeight: '700' }}>{item.partnerPseudo || item.linkedTo}</Text>
+                    {item.coupleDate ? ` (depuis le ${item.coupleDate})` : ''}
+                  </Text>
+                ) : null}
+                {item.pairingCode ? (
+                  <Text style={{ fontSize: 11, color: '#8B5CF6', fontWeight: '600' }}>
+                    Code sync : {item.pairingCode}
+                  </Text>
+                ) : null}
+              </View>
+
+              <Pressable
+                style={[
+                  s.saveBtn,
+                  {
+                    backgroundColor: '#EF4444',
+                    flexDirection: 'row',
+                    gap: 8,
+                    alignSelf: 'flex-start',
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    marginTop: 4,
+                  },
+                ]}
+                onPress={() => handleDelete(item)}
+                disabled={deletingUid === item.uid}
+              >
+                {deletingUid === item.uid ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <>
+                    <Trash2 size={14} color="white" />
+                    <Text style={[s.saveBtnTxt, { fontSize: 12 }]}>{"Supprimer l'utilisateur"}</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        )}
+        ListEmptyComponent={
+          <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+            <Text style={{ color: '#A99693' }}>Aucun utilisateur trouvé</Text>
+          </View>
+        }
+      />
+    </View>
+  );
+}
+
 // ─── Tab Alertes ─────────────────────────────────────────────────────────────
 
 function AlertsTab({ couples, messages, loading }: { couples: CoupleData[]; messages: ContactMessage[]; loading: boolean }) {
+  const [now] = useState(() => Date.now());
+
   if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color="#FF9A8B" size="large" />;
 
   const catThreshold = 0.8; // 80%
@@ -994,7 +1488,6 @@ function AlertsTab({ couples, messages, loading }: { couples: CoupleData[]; mess
   }
 
   // Messages non lus depuis longtemps
-  const now = Date.now();
   for (const msg of messages) {
     if (msg.status === 'unread' && msg.createdAt) {
       const ts = msg.createdAt.toDate ? msg.createdAt.toDate().getTime() : new Date(msg.createdAt).getTime();
@@ -1049,6 +1542,81 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
   const [overrideDate, setOverrideDate] = useState('');
   const [savedOverride, setSavedOverride] = useState('');
   const [loading, setLoading] = useState(false);
+  const [diagSearch, setDiagSearch] = useState('');
+  const [diagResult, setDiagResult] = useState<{
+    userA: { uid: string; pseudo?: string; email?: string; linkedTo?: string; coupleDate?: string };
+    userB?: { uid: string; pseudo?: string; email?: string; linkedTo?: string; coupleDate?: string };
+    isReciprocal: boolean;
+  } | null>(null);
+
+  const runDiagnostic = async () => {
+    if (!diagSearch.trim()) return Alert.alert('⚠️', 'Saisir un email, pseudo ou UID');
+    setLoading(true);
+    try {
+      const qText = diagSearch.trim().toLowerCase();
+      const usersSnap = await getDocs(collection(db, 'users'));
+      let foundUser: any = null;
+      let foundUid = '';
+
+      for (const d of usersSnap.docs) {
+        const u = d.data();
+        if (
+          d.id === diagSearch.trim() ||
+          (u.email && u.email.toLowerCase() === qText) ||
+          (u.pseudo && u.pseudo.toLowerCase() === qText)
+        ) {
+          foundUser = u;
+          foundUid = d.id;
+          break;
+        }
+      }
+
+      if (!foundUser) {
+        Alert.alert('Introuvable', `Aucun utilisateur ne correspond à "${diagSearch.trim()}".`);
+        setLoading(false);
+        return;
+      }
+
+      const userA = { uid: foundUid, pseudo: foundUser.pseudo, email: foundUser.email, linkedTo: foundUser.linkedTo, coupleDate: foundUser.coupleDate };
+      let userB: any = undefined;
+      let isReciprocal = false;
+
+      if (foundUser.linkedTo) {
+        const partnerDoc = await getDoc(doc(db, 'users', foundUser.linkedTo));
+        if (partnerDoc.exists()) {
+          const pb = partnerDoc.data();
+          userB = { uid: partnerDoc.id, pseudo: pb.pseudo, email: pb.email, linkedTo: pb.linkedTo, coupleDate: pb.coupleDate };
+          isReciprocal = pb.linkedTo === foundUid;
+        }
+      }
+
+      setDiagResult({ userA, userB, isReciprocal });
+    } catch (e: any) {
+      Alert.alert('Erreur', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const repairMutualLink = async () => {
+    if (!diagResult?.userA || !diagResult?.userB) return;
+    setLoading(true);
+    try {
+      const uidA = diagResult.userA.uid;
+      const uidB = diagResult.userB.uid;
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'users', uidA), { linkedTo: uidB });
+      batch.update(doc(db, 'users', uidB), { linkedTo: uidA });
+      await batch.commit();
+      Alert.alert('✅ Succès', `Liaison réparée entre ${diagResult.userA.pseudo || uidA} et ${diagResult.userB.pseudo || uidB} !`);
+      setDiagResult(prev => prev ? { ...prev, isReciprocal: true, userB: prev.userB ? { ...prev.userB, linkedTo: uidA } : undefined } : null);
+      onRefresh();
+    } catch (e: any) {
+      Alert.alert('Erreur', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     AsyncStorage.getItem('debug_date_override').then(v => {
@@ -1228,6 +1796,48 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
         </View>
       </View>
 
+      {/* Diagnostic & Réparation de Liaison Couple */}
+      <View style={s.debugSection}>
+        <Text style={s.debugTitle}>🔍 Diagnostic & Réparation de Couple</Text>
+        <Text style={s.debugHint}>Vérifie et répare la réciprocité des liens (ex: Patrick & Jules)</Text>
+        <View style={s.row}>
+          <TextInput
+            style={[s.smallInput, { flex: 1, marginBottom: 0 }]}
+            value={diagSearch}
+            onChangeText={setDiagSearch}
+            placeholder="Email, UID ou pseudo de l'utilisateur"
+            placeholderTextColor="#C4B4B2"
+            autoCapitalize="none"
+          />
+          <Pressable style={s.saveBtn} onPress={runDiagnostic} disabled={loading}>
+            <Text style={s.saveBtnTxt}>Diagnostiquer</Text>
+          </Pressable>
+        </View>
+
+        {diagResult && (
+          <View style={{ marginTop: 12, padding: 12, backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: 12, gap: 6 }}>
+            <Text style={{ fontSize: 13, fontWeight: 'bold' }}>👤 Utilisateur A : {diagResult.userA.pseudo || 'Sans pseudo'} ({diagResult.userA.uid})</Text>
+            <Text style={{ fontSize: 12, color: '#666' }}>Email : {diagResult.userA.email || 'N/A'} | linkedTo : {diagResult.userA.linkedTo || 'aucun'}</Text>
+            {diagResult.userB ? (
+              <>
+                <Text style={{ fontSize: 13, fontWeight: 'bold', marginTop: 4 }}>👤 Utilisateur B : {diagResult.userB.pseudo || 'Sans pseudo'} ({diagResult.userB.uid})</Text>
+                <Text style={{ fontSize: 12, color: '#666' }}>Email : {diagResult.userB.email || 'N/A'} | linkedTo : {diagResult.userB.linkedTo || 'aucun'}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: diagResult.isReciprocal ? '#22C55E' : '#EF4444', marginTop: 4 }}>
+                  {diagResult.isReciprocal ? '✅ Liaison réciproque valide' : '⚠️ Liaison asymétrique ou brisée !'}
+                </Text>
+                {!diagResult.isReciprocal && (
+                  <Pressable style={[s.actionBtn, { backgroundColor: '#FF6A88', marginTop: 8 }]} onPress={repairMutualLink} disabled={loading}>
+                    <Text style={[s.actionBtnText, { color: 'white' }]}>Réparer la liaison réciproque</Text>
+                  </Pressable>
+                )}
+              </>
+            ) : (
+              <Text style={{ fontSize: 12, color: '#F59E0B', marginTop: 4 }}>⚠️ Aucun partenaire trouvé pour ce linkedTo.</Text>
+            )}
+          </View>
+        )}
+      </View>
+
       {/* Utilitaires Globaux */}
       <View style={s.debugSection}>
         <Text style={s.debugTitle}>🔧 Utilitaires globaux</Text>
@@ -1268,7 +1878,7 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
       {/* Reset Roue */}
       <View style={s.debugSection}>
         <Text style={s.debugTitle}>🎡 Reset Roue Quotidienne</Text>
-        <Text style={s.debugHint}>Permet au couple de relancer la roue de récompenses aujourd'hui</Text>
+        <Text style={s.debugHint}>Permet au couple de relancer la roue de récompenses aujourd&apos;hui</Text>
         <Pressable style={[s.saveBtn, { backgroundColor: '#8B5CF6' }]} onPress={resetDailyClaim} disabled={loading}>
           <Text style={s.saveBtnTxt}>Reset Roue</Text>
         </Pressable>
@@ -1277,7 +1887,7 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
       {/* Reset questions vues */}
       <View style={s.debugSection}>
         <Text style={s.debugTitle}>🗑 Reset questions vues</Text>
-        <Text style={s.debugHint}>⚠️ Irréversible : remet toutes les questions comme "non vues"</Text>
+        <Text style={s.debugHint}>{'⚠️ Irréversible : remet toutes les questions comme "non vues"'}</Text>
         <Pressable style={[s.saveBtn, { backgroundColor: '#EF4444' }]} onPress={resetSeenQuestions} disabled={loading}>
           <Text style={s.saveBtnTxt}>Reset toutes les questions</Text>
         </Pressable>
@@ -1365,12 +1975,19 @@ function MessagesTab({ messages, loading, onRefresh, onMarkRead }: {
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export default function AdminScreen() {
-  const myUid = useOnboardingStore(s => s.uid);
-  const isAdmin = myUid && ADMIN_UIDS.includes(myUid);
+  const [authUid, setAuthUid] = useState<string | null>(auth.currentUser?.uid ?? null);
+  const [authReady, setAuthReady] = useState(Boolean(auth.currentUser));
+  useEffect(() => onAuthStateChanged(auth, user => {
+    setAuthUid(user?.uid ?? null);
+    setAuthReady(true);
+  }), []);
+  const myUid = authUid ?? useOnboardingStore.getState().uid;
+  const isAdmin = authReady && isUserAdmin(myUid);
 
   const [activeTab, setActiveTab] = useState<Tab>('stats');
   const [couples, setCouples] = useState<CoupleData[]>([]);
   const [totalFirebaseUsers, setTotalFirebaseUsers] = useState(0);
+  const [usersList, setUsersList] = useState<AdminUserData[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [loadingCouples, setLoadingCouples] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(true);
@@ -1381,6 +1998,7 @@ export default function AdminScreen() {
       const data = await fetchAllCouples();
       setCouples(data.couples);
       setTotalFirebaseUsers(data.totalUsers);
+      setUsersList(data.usersList);
     } catch (e) {
       console.error('[Admin] fetchCouples', e);
     } finally {
@@ -1401,11 +2019,16 @@ export default function AdminScreen() {
     }
   }, []);
 
+  const [mountTime] = useState(() => Date.now());
+
   useEffect(() => {
     if (!isAdmin) return;
-    fetchCouples();
-    fetchMessages();
-  }, [isAdmin]);
+    const t = setTimeout(() => {
+      fetchCouples();
+      fetchMessages();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [isAdmin, fetchCouples, fetchMessages]);
 
   const handleMarkRead = async (id: string) => {
     await updateDoc(doc(db, 'contacts', id), { status: 'read' });
@@ -1415,6 +2038,9 @@ export default function AdminScreen() {
   const handleRefreshAll = () => { fetchCouples(); fetchMessages(); };
 
   // ── Accès refusé ──────────────────────────────────────────────────────────
+  if (!authReady) {
+    return <View style={[s.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator color="#FF6A88" /></View>;
+  }
   if (!isAdmin) {
     return (
       <View style={[s.container, { justifyContent: 'center', alignItems: 'center', gap: 12 }]}>
@@ -1440,7 +2066,7 @@ export default function AdminScreen() {
       const unclaimed = Object.values(c.questProgress).reduce((acc, p) => acc + (p.unclaimedTiers?.length ?? 0), 0);
       if (unclaimed > 0) count++;
     }
-    const now = Date.now();
+    const now = mountTime;
     for (const msg of messages) {
       if (msg.status === 'unread' && msg.createdAt) {
         const ts = msg.createdAt.toDate ? msg.createdAt.toDate().getTime() : new Date(msg.createdAt).getTime();
@@ -1452,6 +2078,7 @@ export default function AdminScreen() {
 
   const TABS: { key: Tab; label: string; icon: any; badge?: number }[] = [
     { key: 'stats', label: 'Stats', icon: BarChart3 },
+    { key: 'users', label: 'Users', icon: CircleUser },
     { key: 'couples', label: 'Couples', icon: Users },
     { key: 'alerts', label: 'Alertes', icon: Bell, badge: alertCount },
     { key: 'debug', label: 'Debug', icon: Wrench },
@@ -1467,7 +2094,7 @@ export default function AdminScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>Admin 🔒</Text>
-          <Text style={s.headerSub}>{couples.length} couples · {messages.length} messages</Text>
+          <Text style={s.headerSub}>{totalFirebaseUsers} users · {couples.length} couples · {messages.length} messages</Text>
         </View>
         <Pressable onPress={handleRefreshAll} style={s.refreshBtn}>
           <RefreshCw color="white" size={20} />
@@ -1497,7 +2124,8 @@ export default function AdminScreen() {
 
       {/* Contenu */}
       <View style={{ flex: 1 }}>
-        {activeTab === 'stats' && <StatsTab couples={couples} messages={messages} loading={loadingCouples} totalFirebaseUsers={totalFirebaseUsers} />}
+        {activeTab === 'stats' && <StatsTab couples={couples} messages={messages} loading={loadingCouples} totalFirebaseUsers={totalFirebaseUsers} onNavigateTab={setActiveTab} />}
+        {activeTab === 'users' && <UsersTab users={usersList} loading={loadingCouples} onRefresh={fetchCouples} />}
         {activeTab === 'couples' && <CouplesTab couples={couples} loading={loadingCouples} onRefresh={fetchCouples} />}
         {activeTab === 'alerts' && <AlertsTab couples={couples} messages={messages} loading={loadingCouples} />}
         {activeTab === 'debug' && <DebugTab couples={couples} onRefresh={handleRefreshAll} />}

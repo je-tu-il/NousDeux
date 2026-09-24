@@ -7,11 +7,11 @@ import { Link } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ImageBackground, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, ImageBackground, Platform, StyleSheet, Text, View } from 'react-native';
 
 export default function CalendarScreen() {
-  const theme  = Colors.light;
-  const { width: windowWidth } = useWindowDimensions();
+  const isDarkMode = useOnboardingStore((s) => s.isDarkMode);
+  const theme  = isDarkMode ? Colors.dark : Colors.light;
   const myUid  = useOnboardingStore((s) => s.uid);
   const [coupleId, setCoupleId] = useState<string | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -31,14 +31,16 @@ export default function CalendarScreen() {
 
   const store = useOnboardingStore();
   const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));
-  const backgroundResizeMode = windowWidth < 600 ? 'contain' : 'cover';
 
   return (
     <ImageBackground
       source={bgSource}
-      style={styles.container}
+      style={[
+        styles.container,
+        { backgroundColor: isDarkMode ? '#1A1514' : '#FFF5F2' }
+      ]}
       resizeMode="cover"
-      imageStyle={{ objectPosition: 'center top' } as any}
+      imageStyle={{ width: '100%', height: '100%', objectPosition: 'center' } as any}
     >
       <View style={styles.safeArea}>
         {/* En-tête */}

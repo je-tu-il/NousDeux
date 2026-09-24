@@ -26,25 +26,60 @@ export default function ChatScreen() {
   const myUid = store.uid;
   const [cId, setCId] = useState('');
   
+  const [isLinked, setIsLinked] = useState(false);
+  const [hasCoupleHistory, setHasCoupleHistory] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  // Initialiser l'ID du couple
+  // Initialiser l'ID du couple avec écoute en temps réel
   useEffect(() => {
     if (!myUid) return;
-    getDoc(doc(db, 'users', myUid)).then((docSnap) => {
-      if (docSnap.exists() && docSnap.data().linkedTo) {
-        const partnerUid = docSnap.data().linkedTo;
-        setCId([myUid, partnerUid].sort().join('_'));
+    return onSnapshot(doc(db, 'users', myUid), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const currentPartner = data.linkedTo;
+        const previousPartner = data.lastPartner;
+
+        if (currentPartner) {
+          setCId([myUid, currentPartner].sort().join('_'));
+          setIsLinked(true);
+          setHasCoupleHistory(true);
+        } else if (previousPartner) {
+          setCId([myUid, previousPartner].sort().join('_'));
+          setIsLinked(false);
+          setHasCoupleHistory(true);
+        } else {
+          setCId('');
+          setIsLinked(false);
+          setHasCoupleHistory(false);
+          setMessages([]);
+          setLoading(false);
+        }
+      } else {
+        setCId('');
+        setIsLinked(false);
+        setHasCoupleHistory(false);
+        setMessages([]);
+        setLoading(false);
       }
+    }, () => {
+      setCId('');
+      setIsLinked(false);
+      setHasCoupleHistory(false);
+      setMessages([]);
+      setLoading(false);
     });
   }, [myUid]);
 
   // Écouter les messages
   useEffect(() => {
-    if (!cId) return;
+    if (!cId) {
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
     
     const messagesRef = collection(db, `couples/${cId}/messages`);
     const q = query(messagesRef, orderBy('createdAt', 'desc'));
@@ -81,7 +116,7 @@ export default function ChatScreen() {
   }, [cId]);
 
   const handleSend = async () => {
-    if (!inputText.trim() || !cId || !myUid) return;
+    if (!isLinked || !inputText.trim() || !cId || !myUid) return;
     
     const textToSend = inputText.trim();
     setInputText('');
@@ -121,6 +156,20 @@ export default function ChatScreen() {
     );
   };
 
+  if (!hasCoupleHistory && !loading) {
+    return (
+      <View style={[styles.root, styles.center, { padding: 24 }]}>
+        <Text style={[styles.headerTitle, { textAlign: 'center', marginBottom: 12 }]}>Messagerie Privée 🔒</Text>
+        <Text style={{ textAlign: 'center', color: theme.tabIconDefault, fontSize: 16, marginBottom: 24 }}>
+          Tu dois être en couple pour accéder au chat avec ton partenaire.
+        </Text>
+        <Pressable onPress={() => router.replace('/dashboard')} style={[styles.sendBtn, { width: 'auto', paddingHorizontal: 20, height: 44 }]}>
+          <Text style={{ color: 'white', fontWeight: 'bold' }}>Retour à l'accueil</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.root}>
       {/* Header */}
@@ -128,7 +177,9 @@ export default function ChatScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <ArrowLeft color="#FF9A8B" size={24} />
         </Pressable>
-        <Text style={styles.headerTitle}>Messagerie Privée 🔒</Text>
+        <Text style={styles.headerTitle}>
+          {isLinked ? 'Messagerie Privée 🔒' : 'Messagerie Privée 🔒 (Lecture seule)'}
+        </Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -149,26 +200,30 @@ export default function ChatScreen() {
       )}
 
       {/* Input */}
-      <View style={styles.inputBar}>
+      <View style={[styles.inputBar, !isLinked && { backgroundColor: '#F3EFEF' }]}>
         <TextInput
-          style={styles.input}
-          placeholder="Écris un message..."
+          style={[styles.input, !isLinked && { backgroundColor: '#E7DFDF', color: '#8A7A78' }]}
+          placeholder={isLinked ? "Écris un message..." : "Compte délié : envoi désactivé"}
           placeholderTextColor={theme.tabIconDefault}
           value={inputText}
           onChangeText={setInputText}
+          editable={isLinked}
           multiline
           maxLength={1000}
           onKeyPress={(e: any) => {
-            if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+            if (isLinked && Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
               e.preventDefault();
               handleSend();
             }
           }}
         />
         <Pressable 
-          style={({ pressed }) => [styles.sendBtn, { opacity: pressed || !inputText.trim() ? 0.6 : 1 }]}
+          style={({ pressed }) => [
+            styles.sendBtn, 
+            (!isLinked || pressed || !inputText.trim()) && { opacity: 0.4, backgroundColor: '#A99693' }
+          ]}
           onPress={handleSend}
-          disabled={!inputText.trim() || sending}
+          disabled={!isLinked || !inputText.trim() || sending}
         >
           {sending ? <ActivityIndicator color="white" size="small" /> : <Send color="white" size={20} />}
         </Pressable>

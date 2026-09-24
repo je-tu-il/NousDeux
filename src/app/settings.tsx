@@ -4,15 +4,18 @@ import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import * as ImagePicker from 'expo-image-picker';
 import { Link, router } from 'expo-router';
-import { arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { deleteUser, GoogleAuthProvider, reauthenticateWithPopup, signOut } from 'firebase/auth';
+import { arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { deleteUser, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithPopup, signOut } from 'firebase/auth';
 import { ArrowLeft, Camera, Check, CheckCircle2, Copy, FileText, HeartCrack, LogOut, Mail, Shield, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeInUp, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { isUserAdmin } from '@/constants/admins';
+import UIModal, { UIModalType } from '@/components/UIModal';
 
 // Durée du debounce pour pseudo/age (ms)
 const DEBOUNCE_DELAY = 1000;
+const MAX_PSEUDO_LENGTH = 18;
 
 export default function SettingsScreen() {
   const store = useOnboardingStore((state) => state);
@@ -21,41 +24,55 @@ export default function SettingsScreen() {
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
   const styles = getStyles(theme);
 
-  const [pseudo, setPseudo] = useState(store.pseudo);
+  const [pseudo, setPseudo] = useState(store.pseudo.slice(0, MAX_PSEUDO_LENGTH));
   const [age, setAge] = useState(store.age);
   const [avatar, setAvatar] = useState(store.avatar);
   const [loading, setLoading] = useState(false);
+  const [modalState, setModalState] = useState<{
+    visible: boolean;
+    type?: UIModalType;
+    title?: string;
+    message?: string;
+  }>({ visible: false });
 
   // Indicateur de sauvegarde visible dans l'UI
   const [savedIndicator, setSavedIndicator] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const [showDesyncModal, setShowDesyncModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isAlone, setIsAlone] = useState(false);
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [isAlone, setIsAlone] = useState(!store.uid || !store.partnerUid);
   const [copied, setCopied] = useState(false);
+  const [authUid, setAuthUid] = useState(auth.currentUser?.uid ?? null);
+  const [authReady, setAuthReady] = useState(Boolean(auth.currentUser));
 
   // Ref pour le debounce pseudo/age
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Vérifier si l'utilisateur est seul ──────────────────────────────────
+  useEffect(() => onAuthStateChanged(auth, user => {
+    setAuthUid(user?.uid ?? null);
+    setAuthReady(true);
+  }), []);
+
   useEffect(() => {
-    const checkAlone = async () => {
-      if (!store.uid) return;
-      const myDoc = await getDoc(doc(db, 'users', store.uid));
-      if (myDoc.exists()) {
-        const linkedTo = myDoc.data().linkedTo;
-        if (!linkedTo) {
-          setIsAlone(true);
-        } else {
-          const partnerDoc = await getDoc(doc(db, 'users', linkedTo));
-          if (!partnerDoc.exists() || partnerDoc.data().linkedTo !== store.uid) {
-            setIsAlone(true);
-          }
+    if (!store.uid) return;
+    const unsub = onSnapshot(doc(db, 'users', store.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        const uData = docSnap.data();
+        const linkedTo = uData.linkedTo;
+        setIsAlone(typeof linkedTo !== 'string' || linkedTo.length === 0);
+        if (uData.pairingCode && store.myCode !== uData.pairingCode) {
+          store.setMyCode(uData.pairingCode);
         }
+      } else {
+        setIsAlone(true);
       }
-    };
-    checkAlone();
-  }, [store.uid]);
+    }, () => {
+      // En cas d'erreur réseau transitoire, fallback sur le cache Zustand
+      setIsAlone(!store.partnerUid);
+    });
+    return () => unsub();
+  }, [store.uid, store.partnerUid, store.myCode]);
 
   // ── Sauvegarder dans Firebase (réutilisable) ─────────────────────────────
   const saveToFirebase = useCallback(async (fields: { pseudo?: string; age?: string; avatarUrl?: string | null }) => {
@@ -70,17 +87,23 @@ export default function SettingsScreen() {
       setTimeout(() => setSavedIndicator('idle'), 2000);
     } catch (err: any) {
       setSavedIndicator('idle');
-      Alert.alert('Erreur', err.message);
+      setModalState({
+        visible: true,
+        type: 'error',
+        title: 'Erreur de sauvegarde',
+        message: err.message || 'Impossible d\'enregistrer les modifications.',
+      });
     }
   }, [store]);
 
   // ── Autosave pseudo avec debounce ────────────────────────────────────────
   const handlePseudoChange = (value: string) => {
-    setPseudo(value);
+    const limitedValue = value.slice(0, MAX_PSEUDO_LENGTH);
+    setPseudo(limitedValue);
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    if (!value.trim()) return;
+    if (!limitedValue.trim()) return;
     debounceTimer.current = setTimeout(() => {
-      saveToFirebase({ pseudo: value.trim() });
+      saveToFirebase({ pseudo: limitedValue.trim() });
     }, DEBOUNCE_DELAY);
   };
 
@@ -99,7 +122,12 @@ export default function SettingsScreen() {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Désolé', "Nous avons besoin de la permission d'accès à tes photos.");
+        setModalState({
+          visible: true,
+          type: 'permission',
+          title: 'Accès requis',
+          message: "Nous avons besoin de la permission d'accès à tes photos pour changer ton avatar.",
+        });
         return;
       }
     }
@@ -132,8 +160,13 @@ export default function SettingsScreen() {
         if (partnerUid) {
           const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
           const leaveBatch = writeBatch(db);
+          const previousLinkedAt = data.linkedAt || null;
           leaveBatch.update(doc(db, 'users', store.uid), {
             linkedTo: deleteField(),
+            linkedAt: deleteField(),
+            previousLinkedAt,
+            lastPartner: partnerUid,
+            lastPartnerAt: new Date().toISOString(),
             coupleDate: deleteField(),
             proposedDate: deleteField(),
             needsDate: deleteField(),
@@ -142,6 +175,10 @@ export default function SettingsScreen() {
           if (partnerDoc.exists() && partnerDoc.data().linkedTo === store.uid) {
             leaveBatch.update(doc(db, 'users', partnerUid), {
               linkedTo: deleteField(),
+              linkedAt: deleteField(),
+              previousLinkedAt: partnerDoc.data().linkedAt || previousLinkedAt,
+              lastPartner: store.uid,
+              lastPartnerAt: new Date().toISOString(),
               coupleDate: deleteField(),
               proposedDate: deleteField(),
               needsDate: deleteField(),
@@ -161,7 +198,12 @@ export default function SettingsScreen() {
         router.replace('/dashboard');
       }
     } catch (error: any) {
-      Alert.alert('Erreur', error.message);
+      setModalState({
+        visible: true,
+        type: 'error',
+        title: 'Erreur',
+        message: error.message || 'Impossible de vous désynchroniser pour le moment.',
+      });
       setLoading(false);
     }
   };
@@ -170,7 +212,11 @@ export default function SettingsScreen() {
   const processDeleteAccount = async () => {
     setLoading(true);
     try {
-      if (!store.uid) return;
+      if (!store.uid) {
+        setShowDeleteModal(false);
+        router.replace('/onboarding/login');
+        return;
+      }
       const firebaseUser = auth.currentUser;
       const lastSignIn = firebaseUser?.metadata.lastSignInTime
         ? Date.parse(firebaseUser.metadata.lastSignInTime)
@@ -217,6 +263,7 @@ export default function SettingsScreen() {
         }
       }
       deleteBatch.delete(doc(db, 'users', store.uid));
+      deleteBatch.delete(doc(db, 'userProfiles', store.uid));
       await deleteBatch.commit();
       if (firebaseUser) await deleteUser(firebaseUser);
 
@@ -234,9 +281,19 @@ export default function SettingsScreen() {
       router.replace('/onboarding/login');
     } catch (error: any) {
       if (error?.code === 'auth/requires-recent-login') {
-        Alert.alert('Reconnecte-toi pour continuer', 'Google doit confirmer ton identité avant la suppression. Déconnecte-toi puis reconnecte-toi, et recommence.');
+        setModalState({
+          visible: true,
+          type: 'auth',
+          title: 'Confirmation requise',
+          message: 'Google doit confirmer ton identité avant la suppression. Déconnecte-toi puis reconnecte-toi, et recommence.',
+        });
       } else {
-        Alert.alert('Erreur', error.message);
+        setModalState({
+          visible: true,
+          type: 'error',
+          title: 'Erreur',
+          message: error.message || 'Une erreur est survenue lors de la suppression.',
+        });
       }
       setLoading(false);
     }
@@ -251,38 +308,50 @@ export default function SettingsScreen() {
         creatorUid: store.uid,
         createdAt: new Date(),
       });
+      await setDoc(doc(db, 'users', store.uid), {
+        pairingCode: newCode,
+      }, { merge: true });
       store.setMyCode(newCode);
-      Alert.alert('Nouveau code généré', `Ton nouveau code de partage est : ${newCode}`);
+      setModalState({
+        visible: true,
+        type: 'success',
+        title: 'Nouveau code généré',
+        message: `Ton nouveau code de partage est : ${newCode}`,
+      });
     } catch (err: any) {
-      Alert.alert('Erreur', err.message);
+      setModalState({
+        visible: true,
+        type: 'error',
+        title: 'Erreur',
+        message: err.message || 'Impossible de générer un nouveau code.',
+      });
     }
     setLoading(false);
   };
 
   // ── Déconnexion (efface l'état local sans supprimer les données) ──────────
-  const handleDisconnect = () => {
-    Alert.alert(
-      'Se déconnecter',
-      'Tu seras renvoyé à l\'écran de connexion. Tes données sont conservées.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Déconnecter',
-          style: 'destructive',
-          onPress: async () => {
-            await signOut(auth);
-            store.setPseudo('');
-            store.setAge('');
-            store.setAvatar(null);
-            store.setSynced(false);
-            store.setMyCode('');
-            store.setPartnerCode('');
-            store.setUid(null);
-            router.replace('/onboarding/login');
-          },
-        },
-      ]
-    );
+  const handleDisconnect = () => setShowDisconnectModal(true);
+
+  const disconnect = async () => {
+      try {
+        await signOut(auth);
+      } catch (error: any) {
+        setModalState({
+          visible: true,
+          type: 'error',
+          title: 'Erreur de déconnexion',
+          message: error?.message ?? 'Impossible de se déconnecter.',
+        });
+        return;
+      }
+      store.setPseudo('');
+      store.setAge('');
+      store.setAvatar(null);
+      store.setSynced(false);
+      store.setMyCode('');
+      store.setPartnerCode('');
+      store.setUid(null);
+      router.replace('/onboarding/login');
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -303,7 +372,7 @@ export default function SettingsScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/dashboard')} style={styles.backButton}>
             <ArrowLeft color={theme.text} size={28} />
           </Pressable>
           <Text style={[styles.title, { color: theme.text }]}>Paramètres</Text>
@@ -347,6 +416,12 @@ export default function SettingsScreen() {
             </Pressable>
             <Text style={styles.changePhotoText}>Appuie pour changer</Text>
 
+            {auth.currentUser?.email && (
+              <View style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: store.isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }}>
+                <Text style={{ fontSize: 12, color: theme.tabIconDefault }}>Compte Google : <Text style={{ fontWeight: '600', color: theme.text }}>{auth.currentUser.email}</Text></Text>
+              </View>
+            )}
+
             <View style={{ width: '100%', marginTop: 20 }}>
 
               {/* Pseudo — autosave après 1s sans frappe */}
@@ -355,9 +430,13 @@ export default function SettingsScreen() {
                 style={styles.input}
                 value={pseudo}
                 onChangeText={handlePseudoChange}
+                maxLength={MAX_PSEUDO_LENGTH}
                 placeholder="Ton pseudo"
                 placeholderTextColor={theme.tabIconDefault}
               />
+              <Text style={[styles.inputHint, { color: theme.tabIconDefault }]}>
+                {pseudo.length}/{MAX_PSEUDO_LENGTH} caractères maximum
+              </Text>
 
               {/* Âge — autosave après 1s sans frappe */}
               <Text style={[styles.label, { color: theme.text }]}>Âge</Text>
@@ -428,7 +507,7 @@ export default function SettingsScreen() {
             <DarkModeToggle isDark={store.isDarkMode} onToggle={() => store.setDarkMode(!store.isDarkMode)} theme={theme} styles={styles} />
 
             {/* Admin Panel Link - Only visible to admins */}
-            {(store.uid === '0SDwLPRnKRaq0SMn0RkjEfWTugl1' || store.uid === 'rfI3GYRmLPcMCCwejgnF22yy1ni2') && (
+            {(isUserAdmin(authUid) || isUserAdmin(store.uid)) && (
               <>
                 <View style={styles.divider} />
                 <Link href="/admin" asChild>
@@ -514,15 +593,44 @@ export default function SettingsScreen() {
           <Text style={{ color: '#A99693', fontSize: 12, marginBottom: 4 }}>Informations légales</Text>
             <Link href="/terms" style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
               <FileText color={theme.text} size={14} />
-              <Text style={[styles.legalLinkText, { color: theme.text }]}>Conditions Générales d'Utilisation</Text>
+              <Text style={[styles.legalLinkText, { color: theme.text }]}>Conditions Générales d’Utilisation</Text>
             </Link>
             <Link href="/privacy" style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
               <Shield color={theme.text} size={14} />
               <Text style={[styles.legalLinkText, { color: theme.text }]}>Politique de Confidentialité</Text>
             </Link>
-          <Text style={{ color: '#C8B8B6', fontSize: 11, marginTop: 8 }}>NousDeux v1.0.0 — © 2026</Text>
+          <View style={{
+            backgroundColor: store.isDarkMode ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)',
+            paddingHorizontal: 14,
+            paddingVertical: 6,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: store.isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 154, 139, 0.25)',
+            marginTop: 10,
+          }}>
+            <Text style={{ color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', fontSize: 11, fontWeight: '600' }}>NousDeux v1.0.0 — © 2026</Text>
+          </View>
         </Animated.View>
       </ScrollView>
+
+      {/* Modal Désynchronisation */}
+      <Modal visible={showDisconnectModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <Animated.View entering={FadeInUp.duration(300)} style={styles.modalContent}>
+            <LogOut color={theme.tint} size={44} style={{ alignSelf: 'center', marginBottom: 15 }} />
+            <Text style={styles.modalTitle}>Se déconnecter</Text>
+            <Text style={styles.modalText}>Tes données sont conservées. Tu seras renvoyé à l’écran de connexion.</Text>
+            <View style={styles.modalActions}>
+              <Pressable style={styles.modalCancel} onPress={() => setShowDisconnectModal(false)}>
+                <Text style={styles.modalCancelText}>Annuler</Text>
+              </Pressable>
+              <Pressable style={styles.modalConfirm} onPress={() => { setShowDisconnectModal(false); void disconnect(); }}>
+                <Text style={styles.modalConfirmText}>Déconnecter</Text>
+              </Pressable>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
 
       {/* Modal Désynchronisation */}
       <Modal visible={showDesyncModal} transparent animationType="fade">
@@ -565,6 +673,14 @@ export default function SettingsScreen() {
           </Animated.View>
         </View>
       </Modal>
+
+      <UIModal
+        visible={modalState.visible}
+        onClose={() => setModalState({ visible: false })}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+      />
     </ImageBackground>
   );
 }
@@ -650,6 +766,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.glassBackground,
     color: theme.text,
   },
+  inputHint: { alignSelf: 'flex-end', fontSize: 12, marginTop: -14, marginBottom: 14 },
   avatarWrapper: { width: 110, height: 110, borderRadius: 55, borderWidth: 3, overflow: 'visible', marginBottom: 6, position: 'relative' },
   avatarImage: { width: 110, height: 110, borderRadius: 55 },
   avatarPlaceholder: { width: 110, height: 110, borderRadius: 55, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.glassBackground },

@@ -24,7 +24,8 @@
     "web": {
       "output": "single",
       "favicon": "./assets/images/favicon.png",
-      "name": "NousDeux"
+      "name": "NousDeux",
+      "lang": "fr"
     },
     "plugins": [
       "expo-router",

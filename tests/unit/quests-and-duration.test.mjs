@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const read = (relativePath) => readFile(resolve(root, relativePath), 'utf8');
+
+test('couple duration quest clamps days to 365 and repairs corrupt current > 365', async () => {
+  const economySrc = await read('src/lib/economy.ts');
+
+  assert.match(
+    economySrc,
+    /Math\.min\(365,\s*Math\.max\(0,\s*Math\.floor\(\(Date\.now\(\)\s*-\s*start\.getTime\(\)\)\s*\/\s*86400000\)\)\)/,
+    'updateCoupleDurationQuest must clamp duration between 0 and 365 days'
+  );
+
+  assert.match(
+    economySrc,
+    /if\s*\(current\s*>\s*days\)\s*\{[\s\S]*'couple_duration\.current':\s*days/,
+    'updateCoupleDurationQuest must reset corrupt current values exceeding days'
+  );
+});
+
+test('QuestCard distinguishes individual claim status from partner status', async () => {
+  const cardSrc = await read('src/components/QuestCard.tsx');
+
+  assert.match(cardSrc, /const hasUserClaimed =/, 'QuestCard must check if current user claimed');
+  assert.match(cardSrc, /const isWaitingForPartner = isUnclaimed && hasUserClaimed/, 'isWaitingForPartner must require that user already claimed');
+  assert.doesNotMatch(cardSrc, /Réclamer encore/, 'QuestCard should never prompt user to re-claim already claimed tier');
+});
+
+test('streak unlocks are synced to inventory and isOwned checks inventory safely', async () => {
+  const economySrc = await read('src/lib/economy.ts');
+  const cosmeticsSrc = await read('src/data/cosmetics.ts');
+
+  assert.match(economySrc, /syncStreakCosmetics/, 'economy.ts must provide syncStreakCosmetics to persist streak unlocks');
+  assert.match(economySrc, /STREAK_UNLOCKS/, 'economy.ts must define streak unlocks');
+  assert.match(cosmeticsSrc, /inventory\?\.backgrounds\?\.includes/, 'isOwned must safely verify inventory backgrounds');
+});

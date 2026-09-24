@@ -47,10 +47,10 @@ export const QUESTS: Quest[] = [
     icon: '💬',
     trigger: 'question_answered',
     tiers: [
-      { tier: 'bronze', threshold: 10, reward: 30 },
-      { tier: 'silver', threshold: 50, reward: 100 },
-      { tier: 'gold', threshold: 200, reward: 300 },
-      { tier: 'platinum', threshold: 500, reward: 800 }
+      { tier: 'bronze', threshold: 30, reward: 30 },
+      { tier: 'silver', threshold: 150, reward: 100 },
+      { tier: 'gold', threshold: 500, reward: 300 },
+      { tier: 'platinum', threshold: 1500, reward: 800 }
     ]
   },
   {
@@ -60,23 +60,23 @@ export const QUESTS: Quest[] = [
     icon: '🌸',
     trigger: 'petals_earned',
     tiers: [
-      { tier: 'bronze', threshold: 100, reward: 25 },
-      { tier: 'silver', threshold: 500, reward: 80 },
-      { tier: 'gold', threshold: 2000, reward: 200 },
-      { tier: 'platinum', threshold: 5000, reward: 500 }
+      { tier: 'bronze', threshold: 500, reward: 25 },
+      { tier: 'silver', threshold: 2500, reward: 80 },
+      { tier: 'gold', threshold: 10000, reward: 200 },
+      { tier: 'platinum', threshold: 30000, reward: 500 }
     ]
   },
   {
     id: 'bonus_questions',
     name: 'Extra effort',
-    description: 'Compléter des questions bonus',
+    description: 'Répondre aux questions illimitées',
     icon: '✨',
     trigger: 'bonus_question',
     tiers: [
-      { tier: 'bronze', threshold: 5, reward: 15 },
-      { tier: 'silver', threshold: 20, reward: 60 },
-      { tier: 'gold', threshold: 75, reward: 180 },
-      { tier: 'platinum', threshold: 200, reward: 450 }
+      { tier: 'bronze', threshold: 20, reward: 15 },
+      { tier: 'silver', threshold: 100, reward: 60 },
+      { tier: 'gold', threshold: 400, reward: 180 },
+      { tier: 'platinum', threshold: 1200, reward: 450 }
     ]
   },
   {
@@ -86,10 +86,10 @@ export const QUESTS: Quest[] = [
     icon: '💞',
     trigger: 'both_active',
     tiers: [
-      { tier: 'bronze', threshold: 5, reward: 20 },
-      { tier: 'silver', threshold: 15, reward: 60 },
-      { tier: 'gold', threshold: 60, reward: 200 },
-      { tier: 'platinum', threshold: 200, reward: 600 }
+      { tier: 'bronze', threshold: 14, reward: 20 },
+      { tier: 'silver', threshold: 60, reward: 60 },
+      { tier: 'gold', threshold: 180, reward: 200 },
+      { tier: 'platinum', threshold: 365, reward: 600 }
     ]
   },
   {
@@ -99,10 +99,10 @@ export const QUESTS: Quest[] = [
     icon: '📅',
     trigger: 'daily_claim',
     tiers: [
-      { tier: 'bronze', threshold: 5, reward: 25 },
-      { tier: 'silver', threshold: 20, reward: 75 },
-      { tier: 'gold', threshold: 60, reward: 220 },
-      { tier: 'platinum', threshold: 180, reward: 600 }
+      { tier: 'bronze', threshold: 14, reward: 25 },
+      { tier: 'silver', threshold: 60, reward: 75 },
+      { tier: 'gold', threshold: 180, reward: 220 },
+      { tier: 'platinum', threshold: 365, reward: 600 }
     ]
   },
   {
@@ -112,10 +112,10 @@ export const QUESTS: Quest[] = [
     icon: '🛍️',
     trigger: 'petals_spent',
     tiers: [
-      { tier: 'bronze', threshold: 50, reward: 30 },
-      { tier: 'silver', threshold: 200, reward: 100 },
-      { tier: 'gold', threshold: 1000, reward: 280 },
-      { tier: 'platinum', threshold: 3000, reward: 700 }
+      { tier: 'bronze', threshold: 250, reward: 30 },
+      { tier: 'silver', threshold: 1000, reward: 100 },
+      { tier: 'gold', threshold: 5000, reward: 280 },
+      { tier: 'platinum', threshold: 15000, reward: 700 }
     ]
   },
   {
@@ -125,10 +125,10 @@ export const QUESTS: Quest[] = [
     icon: '💎',
     trigger: 'items_owned',
     tiers: [
-      { tier: 'bronze', threshold: 3, reward: 35 },
-      { tier: 'silver', threshold: 10, reward: 100 },
-      { tier: 'gold', threshold: 25, reward: 260 },
-      { tier: 'platinum', threshold: 50, reward: 650 }
+      { tier: 'bronze', threshold: 5, reward: 35 },
+      { tier: 'silver', threshold: 15, reward: 100 },
+      { tier: 'gold', threshold: 35, reward: 260 },
+      { tier: 'platinum', threshold: 80, reward: 650 }
     ]
   },
   {

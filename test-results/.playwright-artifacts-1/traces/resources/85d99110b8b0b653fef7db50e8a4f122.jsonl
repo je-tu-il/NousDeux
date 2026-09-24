@@ -1,0 +1,6 @@
+{"type":"send","time":1790266645412.2031,"opcode":1,"data":"{\"type\":\"log-opt-in\"}"}
+{"type":"send","time":1790266645412.479,"opcode":1,"data":"{\"type\":\"register-entrypoints\",\"entryPoints\":[\"http://127.0.0.1:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&transform.reactCompiler=true&unstable_transformProfile=hermes-stable\"]}"}
+{"type":"send","time":1790266645412.62,"opcode":1,"data":"{\"mode\":\"web\",\"type\":\"log\",\"level\":\"info\",\"data\":[\"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools\",\"font-weight:bold\"]}"}
+{"type":"send","time":1790266645412.728,"opcode":1,"data":"{\"mode\":\"web\",\"type\":\"log\",\"level\":\"log\",\"data\":[\"Running application \\\"main\\\" with appParams:\\n\",\"{\\\"hydrate\\\": undefined, \\\"rootTag\\\": \\\"#root\\\"}\",\"\\nDevelopment-level warnings: ON.\\nPerformance optimizations: OFF.\"]}"}
+{"type":"send","time":1790266646013.266,"opcode":1,"data":"{\"mode\":\"web\",\"type\":\"log\",\"level\":\"warn\",\"data\":[\"\\\"shadow*\\\" style props are deprecated. Use \\\"boxShadow\\\".\"]}"}
+{"type":"receive","time":1790266647211.4841,"opcode":1,"data":"{\"type\":\"update-start\",\"body\":{\"isInitialUpdate\":true}}"}

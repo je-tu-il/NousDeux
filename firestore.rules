@@ -6,7 +6,10 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null && (
         request.auth.uid == '0SDwLPRnKRaq0SMn0RkjEfWTugl1' ||
-        request.auth.uid == 'rfI3GYRmLPcMCCwejgnF22yy1ni2'
+        request.auth.uid == 'rfI3GYRmLPcMCCwejgnF22yy1ni2' ||
+        request.auth.uid == 'uXNK1h8u01VjUwBENVIu8naJCa42' ||
+        request.auth.uid == 'tvR7bgEnaFROAtsxIOqm1oDx4ME3' ||
+        request.auth.uid == 'neLeDx68mcVXDyrVgW7RDKRFHUE2'
       );
     }
 
@@ -16,9 +19,12 @@ service cloud.firestore {
 
     function isCoupleMember(coupleId) {
       // Couple IDs are created as the two UIDs joined with "_".
-      // Keep this check compatible with existing documents created before
-      // the stricter boundary expression was introduced.
-      return signedIn() && coupleId.matches('.*' + request.auth.uid + '.*');
+      // Use anchored regex to avoid accidental substring matches. Accept both
+      // uid_partner and partner_uid formats.
+      return signedIn() && (
+        coupleId.matches('^' + request.auth.uid + '_[^/]+$') ||
+        coupleId.matches('^[^/]+_' + request.auth.uid + '$')
+      );
     }
 
     // 1. Profils utilisateurs
@@ -32,7 +38,7 @@ service cloud.firestore {
           resource.data.get('linkedTo', null) == request.auth.uid &&
           !request.resource.data.keys().hasAny(['linkedTo']) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['linkedTo', 'coupleDate', 'proposedDate', 'needsDate', 'archivedPartners'])
+            .hasOnly(['linkedTo', 'linkedAt', 'previousLinkedAt', 'coupleDate', 'proposedDate', 'needsDate', 'archivedPartners', 'lastPartner', 'lastPartnerAt'])
         )
       )) || isAdmin();
     }

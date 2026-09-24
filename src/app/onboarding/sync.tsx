@@ -1,17 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ImageBackground, Share, Alert, Image } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { StyleSheet, View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ImageBackground, Share, Alert, Image, ScrollView } from 'react-native';
+import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { Colors } from '@/constants/Colors';
-import Animated, { FadeInDown, FadeInUp, ZoomIn, useSharedValue, useAnimatedStyle, withTiming, interpolate } from 'react-native-reanimated';
-import { ArrowLeft, Copy, Share2, CheckCircle2, HeartHandshake } from 'lucide-react-native';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
+import Animated, { FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
+import { ArrowLeft, Copy, Share2, CheckCircle2, HeartHandshake, Compass } from 'lucide-react-native';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
+import UIModal, { UIModalType } from '@/components/UIModal';
 
 const generateCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 };
+
+async function resetCoupleData(coupleId: string) {
+  const subcollections = ['daily', 'progress', 'quests', 'economy', 'inventory', 'messages'];
+  for (const subcollection of subcollections) {
+    try {
+      const snapshot = await getDocs(collection(db, 'couples', coupleId, subcollection));
+      if (snapshot.empty) continue;
+      const batch = writeBatch(db);
+      for (const item of snapshot.docs) {
+        if (subcollection === 'daily') {
+          const answersSnap = await getDocs(collection(db, 'couples', coupleId, 'daily', item.id, 'answers')).catch(() => null);
+          if (answersSnap && !answersSnap.empty) {
+            const subBatch = writeBatch(db);
+            answersSnap.docs.forEach(ans => subBatch.delete(ans.ref));
+            await subBatch.commit().catch(() => {});
+          }
+        }
+        batch.delete(item.ref);
+      }
+      await batch.commit().catch(() => {});
+    } catch (err) {
+      console.warn('Error resetting couple subcollection:', subcollection, err);
+    }
+  }
+}
 
 export default function SyncScreen() {
   const [partnerCode, setPartnerCode] = useState("");
@@ -20,12 +47,23 @@ export default function SyncScreen() {
   const [partnerName, setPartnerName] = useState("");
   const [loading, setLoading] = useState(false);
   const [partnerAvatar, setPartnerAvatar] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [modalState, setModalState] = useState<{
+    visible: boolean;
+    type?: UIModalType;
+    title?: string;
+    message?: string;
+  }>({ visible: false });
 
   const myCode = useOnboardingStore((state) => state.myCode);
   const myAvatar = useOnboardingStore((state) => state.avatar);
   const setMyCode = useOnboardingStore((state) => state.setMyCode);
-  const setSynced = useOnboardingStore((state) => state.setSynced);
-  const theme = Colors.light;
+  const store = useOnboardingStore((state) => state);
+  const theme = store.isDarkMode ? Colors.dark : Colors.light;
+  const backgroundSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode)
+    || (store.isDarkMode
+      ? require('../../../assets/images/nousdeux_dark_background.png')
+      : require('../../../assets/images/nousdeux_warm_background.png'));
 
   const isLinking = React.useRef(false);
 
@@ -37,39 +75,50 @@ export default function SyncScreen() {
     } else if (!state.age) {
       router.replace('/onboarding/age');
       return;
-    } else if (!myCode) {
-      const code = generateCode();
-      setMyCode(code);
-      setDoc(doc(db, "pairing_codes", code), {
-        creatorUid: state.uid,
-        createdAt: new Date()
-      }).catch(err => console.error(err));
     }
 
-    // Écoute en temps réel si quelqu'un se lie à nous
+    // Écoute en temps réel du profil utilisateur (source unique de vérité Firestore)
     const unsub = onSnapshot(doc(db, "users", state.uid), async (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        // Si on est lié, on déclenche le succès (sauf si c'est nous qui initions le lien pour éviter les race conditions)
-        if (data.linkedTo && !success && !isLinking.current) {
-          const partnerDoc = await getDoc(doc(db, "users", data.linkedTo));
-          let pName = "ton partenaire";
-          let pAvatar = null;
-          if (partnerDoc.exists()) {
-            pName = partnerDoc.data().pseudo;
-            pAvatar = partnerDoc.data().avatarUrl || null;
-          }
-          setPartnerName(pName);
-          setPartnerAvatar(pAvatar);
-          setSuccess(true);
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+
+      // 1. Synchronisation temps réel du code de jumelage
+      if (data.pairingCode) {
+        if (useOnboardingStore.getState().myCode !== data.pairingCode) {
+          setMyCode(data.pairingCode);
         }
+      } else {
+        // Si le profil en base n'a pas encore de pairingCode, on lui assigne
+        // son code existant (ou un nouveau) et on l'enregistre immédiatement
+        const fallbackCode = useOnboardingStore.getState().myCode || generateCode();
+        setMyCode(fallbackCode);
+        await setDoc(doc(db, "users", state.uid!), { pairingCode: fallbackCode }, { merge: true });
+        await setDoc(doc(db, "pairing_codes", fallbackCode), {
+          creatorUid: state.uid,
+          createdAt: new Date(),
+        }, { merge: true });
+      }
+
+      // 2. Si on est lié, on déclenche le succès
+      if (data.linkedTo && !success && !isLinking.current) {
+        const partnerDoc = await getDoc(doc(db, "users", data.linkedTo));
+        let pName = "ton partenaire";
+        let pAvatar = null;
+        if (partnerDoc.exists()) {
+          pName = partnerDoc.data().pseudo;
+          pAvatar = partnerDoc.data().avatarUrl || null;
+        }
+        setPartnerName(pName);
+        setPartnerAvatar(pAvatar);
+        setSuccess(true);
       }
     });
 
     return () => unsub();
-  }, [myCode, success]);
+  }, [setMyCode, success]);
 
   const handleCopy = async () => {
+    if (!myCode) return;
     await Clipboard.setStringAsync(myCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -85,12 +134,18 @@ export default function SyncScreen() {
         message: `Rejoins-moi sur NousDeux ! Clique sur ce lien pour lier nos comptes : ${shareUrl}`,
       });
     } catch (error: any) {
-      Alert.alert(error.message);
+      setModalState({
+        visible: true,
+        type: 'error',
+        title: 'Erreur de partage',
+        message: error?.message || 'Impossible de partager le code pour le moment.',
+      });
     }
   };
 
   const handleLink = async () => {
     const codeToSearch = partnerCode.trim().toUpperCase();
+    setErrorMessage('');
     if (codeToSearch.length === 6 && !loading) {
       isLinking.current = true;
       setLoading(true);
@@ -99,7 +154,9 @@ export default function SyncScreen() {
         const myUid = state.uid;
 
         if (!myUid) {
-          Alert.alert("Erreur", "Vous n'êtes pas connecté.");
+          const msg = "Vous n'êtes pas connecté. Reconnectez-vous puis réessayez.";
+          setErrorMessage(msg);
+          setModalState({ visible: true, type: 'auth', title: 'Non connecté', message: msg });
           setLoading(false);
           isLinking.current = false;
           return;
@@ -111,7 +168,14 @@ export default function SyncScreen() {
         const codeDoc = await Promise.race([fetchCode, timeout]) as any;
 
         if (!codeDoc.exists()) {
-          Alert.alert("Erreur", "Ce code n'existe pas ou a expiré.");
+          const msg = "Ce code n'existe pas ou a expiré.";
+          setErrorMessage(msg);
+          setModalState({
+            visible: true,
+            type: 'sync',
+            title: 'Code introuvable',
+            message: "Ce code de synchronisation n'existe pas ou a expiré. Demande à ton partenaire de vérifier son code à 6 caractères.",
+          });
           setLoading(false);
           isLinking.current = false;
           return;
@@ -119,25 +183,92 @@ export default function SyncScreen() {
 
         const partnerUid = codeDoc.data().creatorUid;
         if (partnerUid === myUid) {
-          Alert.alert("Erreur", "Tu ne peux pas te synchroniser avec toi-même !");
+          const msg = "Tu ne peux pas te synchroniser avec toi-même ! Ce code appartient à ton propre compte. Demande à ton partenaire de t'envoyer son propre code de synchronisation.";
+          setErrorMessage(msg);
+          setModalState({
+            visible: true,
+            type: 'self_pairing',
+            title: 'Code personnel',
+            message: msg,
+          });
           setLoading(false);
           isLinking.current = false;
           return;
         }
 
+        const myDoc = await getDoc(doc(db, 'users', myUid));
+        const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
+        const myData = myDoc.exists() ? myDoc.data() : {};
+        const partnerData = partnerDoc.exists() ? partnerDoc.data() : {};
+
+        // Empêcher de lier un utilisateur déjà en couple
+        if (partnerData.linkedTo && partnerData.linkedTo !== myUid) {
+          const msg = "Cette personne est déjà en couple avec un autre utilisateur.";
+          setErrorMessage(msg);
+          setModalState({
+            visible: true,
+            type: 'already_linked',
+            title: 'Partenaire déjà en couple',
+            message: "Ce partenaire est déjà associé à un autre compte. Il doit d'abord se désynchroniser.",
+          });
+          setLoading(false);
+          isLinking.current = false;
+          return;
+        }
+        if (myData.linkedTo && myData.linkedTo !== partnerUid) {
+          const msg = "Tu es déjà en couple. Rends-toi dans les Réglages pour te désynchroniser d'abord.";
+          setErrorMessage(msg);
+          setModalState({
+            visible: true,
+            type: 'warning',
+            title: 'Déjà en couple',
+            message: msg,
+          });
+          setLoading(false);
+          isLinking.current = false;
+          return;
+        }
+
+        // Sécurité primordiale : si l'un des deux se remet avec une autre personne,
+        // suppression complète de tous les messages et données de l'ancien couple
+        // AVANT MÊME de finaliser la connexion !
+        if (myData.lastPartner && myData.lastPartner !== partnerUid) {
+          const oldCoupleId = [myUid, myData.lastPartner].sort().join('_');
+          await resetCoupleData(oldCoupleId);
+        }
+        if (partnerData.lastPartner && partnerData.lastPartner !== myUid) {
+          const oldPartnerCoupleId = [partnerUid, partnerData.lastPartner].sort().join('_');
+          await resetCoupleData(oldPartnerCoupleId);
+        }
+
+        const samePreviousPair = myData.lastPartner === partnerUid && partnerData.lastPartner === myUid;
+        const coupleId = [myUid, partnerUid].sort().join('_');
+        if (!samePreviousPair) {
+          await resetCoupleData(coupleId);
+        }
+
         // 2. Lier les comptes et forcer le passage par la page date avec reset total
+        const nowIso = new Date().toISOString();
+        const effectiveLinkedAt = (samePreviousPair && (myData.previousLinkedAt || partnerData.previousLinkedAt))
+          ? (myData.previousLinkedAt || partnerData.previousLinkedAt)
+          : nowIso;
+
         const linkBatch = writeBatch(db);
         linkBatch.update(doc(db, "users", myUid!), {
           linkedTo: partnerUid,
           coupleDate: deleteField(),
           proposedDate: deleteField(),
           needsDate: true,
+          lastPartner: partnerUid,
+          linkedAt: effectiveLinkedAt,
         });
         linkBatch.update(doc(db, "users", partnerUid), {
           linkedTo: myUid,
           coupleDate: deleteField(),
           proposedDate: deleteField(),
           needsDate: true,
+          lastPartner: myUid,
+          linkedAt: effectiveLinkedAt,
         });
         await linkBatch.commit();
         // Cosmetic ownership is personal. Re-pairing must not reset the
@@ -153,18 +284,33 @@ export default function SyncScreen() {
         }
 
       } catch (error: any) {
-        Alert.alert("Erreur de connexion", error.message + "\nAssurez-vous que Firestore est bien activé et en mode test.");
+        const isNet = error?.message?.includes('Timeout') || error?.message?.includes('réseau') || error?.code === 'unavailable';
+        const msg = `Erreur de connexion : ${error?.message ?? 'Vérifie ta connexion internet puis réessaie.'}`;
+        setErrorMessage(msg);
+        setModalState({
+          visible: true,
+          type: isNet ? 'network' : 'error',
+          title: isNet ? 'Problème de connexion' : 'Erreur',
+          message: isNet ? "Impossible de contacter le serveur. Vérifie ton réseau et réessaie." : (error?.message || "Une erreur est survenue lors de la synchronisation."),
+        });
         setLoading(false);
         isLinking.current = false;
       }
     } else if (codeToSearch.length !== 6) {
-      Alert.alert("Erreur", "Le code doit faire exactement 6 caractères.");
+      const msg = "Le code doit faire exactement 6 caractères.";
+      setErrorMessage(msg);
+      setModalState({
+        visible: true,
+        type: 'warning',
+        title: 'Code incomplet',
+        message: msg,
+      });
     }
   };
 
   if (success) {
     return (
-      <ImageBackground source={require('../../../assets/images/nousdeux_warm_background.png')} style={styles.container} resizeMode="cover">
+      <ImageBackground source={backgroundSource} style={styles.container} resizeMode="cover" imageStyle={styles.backgroundImage}>
         <View style={[styles.successContent, { flex: 1, justifyContent: 'center', padding: 20 }]}>
           <Animated.View entering={ZoomIn.duration(800)} style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 40, gap: 15 }}>
             <View style={[styles.avatarCircle, { backgroundColor: theme.tint, position: 'relative', left: 0 }]}>
@@ -211,92 +357,132 @@ export default function SyncScreen() {
   }
 
   return (
-    <ImageBackground source={require('../../../assets/images/nousdeux_warm_background.png')} style={styles.container} resizeMode="cover">
+    <ImageBackground source={backgroundSource} style={styles.container} resizeMode="cover" imageStyle={styles.backgroundImage}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
-        
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/onboarding/age');
-            }
-          }}>
-            <ArrowLeft color={theme.text} size={28} />
-          </Pressable>
-        </View>
-
-        <View style={styles.content}>
-          <Animated.View entering={FadeInDown.duration(800)}>
-            <Text style={[styles.title, { color: theme.text }]}>Synchronisation</Text>
-            <Text style={[styles.subtitle, { color: theme.text }]}>
-              Donne ton code à ton partenaire ou entre le sien pour lier vos téléphones.
-            </Text>
-          </Animated.View>
-
-          {/* Mon Code */}
-          <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.codeContainer}>
-            <Pressable 
-              style={[styles.codeBox, { borderColor: theme.tint, backgroundColor: 'rgba(255,255,255,0.6)' }]}
-              onPress={handleCopy}
-            >
-              <Text style={[styles.codeText, { color: theme.text }]}>{myCode}</Text>
-              {copied ? <CheckCircle2 color="green" size={24} /> : <Copy color={theme.tint} size={24} />}
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <Pressable style={styles.backBtn} onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else if (store.pseudo && store.age) {
+                router.replace('/dashboard');
+              } else {
+                router.replace('/onboarding/avatar');
+              }
+            }}>
+              <ArrowLeft color={theme.text} size={28} />
             </Pressable>
-            <Pressable 
-              style={[styles.shareButton, { backgroundColor: theme.gradientEnd }]} 
-              onPress={handleShare}
-            >
-              <Share2 color="white" size={20} />
-              <Text style={styles.shareText}>Partager mon code</Text>
-            </Pressable>
-          </Animated.View>
-
-          <View style={styles.divider}>
-            <View style={[styles.line, { backgroundColor: theme.tint, opacity: 0.2 }]} />
-            <Text style={[styles.orText, { color: theme.text }]}>OU</Text>
-            <View style={[styles.line, { backgroundColor: theme.tint, opacity: 0.2 }]} />
           </View>
 
-          {/* Code du partenaire */}
-          <Animated.View entering={FadeInUp.duration(800).delay(400)}>
-            <Text style={[styles.label, { color: theme.text }]}>Code de ton partenaire</Text>
-            <TextInput 
-              style={[styles.input, { color: theme.text, borderColor: theme.tint, backgroundColor: 'rgba(255,255,255,0.6)' }]} 
-              placeholder="XXXXXX"
-              placeholderTextColor="#A99693"
-              maxLength={6}
-              autoCapitalize="characters"
-              value={partnerCode}
-              onChangeText={(t) => setPartnerCode(t.toUpperCase())}
-            />
-            
-            <Pressable 
-              style={({ pressed }) => [
-                styles.linkButton, 
-                { backgroundColor: partnerCode.length === 6 ? theme.tint : '#A99693', opacity: pressed ? 0.8 : 1 }
-              ]} 
-              onPress={handleLink}
-              disabled={partnerCode.length !== 6}
-            >
-              <Text style={styles.linkButtonText}>Lier les comptes</Text>
-            </Pressable>
-          </Animated.View>
-        </View>
+          <View style={styles.content}>
+            <Animated.View entering={FadeInDown.duration(800)}>
+              <Text style={[styles.title, { color: theme.text }]}>Synchronisation</Text>
+              <Text style={[styles.subtitle, { color: theme.text }]}>
+                Donne ton code à ton partenaire ou entre le sien pour lier vos téléphones.
+              </Text>
+            </Animated.View>
+
+            {/* Mon Code */}
+            <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.codeContainer}>
+              <Pressable 
+                style={[styles.codeBox, { borderColor: theme.tint, backgroundColor: theme.glassBackground }]}
+                onPress={handleCopy}
+              >
+                {myCode ? (
+                  <Text style={[styles.codeText, { color: theme.text }]}>{myCode}</Text>
+                ) : (
+                  <Text style={[styles.codeText, { color: theme.tabIconDefault, fontSize: 24 }]}>Génération…</Text>
+                )}
+                {copied ? <CheckCircle2 color="green" size={24} /> : <Copy color={theme.tint} size={24} />}
+              </Pressable>
+              <Pressable 
+                style={[styles.shareButton, { backgroundColor: theme.gradientEnd }]} 
+                onPress={handleShare}
+              >
+                <Share2 color="white" size={20} />
+                <Text style={styles.shareText}>Partager mon code</Text>
+              </Pressable>
+            </Animated.View>
+
+            <View style={styles.divider}>
+              <View style={[styles.line, { backgroundColor: theme.tint, opacity: 0.2 }]} />
+              <Text style={[styles.orText, { color: theme.text }]}>OU</Text>
+              <View style={[styles.line, { backgroundColor: theme.tint, opacity: 0.2 }]} />
+            </View>
+
+            {/* Code du partenaire */}
+            <Animated.View entering={FadeInUp.duration(800).delay(400)}>
+              <Text style={[styles.label, { color: theme.text }]}>Code de ton partenaire</Text>
+              <TextInput 
+                style={[styles.input, { color: theme.text, borderColor: theme.tint, backgroundColor: theme.glassBackground }]} 
+                placeholder="XXXXXX"
+                placeholderTextColor="#A99693"
+                maxLength={6}
+                autoCapitalize="characters"
+                value={partnerCode}
+                onChangeText={(t) => setPartnerCode(t.toUpperCase())}
+              />
+              <Pressable 
+                style={({ pressed }) => [
+                  styles.linkButton, 
+                  { backgroundColor: partnerCode.length === 6 ? theme.tint : '#A99693', opacity: pressed ? 0.8 : 1 }
+                ]} 
+                onPress={handleLink}
+                disabled={loading}
+              >
+                <Text style={styles.linkButtonText}>{loading ? 'Liaison en cours...' : 'Lier les comptes'}</Text>
+              </Pressable>
+
+              {/* Passer et continuer en mode solo */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.skipCardButton,
+                  {
+                    borderColor: theme.tint,
+                    backgroundColor: store.isDarkMode ? 'rgba(42, 26, 26, 0.85)' : 'rgba(255, 255, 255, 0.92)',
+                    opacity: pressed ? 0.8 : 1
+                  }
+                ]}
+                onPress={() => router.replace('/dashboard')}
+              >
+                <Compass color={theme.tint} size={22} />
+                <Text style={[styles.skipCardButtonText, { color: theme.tint }]}>
+                  Se synchroniser plus tard (Mode Solo)
+                </Text>
+              </Pressable>
+            </Animated.View>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
+
+      <UIModal
+        visible={modalState.visible}
+        onClose={() => setModalState({ visible: false })}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+      />
     </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', overflow: 'hidden' },
-  keyboardView: { flex: 1, padding: 30, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  container: { flex: 1, width: '100%', minHeight: '100vh' as any, overflow: 'hidden', backgroundColor: '#FFF5F2' },
+  backgroundImage: { width: '100%', height: '100%' },
+  keyboardView: { flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  scrollContent: { flexGrow: 1, padding: 30, paddingBottom: 60, justifyContent: 'center' },
   header: { paddingTop: Platform.OS === 'web' ? 20 : 50, zIndex: 10 },
   backBtn: { padding: 10, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 20, alignSelf: 'flex-start' },
-  content: { flex: 1, justifyContent: 'center' },
+  content: { flexGrow: 1, justifyContent: 'center', paddingBottom: 24 },
   title: { fontSize: 32, fontWeight: '800', marginBottom: 10, textAlign: 'center' },
-  subtitle: { fontSize: 16, opacity: 0.7, textAlign: 'center', marginBottom: 40, lineHeight: 24 },
+  subtitle: { fontSize: 16, opacity: 0.7, textAlign: 'center', marginBottom: 20, lineHeight: 24 },
+
+  hintText: { fontSize: 12, textAlign: 'center', marginBottom: 12, opacity: 0.8 },
   codeContainer: { alignItems: 'center', marginBottom: 20 },
   codeBox: { flexDirection: 'row', alignItems: 'center', gap: 16, borderWidth: 2, borderStyle: 'dashed', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 20, marginBottom: 20 },
   codeText: { fontSize: 36, fontWeight: '900', letterSpacing: 8 },
@@ -309,6 +495,28 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, padding: 16, borderRadius: 16, fontSize: 24, textAlign: 'center', letterSpacing: 6, fontWeight: 'bold', marginBottom: 20, outlineStyle: 'none' as any },
   linkButton: { padding: 18, borderRadius: 16, alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
   linkButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  skipCardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  skipCardButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  errorText: { marginBottom: 14, padding: 12, borderRadius: 12, textAlign: 'center', lineHeight: 20 },
   successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   successContent: { flex: 1, justifyContent: 'center', padding: 20, width: '100%', maxWidth: 500, alignSelf: 'center' },
   successIconWrapper: { padding: 30, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: 100, marginBottom: 30, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 },
