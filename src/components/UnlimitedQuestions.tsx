@@ -198,6 +198,52 @@ const NEXT_CATEGORY_MAP: Record<string, string | null> = {
   defi: null,
 };
 
+async function recordCategoryAnswer(cId: string, slot: string, category: string | undefined, uid: string): Promise<{ justReachedTen?: boolean; nextCategory?: string } | void> {
+  if (!cId || !slot) return;
+  const slotRef = doc(db, 'couples', cId, 'daily', slot);
+  const walletRef = doc(db, `couples/${cId}/economy/wallet`);
+
+  return await runTransaction(db, async (tx) => {
+    const slotSnap = await tx.get(slotRef);
+    if (!slotSnap.exists()) return;
+
+    const slotData = slotSnap.data();
+    const resolvedCategory = (category && category !== 'all')
+      ? category
+      : (slotData.questionCategory || (slotData.questionId ? getById(slotData.questionId)?.category : undefined) || (slotData.category !== 'all' ? slotData.category : undefined));
+
+    let walletSnap: any = null;
+    if (resolvedCategory) walletSnap = await tx.get(walletRef);
+
+    let justReachedTen = false;
+    let nextCategory: string | undefined = undefined;
+
+    if (resolvedCategory && !slotData.countedForStats) {
+      const currentCount = walletSnap?.exists() ? (walletSnap.data().unlimitedStats?.[resolvedCategory] || 0) : 0;
+      const newCount = currentCount + 1;
+      tx.set(walletRef, { unlimitedStats: { [resolvedCategory]: increment(1) } }, { merge: true });
+      tx.set(slotRef, {
+        countedForStats: true,
+        hasAnswer: true,
+        category: resolvedCategory,
+        answeredBy: arrayUnion(uid),
+      }, { merge: true });
+
+      if (newCount === 10) {
+        justReachedTen = true;
+        nextCategory = NEXT_CATEGORY_MAP[resolvedCategory] || undefined;
+      }
+    } else {
+      tx.set(slotRef, {
+        hasAnswer: true,
+        answeredBy: arrayUnion(uid),
+      }, { merge: true });
+    }
+
+    return { justReachedTen, nextCategory };
+  });
+}
+
 async function completeUnlimitedQuestion(cId: string, slot: string, category: string | undefined, uid: string, partnerUid: string): Promise<{ justReachedTen?: boolean; nextCategory?: string } | void> {
   if (!cId) throw new Error('Missing coupleId');
   const slotRef = doc(db, 'couples', cId, 'daily', slot);
@@ -219,14 +265,15 @@ async function completeUnlimitedQuestion(cId: string, slot: string, category: st
     let walletSnap: any = null;
     if (resolvedCategory) walletSnap = await tx.get(walletRef);
 
-    tx.update(slotRef, { bothAnswered: true });
+    tx.update(slotRef, { bothAnswered: true, hasAnswer: true });
     let justReachedTen = false;
     let nextCategory: string | undefined = undefined;
 
-    if (resolvedCategory) {
+    if (resolvedCategory && !slotData.countedForStats) {
       const currentCount = walletSnap?.exists() ? (walletSnap.data().unlimitedStats?.[resolvedCategory] || 0) : 0;
       const newCount = currentCount + 1;
       tx.set(walletRef, { unlimitedStats: { [resolvedCategory]: increment(1) } }, { merge: true });
+      tx.set(slotRef, { countedForStats: true }, { merge: true });
       if (newCount === 10) {
         justReachedTen = true;
         nextCategory = NEXT_CATEGORY_MAP[resolvedCategory] || undefined;
@@ -475,6 +522,15 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
       void checkQuests(cId, 'question_answered', 1);
       void checkQuests(cId, 'bonus_question', 1);
 
+      const currentCat = categoryFilter || question.category;
+      const catRes = await recordCategoryAnswer(cId, slotKey, currentCat, myUid).catch(() => {});
+      if (catRes && catRes.justReachedTen) {
+        setCelebration({
+          categoryName: CATEGORY_NAMES[currentCat || 'amour'] || 'cette catégorie',
+          nextCategoryName: catRes.nextCategory ? CATEGORY_NAMES[catRes.nextCategory] : undefined,
+        });
+      }
+
       if (partnerHasAnswered) {
         const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
         if (pAns.exists()) {
@@ -482,7 +538,6 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
           if (decryptedPartner && decryptedPartner.length > 0) {
             setPartnerAnswer(decryptedPartner);
           }
-          const currentCat = categoryFilter || question.category;
           const res = await completeUnlimitedQuestion(cId, slotKey, currentCat, myUid, partnerUid);
           if (res && typeof res === 'object' && res.justReachedTen) {
             setCelebration({

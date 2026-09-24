@@ -109,7 +109,7 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
 
   // ── Streak mini-bar (fenêtre glissante) ─────────────────────────────────────
   const displayedStreak = currentStreak ?? streak;
-  const daysToShow = Math.min(Math.max(displayedStreak, 7), 30);
+  const daysToShow = compact ? 5 : Math.min(Math.max(displayedStreak, 7), 30);
   const scrollViewRef = useRef<ScrollView>(null);
   const miniDays: string[] = [];
   for (let i = -(daysToShow - 1); i <= 0; i++) {
@@ -173,7 +173,10 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
         horizontal
         showsHorizontalScrollIndicator={false}
         contentOffset={{ x: 10000, y: 0 }}
-        contentContainerStyle={styles.miniRow}
+        contentContainerStyle={[
+          styles.miniRow,
+          miniDays.length <= 7 && { justifyContent: 'space-between', width: '100%', paddingHorizontal: 0 }
+        ]}
         style={styles.miniScrollView}
         onContentSizeChange={scrollToToday}
         onLayout={scrollToToday}
