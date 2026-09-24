@@ -39,12 +39,27 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
   const naturallyNextIdx = nextTierIndex(completedTier);
   const isFullyDone = naturallyNextIdx === -1;
   
-  // Par défaut on affiche le prochain palier, ou le platine si tout est fini
-  const defaultIdx = isFullyDone ? 3 : naturallyNextIdx;
+  // Trouver le premier palier complété mais pas encore récupéré (ex: bronze non récupéré)
+  let firstUnclaimedIdx = -1;
+  if (progress.unclaimedTiers && progress.unclaimedTiers.length > 0) {
+    for (let i = 0; i < TIER_ORDER.length; i++) {
+      if (progress.unclaimedTiers.includes(TIER_ORDER[i])) {
+        firstUnclaimedIdx = i;
+        break;
+      }
+    }
+  }
+
+  // Ne pas passer sur le prochain palier de quête si la récompense précédente n'a pas encore été récupérée.
+  // Une fois récupérée, passer au palier en cours (naturallyNextIdx), ou platine si tout est fini.
+  const defaultIdx = firstUnclaimedIdx !== -1 
+    ? firstUnclaimedIdx 
+    : (isFullyDone ? 3 : naturallyNextIdx);
+
   const [viewIdx, setViewIdx] = useState<number>(defaultIdx);
   const [loadingClaim, setLoadingClaim] = useState(false);
 
-  // Plus de sauvegarde dans AsyncStorage, on reste sur le palier en cours par défaut
+  // Met à jour l'affichage dès que la récompense est récupérée pour basculer sur le palier suivant
   useEffect(() => {
     setViewIdx(defaultIdx);
   }, [defaultIdx]);

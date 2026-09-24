@@ -3,6 +3,7 @@ import DailyClaim from '@/components/DailyClaim';
 import PixelAvatar from '@/components/PixelAvatar';
 import StreakCalendar from '@/components/StreakCalendar';
 import GoogleAdBanner from '@/components/GoogleAdBanner';
+import AppLaunchAd from '@/components/AppLaunchAd';
 import { Colors } from '@/constants/Colors';
 import { Cosmetic, COSMETICS, getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
 import { cacheWallet, computeStreakCached, getCachedWallet, getUserProfile, getWallet, invalidateStreakCache, syncUnlimitedStats, updateWalletStreak, UserProfile } from '@/lib/economy';
@@ -406,6 +407,7 @@ export default function DashboardScreen() {
 
   return (
     <ImageBackground source={backgroundSource} style={styles.container} resizeMode={backgroundResizeMode} imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
+      <AppLaunchAd />
       <View style={[styles.safeArea, { overflow: 'visible', backgroundColor: 'transparent' }]}> 
         <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>{/* NOUVEAU HEADER : LinearGradient Mon Profil + Wallet */}
         <LinearGradient
