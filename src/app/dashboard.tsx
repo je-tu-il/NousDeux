@@ -615,8 +615,25 @@ export default function DashboardScreen() {
                         <Text style={styles.categoryCardTitle}>{cat.title}</Text>
                       </View>
                       <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: store.isDarkMode ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.7)', borderRadius: 20 }}>
-                        <Lock color={store.isDarkMode ? '#A89997' : '#6B7280'} size={28} />
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: store.isDarkMode ? '#A89997' : '#4B5563', marginTop: 4 }}>{reqCount}/10</Text>
+                        <Lock color={store.isDarkMode ? '#A89997' : '#6B7280'} size={26} />
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: store.isDarkMode ? '#A89997' : '#4B5563', marginTop: 3 }}>
+                          {reqCount}/10
+                        </Text>
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: store.isDarkMode ? '#A89997' : '#6B7280', opacity: 0.85 }}>
+                          {cat.requires ? [
+                            { id: 'amour', title: 'Amour' },
+                            { id: 'fun', title: 'Fun' },
+                            { id: 'profond', title: 'Profond' },
+                            { id: 'intime', title: 'Intime' },
+                            { id: 'pile_ou_face', title: 'Tu préfères' },
+                            { id: 'famille', title: 'Famille' },
+                            { id: 'debat', title: 'Débat' },
+                            { id: 'futur', title: 'Futur' },
+                            { id: 'souvenir', title: 'Souvenir' },
+                            { id: 'reve', title: 'Rêve' },
+                            { id: 'quotidien', title: 'Quotidien' },
+                          ].find(item => item.id === cat.requires)?.title ?? cat.requires : ''}
+                        </Text>
                       </View>
                     </Pressable>
                   ) : (
@@ -627,15 +644,6 @@ export default function DashboardScreen() {
                       {cat.icon}
                       {partnerAnsweredCategories.has(cat.id) && <View style={styles.partnerAnswerDot} />}
                       <Text style={styles.categoryCardTitle}>{cat.title}</Text>
-                      {((wallet as any)?.unlimitedStats?.[cat.id] || 0) >= 10 ? (
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', marginTop: 2 }}>
-                          Complété ✓
-                        </Text>
-                      ) : (
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', marginTop: 2 }}>
-                          {`${(wallet as any)?.unlimitedStats?.[cat.id] || 0}/10`}
-                        </Text>
-                      )}
                     </Link>
                   )}
                 </Animated.View>
