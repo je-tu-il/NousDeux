@@ -26,7 +26,7 @@ jobs:
         run: npm ci
 
       - name: Prebuild native iOS project
-        run: npx expo prebuild --platform ios --clean
+        run: npx expo prebuild --platform ios --clean --no-install
 
       - name: Install CocoaPods
         working-directory: ios
