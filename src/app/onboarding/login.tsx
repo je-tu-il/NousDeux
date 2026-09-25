@@ -2,7 +2,7 @@ import { Colors } from '@/constants/Colors';
 import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Link, router } from 'expo-router';
-import { browserLocalPersistence, getRedirectResult, GoogleAuthProvider, setPersistence, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { browserLocalPersistence, getRedirectResult, GoogleAuthProvider, setPersistence, signInWithCredential, signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { CheckSquare, Square } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
@@ -129,16 +129,42 @@ export default function LoginScreen() {
     setLoginError(null);
     setIsSigningIn(true);
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
       if (Platform.OS === 'web') {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
         await setPersistence(auth, browserLocalPersistence);
+        const result = await withLoginTimeout(signInWithPopup(auth, provider));
+        await completeLogin(result.user);
+      } else {
+        // Native Mobile (iOS IPA / Android APK)
+        const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+
+        GoogleSignin.configure({
+          webClientId: '617698669043-fjlmaj3eja7tenr5ov2kcbdol76ped0g.apps.googleusercontent.com',
+          offlineAccess: false,
+        });
+
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        const signInResult = await GoogleSignin.signIn();
+
+        const idToken = signInResult.data?.idToken || (signInResult as any).idToken;
+        if (!idToken) {
+          throw new Error("Impossible de récupérer le jeton de connexion Google.");
+        }
+
+        const credential = GoogleAuthProvider.credential(idToken);
+        const userCredential = await signInWithCredential(auth, credential);
+        await completeLogin(userCredential.user);
       }
-      const result = await withLoginTimeout(signInWithPopup(auth, provider));
-      await completeLogin(result.user);
     } catch (error: any) {
-      // L'utilisateur a fermé la popup volontairement — pas une erreur bloquante
-      if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+      // L'utilisateur a fermé ou annulé la fenêtre Google
+      if (
+        error?.code === 'auth/popup-closed-by-user' || 
+        error?.code === 'auth/cancelled-popup-request' ||
+        error?.code === 'SIGN_IN_CANCELLED' ||
+        error?.message?.includes('user cancelled') ||
+        error?.message?.includes('cancelled')
+      ) {
         setIsSigningIn(false);
         return;
       }
