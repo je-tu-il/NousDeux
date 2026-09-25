@@ -1,24 +1,20 @@
 name: Build iOS IPA
 
 on:
-  # Déclenché automatiquement sur chaque push sur main
   push:
     branches:
       - main
-  # Ou manuellement depuis l'onglet Actions de GitHub
   workflow_dispatch:
 
 jobs:
   build-ios:
-    name: Build IPA via EAS
-    runs-on: ubuntu-latest
+    name: Build iOS IPA
+    runs-on: macos-latest
 
     steps:
-      # ── 1. Récupérer le code ───────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Configurer Node.js ──────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -26,35 +22,38 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
-      # ── 3. Installer les dépendances ───────────────────────────────────────
       - name: Install dependencies
         run: npm ci
 
-      # ── 4. Installer EAS CLI ───────────────────────────────────────────────
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
+      - name: Prebuild native iOS project
+        run: npx expo prebuild --platform ios --clean
 
-      # ── 5. Lancer le build IPA ────────────────────────────────────────────
-      # Le profil "preview" en mode iOS génère un IPA avec distribution interne.
-      # Sans compte Apple Developer, EAS utilisera un certificat de dev ad-hoc
-      # que tu pourras installer manuellement via AltStore, Sideloadly, etc.
-      - name: Build iOS IPA (EAS)
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+
+      - name: Build Xcode Archive
         run: |
-          eas build \
-            --platform ios \
-            --profile preview \
-            --non-interactive \
-            --no-wait
+          cd ios
+          xcodebuild clean archive \
+            -workspace nousdeux.xcworkspace \
+            -scheme nousdeux \
+            -configuration Release \
+            -archivePath $PWD/build/nousdeux.xcarchive \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
 
-      # ── NOTE ──────────────────────────────────────────────────────────────
-      # Sans compte Apple Developer à 99$/an :
-      #   - EAS génère l'IPA avec un certificat de développement
-      #   - Pour l'installer sur ton iPhone, utilise :
-      #       • AltStore     → https://altstore.io
-      #       • Sideloadly   → https://sideloadly.io
-      #       • ou EAS sur appareil (nécessite Expo Go enregistré)
-      #
-      # Le build et le lien de téléchargement sont disponibles sur :
-      #   https://expo.dev/accounts/[ton-compte]/projects/nousdeux/builds
+      - name: Package Unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -r ios/build/nousdeux.xcarchive/Products/Applications/*.app Payload/
+          zip -r NousDeux.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NousDeux-iOS-IPA
+          path: NousDeux.ipa
+          retention-days: 14

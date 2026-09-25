@@ -1,24 +1,20 @@
 name: Build Android APK
 
 on:
-  # Déclenché automatiquement sur chaque push sur main
   push:
     branches:
       - main
-  # Ou manuellement depuis l'onglet Actions de GitHub
   workflow_dispatch:
 
 jobs:
   build-android:
-    name: Build APK via EAS
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Récupérer le code ───────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Configurer Node.js ──────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -26,31 +22,36 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
-      # ── 3. Installer les dépendances ───────────────────────────────────────
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install dependencies
         run: npm ci
 
-      # ── 4. Installer EAS CLI ───────────────────────────────────────────────
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
+      - name: Prebuild native Android project
+        run: npx expo prebuild --platform android --clean
 
-      # ── 5. Lancer le build APK ────────────────────────────────────────────
-      # Le profil "preview" dans eas.json produit un APK (buildType: apk)
-      # Le build tourne sur les serveurs d'Expo — pas besoin d'Android SDK local
-      - name: Build Android APK (EAS)
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - name: Make Gradle executable
+        run: chmod +x android/gradlew
+
+      - name: Build Android APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare APK Output
         run: |
-          eas build \
-            --platform android \
-            --profile preview \
-            --non-interactive \
-            --no-wait
+          mkdir -p build-output
+          cp android/app/build/outputs/apk/debug/*.apk build-output/NousDeux.apk
 
-      # ── NOTE ──────────────────────────────────────────────────────────────
-      # Le build tourne en arrière-plan sur les serveurs Expo.
-      # Une fois terminé, le lien de téléchargement de l'APK est disponible sur :
-      #   https://expo.dev/accounts/[ton-compte]/projects/nousdeux/builds
-      #
-      # Si tu veux attendre la fin du build et récupérer l'APK ici :
-      # remplace --no-wait par --wait et ajoute une étape "eas build:download"
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NousDeux-Android-APK
+          path: build-output/NousDeux.apk
+          retention-days: 14
