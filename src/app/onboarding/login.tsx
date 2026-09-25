@@ -141,6 +141,7 @@ export default function LoginScreen() {
 
         GoogleSignin.configure({
           webClientId: '617698669043-fjlmaj3eja7tenr5ov2kcbdol76ped0g.apps.googleusercontent.com',
+          iosClientId: '617698669043-ioqqer8rkgih638t0a2b4d7j1sthg4un.apps.googleusercontent.com',
           offlineAccess: false,
         });
 

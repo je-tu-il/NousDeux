@@ -10,7 +10,8 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.pixelthings.nousdeux"
+      "bundleIdentifier": "com.pixelthings.nousdeuxapp",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +21,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.pixelthings.nousdeux"
+      "package": "com.pixelthings.nousdeuxapp"
     },
     "web": {
       "output": "single",
@@ -43,7 +44,12 @@
       "expo-secure-store",
       "expo-image",
       "expo-notifications",
-      "@react-native-google-signin/google-signin"
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.617698669043-ioqqer8rkgih638t0a2b4d7j1sthg4un"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
