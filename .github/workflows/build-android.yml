@@ -15,6 +15,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -28,9 +39,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
       - name: Install dependencies
         run: npm ci
 
@@ -42,7 +50,11 @@ jobs:
 
       - name: Build Android APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon --max-workers=2
+        env:
+          GRADLE_OPTS: >-
+            -Dorg.gradle.caching=false
+            -Dorg.gradle.parallel=false
 
       - name: Prepare APK Output
         run: |
