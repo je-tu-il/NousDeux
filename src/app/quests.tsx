@@ -26,7 +26,7 @@ import QuestCard from '../components/QuestCard';
 import { Colors } from '../constants/Colors';
 import { Cosmetic, COSMETICS, getCosmeticById, getCosmeticImage, parseGradientColors } from '../data/cosmetics';
 import { QUESTS } from '../data/quests';
-import { claimQuestReward, getQuestProgress, QuestProgressMap, QuestTier, updateCoupleDurationQuest } from '../lib/economy';
+import { checkQuests, claimQuestReward, computeStreakCached, getCachedWallet, getQuestProgress, QuestProgressMap, QuestTier, syncUnlimitedStats, updateCoupleDurationQuest } from '../lib/economy';
 import { auth, db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
 
@@ -76,7 +76,20 @@ export default function QuestsScreen() {
         if (!userData?.linkedAt) {
           setDoc(doc(db, 'users', myUid), { linkedAt: startDate }, { merge: true }).catch(() => {});
         }
-        await updateCoupleDurationQuest(cId, startDate);
+        const userWallet = getCachedWallet(cId);
+        const streak = userWallet?.streak ?? (await computeStreakCached(cId).catch(() => 0));
+        await updateCoupleDurationQuest(cId, startDate, streak);
+
+        const currentProg = (await getQuestProgress(cId)) || {};
+        if (streak > (currentProg.both_active?.current ?? 0)) {
+          await checkQuests(cId, 'both_active', streak - (currentProg.both_active?.current ?? 0)).catch(() => {});
+        }
+        const stats = await syncUnlimitedStats(cId).catch(() => ({}));
+        const totalUnlimited = Object.values(stats).reduce((a, b) => a + b, 0);
+        if (totalUnlimited > (currentProg.bonus_questions?.current ?? 0)) {
+          await checkQuests(cId, 'bonus_question', totalUnlimited - (currentProg.bonus_questions?.current ?? 0)).catch(() => {});
+        }
+
         const progress = await getQuestProgress(cId);
         questProgressCache.set(cId, progress);
         setProgressMap(progress || {});
@@ -109,7 +122,19 @@ export default function QuestsScreen() {
         if (!userData?.linkedAt) {
           setDoc(doc(db, 'users', myUid), { linkedAt: startDate }, { merge: true }).catch(() => {});
         }
-        await updateCoupleDurationQuest(cId, startDate);
+        const userWallet = getCachedWallet(cId);
+        const streak = userWallet?.streak ?? (await computeStreakCached(cId).catch(() => 0));
+        await updateCoupleDurationQuest(cId, startDate, streak);
+
+        const currentProg = cached || (await getQuestProgress(cId)) || {};
+        if (streak > (currentProg.both_active?.current ?? 0)) {
+          await checkQuests(cId, 'both_active', streak - (currentProg.both_active?.current ?? 0)).catch(() => {});
+        }
+        const stats = await syncUnlimitedStats(cId).catch(() => ({}));
+        const totalUnlimited = Object.values(stats).reduce((a, b) => a + b, 0);
+        if (totalUnlimited > (currentProg.bonus_questions?.current ?? 0)) {
+          await checkQuests(cId, 'bonus_question', totalUnlimited - (currentProg.bonus_questions?.current ?? 0)).catch(() => {});
+        }
 
         if (isCancelled) return;
         unsubSnapshot = onSnapshot(doc(db, `couples/${cId}/quests/progress`), (snap) => {

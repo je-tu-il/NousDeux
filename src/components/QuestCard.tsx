@@ -37,20 +37,30 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
   const styles = getStyles(theme, store.isDarkMode);
   const completedTier = progress.tier ?? null;
   const naturallyNextIdx = nextTierIndex(completedTier);
-  const isFullyDone = naturallyNextIdx === -1;
-  
-  // Trouver le premier palier complété mais pas encore récupéré (ex: bronze non récupéré)
+  const myUid = store.uid;
+  const [optimisticClaimedTiers, setOptimisticClaimedTiers] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setOptimisticClaimedTiers({});
+  }, [myUid]);
+
+  // Trouver le premier palier complété mais pas encore récupéré par CET utilisateur
   let firstUnclaimedIdx = -1;
   if (progress.unclaimedTiers && progress.unclaimedTiers.length > 0) {
     for (let i = 0; i < TIER_ORDER.length; i++) {
-      if (progress.unclaimedTiers.includes(TIER_ORDER[i])) {
-        firstUnclaimedIdx = i;
-        break;
+      const tierName = TIER_ORDER[i];
+      if (progress.unclaimedTiers.includes(tierName)) {
+        const claimers = progress.claimedBy?.[tierName] ?? [];
+        const hasClaimedThis = (myUid ? claimers.includes(myUid) : false) || Boolean(optimisticClaimedTiers[tierName]);
+        if (!hasClaimedThis) {
+          firstUnclaimedIdx = i;
+          break;
+        }
       }
     }
   }
 
-  // Ne pas passer sur le prochain palier de quête si la récompense précédente n'a pas encore été récupérée.
+  // Ne pas passer sur le prochain palier de quête si la récompense précédente n'a pas encore été récupérée par l'utilisateur.
   // Une fois récupérée, passer au palier en cours (naturallyNextIdx), ou platine si tout est fini.
   const defaultIdx = firstUnclaimedIdx !== -1 
     ? firstUnclaimedIdx 
@@ -101,15 +111,8 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
   const currentAmount = progress.current ?? 0;
   const progressRatio = Math.min(currentAmount / targetAmount, 1);
   const isViewTierDone = currentAmount >= targetAmount;
-  
   const isUnclaimed = progress.unclaimedTiers?.includes(viewTier.tier);
-  const myUid = store.uid;
   const claimedByUsers = progress.claimedBy?.[viewTier.tier] ?? [];
-  const [optimisticClaimedTiers, setOptimisticClaimedTiers] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    setOptimisticClaimedTiers({});
-  }, [myUid]);
 
   const hasUserClaimed = (myUid ? claimedByUsers.includes(myUid) : false) || Boolean(optimisticClaimedTiers[viewTier.tier]);
   const partnerClaimed = myUid ? claimedByUsers.some(id => id !== myUid) : claimedByUsers.length > 0;

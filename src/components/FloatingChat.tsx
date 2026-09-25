@@ -24,7 +24,9 @@ export default function FloatingChat() {
   const [hasUnread, setHasUnread] = useState(false);
   const store = useOnboardingStore(s => s);
   const myUid = store.uid;
-  const [cId, setCId] = useState('');
+  const initialPartner = store.partnerUid;
+  const initialCId = (myUid && initialPartner) ? [myUid, initialPartner].sort().join('_') : '';
+  const [cId, setCId] = useState(initialCId);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
@@ -139,8 +141,8 @@ export default function FloatingChat() {
     setWindowPosition(nextPos);
   }, [screenWidth, screenHeight, clampDragPosition]);
   
-  const [isLinked, setIsLinked] = useState(false);
-  const [hasCoupleHistory, setHasCoupleHistory] = useState(false);
+  const [isLinked, setIsLinked] = useState(Boolean(initialPartner));
+  const [hasCoupleHistory, setHasCoupleHistory] = useState(Boolean(initialPartner));
 
   useEffect(() => {
     if (!myUid) return;
@@ -200,7 +202,11 @@ export default function FloatingChat() {
           } else {
             decryptedText = data.text || ''; 
           }
-        } catch {}
+        } catch {
+          if (data.text) {
+            decryptedText = data.text;
+          }
+        }
 
         const createdAtMillis = data.createdAt?.toMillis
           ? data.createdAt.toMillis()
@@ -251,8 +257,8 @@ export default function FloatingChat() {
     <>
       {isOpen && (
         <Animated.View 
-          entering={SlideInDown.springify().damping(20).stiffness(200)}
-          exiting={SlideOutDown.duration(200)}
+          entering={SlideInDown.duration(180)}
+          exiting={SlideOutDown.duration(150)}
           style={[styles.chatWindow, {
             left: windowPosition.x,
             top: windowPosition.y,
@@ -321,7 +327,7 @@ export default function FloatingChat() {
 
       {/* FAB */}
       {!isOpen && (
-        <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.fabContainer}>
+        <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)} style={styles.fabContainer}>
           <Pressable style={styles.fab} onPress={openChat}>
             <MessageCircle color="white" size={28} />
             {hasUnread && <View style={styles.unreadDot} />}

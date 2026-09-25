@@ -72,7 +72,7 @@ export default function GoogleAdBanner({ style }: GoogleAdBannerProps) {
     BannerAdComponent = null;
   }
 
-  if (BannerAdComponent && BannerAdSize && !GOOGLE_ADS_CONFIG.isTestMode) {
+  if (BannerAdComponent && BannerAdSize) {
     return (
       <View style={[styles.container, style]}>
         <BannerAdComponent
@@ -85,17 +85,8 @@ export default function GoogleAdBanner({ style }: GoogleAdBannerProps) {
     );
   }
 
-  // Bandeau informatif en mode test / Expo Go
-  return (
-    <View style={[styles.container, styles.testBanner, { borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }, style]}>
-      <View style={[styles.badge, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.08)' }]}>
-        <Text style={[styles.badgeText, { color: theme.text, opacity: 0.7 }]}>ANNONCE</Text>
-      </View>
-      <Text style={[styles.testText, { color: theme.text, opacity: 0.6 }]}>
-        Espace Google AdMob (Bannière test)
-      </Text>
-    </View>
-  );
+  // Si le module natif n'est pas présent dans ce build, ne pas afficher d'encart test
+  return null;
 }
 
 const styles = StyleSheet.create({

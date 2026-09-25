@@ -367,7 +367,7 @@ export default function ShopScreen() {
       {/* Wrapper global pour centrer sur grand écran */}
       <View style={{ flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' }}>
         {/* Bouton vers Avatar Builder */}
-        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 16, marginBottom: 12 }}>
           <Pressable 
             style={[styles.avatarRedirectBtn, { opacity: 0.6 }]}
             onPress={() => setShowComingSoon(true)}
@@ -377,7 +377,7 @@ export default function ShopScreen() {
         </View>
 
         {/* Bouton Publicité Récompensée (+15 Pétales) */}
-        <View style={{ paddingTop: 8 }}>
+        <View style={{ marginBottom: 14 }}>
           <RewardedAdButton
             coupleId={coupleId}
             onRewardEarned={() => {
@@ -389,7 +389,7 @@ export default function ShopScreen() {
         </View>
 
         {/* Onglets */}
-        <View style={styles.tabs}>
+        <View style={[styles.tabs, { marginTop: 4 }]}>
           {(['backgrounds', 'borders', 'tags'] as TabType[]).map(tab => (
             <Pressable
               key={tab}

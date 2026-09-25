@@ -116,6 +116,9 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
 
   const [phase, setPhase] = useState<Phase>(alreadyClaimed ? 'done' : 'loading');
   const [showModal, setShowModal] = useState(false);
+  const [lockedInfoModal, setLockedInfoModal] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' });
+  const [myAnswered, setMyAnswered] = useState(false);
+  const [partnerAnswered, setPartnerAnswered] = useState(false);
   const [wheelPhase, setWheelPhase] = useState<WheelPhase>('idle');
   const [wonAmount, setWonAmount] = useState(0);
   const [claimedBalance, setClaimedBalance] = useState<number | null>(null);
@@ -147,7 +150,7 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
   useEffect(() => {
     if (wallet === null) {
       setPhase('loading');
-      const timeout = setTimeout(() => setPhase('locked'), 8000);
+      const timeout = setTimeout(() => setPhase('locked'), 3000);
       return () => clearTimeout(timeout);
     }
     if (alreadyClaimed) { setPhase('done'); return; }
@@ -161,10 +164,18 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
       partnerUid ? getDoc(doc(db, 'couples', coupleId, 'daily', slotKey, 'answers', partnerUid)) : Promise.resolve({ exists: () => false })
     ])
       .then(([mySnap, partnerSnap]) => {
-        if (mySnap.exists() && partnerSnap.exists()) { setPhase('button'); } else { setPhase('locked'); }
+        const myEx = mySnap.exists();
+        const pEx = partnerSnap.exists();
+        setMyAnswered(myEx);
+        setPartnerAnswered(pEx);
+        if (myEx && pEx) { 
+          setPhase('button'); 
+        } else { 
+          setPhase('locked'); 
+        }
       })
-        .catch(() => setPhase('locked'));
-      }, [coupleId, myUid, today, alreadyClaimed, wallet]);
+      .catch(() => setPhase('locked'));
+  }, [coupleId, myUid, today, alreadyClaimed, wallet]);
 
   const wheelStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value}deg` }] }));
   const resultStyle = useAnimatedStyle(() => ({ transform: [{ scale: resultScale.value }], opacity: resultScale.value }));
@@ -244,9 +255,41 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
     );
   }
 
+  const handleTriggerPress = () => {
+    if (phase === 'button') {
+      setShowModal(true);
+    } else if (phase === 'locked') {
+      if (myAnswered && !partnerAnswered) {
+        setLockedInfoModal({
+          visible: true,
+          title: 'Pas encore dispo !',
+          message: 'Attendez que votre partenaire réponde à la question du jour pour débloquer la roulette de l\'amour 🌸',
+        });
+      } else {
+        setLockedInfoModal({
+          visible: true,
+          title: 'Pas encore dispo !',
+          message: 'Répondez ensemble à la question du jour pour débloquer la roulette de l\'amour 🌸',
+        });
+      }
+    } else if (phase === 'done') {
+      setLockedInfoModal({
+        visible: true,
+        title: 'Déjà jouée !',
+        message: 'Tu as déjà tourné la roulette aujourd\'hui. Reviens demain pour tenter ta chance !',
+      });
+    }
+  };
+
+  const subText = phase === 'locked'
+    ? (myAnswered && !partnerAnswered ? 'Attendez votre partenaire' : 'Répondez pour jouer')
+    : phase === 'done'
+    ? 'Reviens demain'
+    : 'Disponible, tourne la !';
+
   return (
     <>
-      <Pressable onPress={() => { if (phase === 'button') setShowModal(true); }} style={({ pressed }) => [styles.triggerBox, { opacity: pressed && phase === 'button' ? 0.8 : 1 }]}>
+      <Pressable onPress={handleTriggerPress} style={({ pressed }) => [styles.triggerBox, { opacity: pressed ? 0.85 : 1 }]}>
         <LinearGradient colors={phase === 'done' ? (isDarkMode ? ['#302727', '#211B1B'] : ['#C9C9C9', '#E2E2E2']) : [theme.gradientStart, theme.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.triggerGradient}>
           <View style={styles.triggerContent}>
             <Animated.View style={[styles.iconCircle, phase === 'button' ? triggerIconStyle : undefined]}>
@@ -254,11 +297,31 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
             </Animated.View>
             <View style={{ flex: 1, marginLeft: compact ? 0 : 12, alignItems: compact ? 'center' : 'flex-start' }}>
               <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.triggerTitle, phase === 'done' && { color: '#757575' }]}>{phase === 'locked' ? 'Roulette bloquée' : phase === 'done' ? 'Déjà jouée' : 'Roulette du Jour'}</Text>
-              <Text numberOfLines={2} adjustsFontSizeToFit style={[styles.triggerSub, phase === 'done' && { color: '#9E9E9E' }]}>{phase === 'locked' ? 'Répondez pour jouer' : phase === 'done' ? 'Reviens demain' : 'Disponible, tourne la !'}</Text>
+              <Text numberOfLines={2} adjustsFontSizeToFit style={[styles.triggerSub, phase === 'done' && { color: '#9E9E9E' }]}>{subText}</Text>
             </View>
           </View>
         </LinearGradient>
       </Pressable>
+
+      {/* Modale d'info roulette bloquée ou déjà jouée */}
+      <Modal visible={lockedInfoModal.visible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setLockedInfoModal({ visible: false, title: '', message: '' })}>
+          <View style={[styles.modalContent, { maxWidth: 320, padding: 24 }]}>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#4A3B39', textAlign: 'center', marginBottom: 12 }}>
+              {lockedInfoModal.title}
+            </Text>
+            <Text style={{ fontSize: 14, color: '#6B5B59', textAlign: 'center', lineHeight: 20, marginBottom: 20 }}>
+              {lockedInfoModal.message}
+            </Text>
+            <Pressable
+              style={{ backgroundColor: '#FF6A88', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20, alignSelf: 'center' }}
+              onPress={() => setLockedInfoModal({ visible: false, title: '', message: '' })}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>J'ai compris</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal visible={showModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>

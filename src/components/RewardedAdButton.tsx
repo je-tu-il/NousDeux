@@ -128,22 +128,15 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
       }
     }
 
-    // Flux de test & Web sécurisé (accessible UNIQUEMENT si isTestMode est true)
-    if (GOOGLE_ADS_CONFIG.isTestMode) {
-      setModalStep('watching');
-      setModalVisible(true);
-      setIsLoading(false);
+    // Flux de simulation (accessible quand le module AdMob natif n'est pas lié ou en mode test)
+    setModalStep('watching');
+    setModalVisible(true);
+    setIsLoading(false);
 
-      setTimeout(async () => {
-        await recordSuccess();
-        isProcessingRef.current = false;
-      }, 2500);
-    } else {
-      // En production, si aucun module natif d'annonces n'est disponible, ne jamais donner de récompense fictive
-      setIsLoading(false);
+    setTimeout(async () => {
+      await recordSuccess();
       isProcessingRef.current = false;
-      alert("Les annonces ne sont pas disponibles sur cette plateforme.");
-    }
+    }, 2500);
   };
 
   return (

@@ -1,10 +1,15 @@
 import { collection, getDocs } from 'firebase/firestore';
-import { Flame } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Flame } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { db } from '../lib/firebase';
 
 const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const MONTH_NAMES = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+];
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function toKey(year: number, month: number, day: number): string {
@@ -35,6 +40,10 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
   const [record, setRecord] = useState<{ length: number; start: string; end: string } | null>(null);
   const [currentDates, setCurrentDates] = useState<{ start: string; end: string } | null>(null);
   const today = todayKey();
+
+  const now = new Date();
+  const [calMonth, setCalMonth] = useState(now.getMonth());
+  const [calYear, setCalYear] = useState(now.getFullYear());
 
   // Une seule lecture de la collection remplace les lectures quotidiennes du calendrier.
   useEffect(() => {
@@ -152,13 +161,20 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
     );
   }
 
+  const firstDayOfMonth = new Date(calYear, calMonth, 1).getDay();
+  const startDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const calCells: (number | null)[] = [];
+  for (let i = 0; i < startDay; i++) calCells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) calCells.push(d);
+
   return (
     <View style={[styles.container, compact && styles.compactContainer, darkMode && styles.darkContainer]}>
       {/* ── Compteur streak ── */}
       <View style={styles.streakRow}>
-        <Flame color="#FF6B35" size={24} fill="#FF6B35" />
-        <Text style={styles.streakNumber}>{displayedStreak}</Text>
-        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.streakLabel, darkMode && { color: '#F3E8E2' }]}>
+        <Flame color="#FF6B35" size={compact ? 20 : 24} fill="#FF6B35" />
+        <Text style={[styles.streakNumber, compact && { fontSize: 24 }]}>{displayedStreak}</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.streakLabel, compact && { fontSize: 12 }, darkMode && { color: '#F3E8E2' }]}>
           {displayedStreak === 0
             ? 'Nouveau streak !'
             : displayedStreak === 1
@@ -175,7 +191,8 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
         contentOffset={{ x: 10000, y: 0 }}
         contentContainerStyle={[
           styles.miniRow,
-          miniDays.length <= 7 && { justifyContent: 'space-between', width: '100%', paddingHorizontal: 0 }
+          compact && { gap: 4, paddingHorizontal: 0, justifyContent: 'space-between', width: '100%' },
+          !compact && miniDays.length <= 7 && { justifyContent: 'space-between', width: '100%', paddingHorizontal: 0 }
         ]}
         style={styles.miniScrollView}
         onContentSizeChange={scrollToToday}
@@ -189,11 +206,16 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
           const label    = DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1];
           return (
             <View key={key} style={styles.miniDayCol}>
-              <Text style={[styles.miniLabel, isToday && styles.miniLabelToday, darkMode && { color: '#D4B8B4' }]}>{label}</Text>
-              <View style={[styles.miniCircle, isActive && styles.miniActive, isToday && !isActive && styles.miniToday]}>
+              <Text style={[styles.miniLabel, compact && { fontSize: 9 }, isToday && styles.miniLabelToday, darkMode && { color: '#D4B8B4' }]}>{label}</Text>
+              <View style={[
+                styles.miniCircle, 
+                compact && { width: 22, height: 22, borderRadius: 11 },
+                isActive && styles.miniActive, 
+                isToday && !isActive && styles.miniToday
+              ]}>
                 {isActive
-                  ? <Text style={styles.miniCheck}>✓</Text>
-                  : <Text style={[styles.miniNum, isToday && { color: '#FF6B35', fontWeight: '800' }, darkMode && !isToday && { color: '#D4B8B4' }]}>
+                  ? <Text style={[styles.miniCheck, compact && { fontSize: 11 }]}>✓</Text>
+                  : <Text style={[styles.miniNum, compact && { fontSize: 10 }, isToday && { color: '#FF6B35', fontWeight: '800' }, darkMode && !isToday && { color: '#D4B8B4' }]}>
                       {dayNum}
                     </Text>}
               </View>
@@ -203,16 +225,81 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
       </ScrollView>
 
       {showFullCalendar && (
-        <View style={styles.recordBox}>
-          <Text style={styles.recordTitle}>Série en cours</Text>
-          <Text style={styles.recordValue}>{displayedStreak} jour{displayedStreak === 1 ? '' : 's'}</Text>
-          {currentDates && <Text style={styles.recordDates}>Du {currentDates.start} au {currentDates.end}</Text>}
-          <View style={styles.recordSeparator} />
-          <Text style={styles.recordTitle}>Série record</Text>
-          <Text style={styles.recordValue}>{record?.length ?? 0} jour{record?.length === 1 ? '' : 's'}</Text>
-          {record && <Text style={styles.recordDates}>Du {record.start} au {record.end}</Text>}
-          <Text style={styles.legendText}>{activeDays.size} jour{activeDays.size === 1 ? '' : 's'} complété{activeDays.size === 1 ? '' : 's'} au total</Text>
-        </View>
+        <>
+          <View style={styles.recordBox}>
+            <Text style={styles.recordTitle}>Série en cours</Text>
+            <Text style={styles.recordValue}>{displayedStreak} jour{displayedStreak === 1 ? '' : 's'}</Text>
+            {currentDates && <Text style={styles.recordDates}>Du {currentDates.start} au {currentDates.end}</Text>}
+            <View style={styles.recordSeparator} />
+            <Text style={styles.recordTitle}>Série record</Text>
+            <Text style={styles.recordValue}>{record?.length ?? 0} jour{record?.length === 1 ? '' : 's'}</Text>
+            {record && <Text style={styles.recordDates}>Du {record.start} au {record.end}</Text>}
+            <Text style={styles.legendText}>{activeDays.size} jour{activeDays.size === 1 ? '' : 's'} complété{activeDays.size === 1 ? '' : 's'} au total</Text>
+          </View>
+
+          {/* Navigation mois */}
+          <View style={styles.calHeader}>
+            <Pressable
+              onPress={() => {
+                if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+                else setCalMonth(m => m - 1);
+              }}
+              style={styles.navBtn}
+            >
+              <ChevronLeft color={darkMode ? '#F3E8E2' : '#4A3B39'} size={20} />
+            </Pressable>
+            <Text style={[styles.calMonthTitle, darkMode && { color: '#F3E8E2' }]}>
+              {MONTH_NAMES[calMonth]} {calYear}
+            </Text>
+            <Pressable
+              onPress={() => {
+                if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
+                else setCalMonth(m => m + 1);
+              }}
+              style={styles.navBtn}
+            >
+              <ChevronRight color={darkMode ? '#F3E8E2' : '#4A3B39'} size={20} />
+            </Pressable>
+          </View>
+
+          {/* En-têtes jours */}
+          <View style={styles.calGrid}>
+            {DAY_LABELS.map((l, i) => (
+              <View key={i} style={styles.calCell}>
+                <Text style={[styles.calDayLabel, darkMode && { color: '#A99693' }]}>{l}</Text>
+              </View>
+            ))}
+
+            {/* Cellules */}
+            {calCells.map((day, i) => {
+              if (day === null) return <View key={`empty-${i}`} style={styles.calCell} />;
+              const key = toKey(calYear, calMonth, day);
+              const isCellToday = key === today;
+              const isCellActive = activeDays.has(key);
+              return (
+                <View key={key} style={styles.calCell}>
+                  <View style={[
+                    styles.calDayCircle,
+                    isCellActive && styles.calDayActive,
+                    isCellToday && !isCellActive && styles.calDayToday,
+                  ]}>
+                    {isCellActive
+                      ? <Text style={styles.calCheck}>✓</Text>
+                      : <Text style={[styles.calDayNum, isCellToday && { color: '#FF9A8B', fontWeight: '800' }, darkMode && { color: '#D4B8B4' }]}>
+                          {day}
+                        </Text>}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Légende */}
+          <View style={styles.legend}>
+            <View style={[styles.legendDot, { backgroundColor: '#FF6B35' }]} />
+            <Text style={[styles.legendText, darkMode && { color: '#D4B8B4' }]}>Tous les deux ont répondu</Text>
+          </View>
+        </>
       )}
     </View>
   );
@@ -241,6 +328,8 @@ const styles = StyleSheet.create({
   compactContainer: {
     // Aligne la mini-carte sur la hauteur de la roulette du Dashboard.
     minHeight: 116,
+    padding: 10,
+    paddingHorizontal: 8,
     marginBottom: 0,
     overflow: 'hidden',
   },

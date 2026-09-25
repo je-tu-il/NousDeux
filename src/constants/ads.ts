@@ -21,6 +21,9 @@ export const GOOGLE_ADS_CONFIG = {
   // Récompense en pétales offerte pour chaque vidéo
   rewardPetalsAmount: 15,
 
+  // Pas de pub au démarrage de l'application
+  enableAppLaunchAd: false,
+
   // --- GOOGLE ADMOB (Application Android & iOS) ---
   admob: {
     // Identifiants réels de production

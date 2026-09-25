@@ -3,11 +3,11 @@ import { Colors } from '@/constants/Colors';
 import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 import { db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { Link } from 'expo-router';
+import { router } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ImageBackground, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ImageBackground, Platform, StyleSheet, Text, View, Pressable } from 'react-native';
 
 export default function CalendarScreen() {
   const isDarkMode = useOnboardingStore((s) => s.isDarkMode);
@@ -45,9 +45,9 @@ export default function CalendarScreen() {
       <View style={styles.safeArea}>
         {/* En-tête */}
         <View style={styles.header}>
-          <Link href="/dashboard" style={styles.backBtn}>
+          <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>
             <ArrowLeft color={theme.text} size={26} />
-          </Link>
+          </Pressable>
           <Text style={[styles.title, { color: theme.text }]}>Notre Calendrier</Text>
           <View style={{ width: 40 }} />
         </View>

@@ -1,6 +1,6 @@
-import { Link, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import { ImageBackground, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ImageBackground, Platform, StyleSheet, useWindowDimensions, View, Pressable } from 'react-native';
 
 import UnlimitedQuestions from '@/components/UnlimitedQuestions';
 import { Colors } from '@/constants/Colors';
@@ -23,9 +23,9 @@ export default function UnlimitedScreen() {
     >
       <View style={styles.safeArea as any}>
         <View style={styles.headerRow}>
-          <Link href="/dashboard" style={styles.backBtn as any}>
+          <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn as any}>
             <ArrowLeft color={Colors.light.text} size={28} />
-          </Link>
+          </Pressable>
         </View>
 
         <UnlimitedQuestions categoryFilter={categoryFilter} />

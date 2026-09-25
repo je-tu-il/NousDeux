@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, Platform, ImageBackground } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, Platform, ImageBackground, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
@@ -7,11 +7,12 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', backgroundColor: '#FFF5F2' },
   scroll: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 20 : 50, width: '100%', maxWidth: 600, alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
-  pageTitle: { fontSize: 18, fontWeight: '800', color: '#4A3B39', flex: 1, textAlign: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 10 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.95)', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
+  titleContainer: { flex: 1, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
+  pageTitle: { fontSize: 16, fontWeight: '800', color: '#2A1A1A', textAlign: 'center' },
   lastUpdated: { fontSize: 12, color: '#A99693', marginBottom: 20, fontStyle: 'italic' },
-  card: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.08, shadowRadius: 15, elevation: 5 },
+  card: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.08, shadowRadius: 15, elevation: 5 },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: '#4A3B39', marginBottom: 8 },
   sectionBody: { fontSize: 14, color: '#5a4a48', lineHeight: 22 },
@@ -27,11 +28,12 @@ export default function TermsScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 60 }}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <ArrowLeft color="#4A3B39" size={24} />
+          <Pressable style={styles.backBtn} onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }}>
+            <ArrowLeft color="#2A1A1A" size={24} />
           </Pressable>
-          <Text style={styles.pageTitle}>Conditions Générales d'Utilisation</Text>
-          <View style={{ width: 44 }} />
+          <View style={styles.titleContainer}>
+            <Text style={styles.pageTitle}>Conditions Générales d'Utilisation</Text>
+          </View>
         </View>
 
         <Animated.View entering={FadeInUp.duration(500)} style={styles.card}>
@@ -90,7 +92,13 @@ export default function TermsScreen() {
           </Section>
 
           <Section title="10. Contact">
-            Pour toute question relative aux présentes CGU : <B>nousdeux.app.contact@gmail.com</B>
+            Pour toute question relative aux présentes CGU :{' '}
+            <Text
+              style={{ fontWeight: '700', color: '#FF6A88', textDecorationLine: 'underline' }}
+              onPress={() => Linking.openURL('mailto:nousdeux.app.contact@gmail.com')}
+            >
+              nousdeux.app.contact@gmail.com
+            </Text>
           </Section>
         </Animated.View>
       </ScrollView>

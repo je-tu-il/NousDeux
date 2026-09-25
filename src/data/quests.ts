@@ -68,7 +68,7 @@ export const QUESTS: Quest[] = [
   },
   {
     id: 'bonus_questions',
-    name: 'Extra effort',
+    name: 'Questions Illimitées',
     description: 'Répondre aux questions illimitées',
     icon: '✨',
     trigger: 'bonus_question',

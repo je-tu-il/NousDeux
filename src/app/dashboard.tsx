@@ -58,7 +58,10 @@ export default function DashboardScreen() {
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
   const [unlockedItems, setUnlockedItems] = useState<Cosmetic[]>([]);
-  const [wallet, setWallet] = useState<any>(null);
+  const [wallet, setWallet] = useState<any>(() => {
+    const initialCoupleId = store.partnerUid && store.uid ? [store.uid, store.partnerUid].sort().join('_') : null;
+    return initialCoupleId ? getCachedWallet(initialCoupleId) : null;
+  });
   const [hasQuestRewards, setHasQuestRewards] = useState(false);
   const [partnerAnsweredCategories, setPartnerAnsweredCategories] = useState<Set<string>>(new Set());
 
@@ -250,6 +253,18 @@ export default function DashboardScreen() {
     checkUnlocks();
   }, [wallet?.streak]);
 
+  useEffect(() => {
+    if (!partner?.coupleId) return;
+    AsyncStorage.getItem(`wallet_${partner.coupleId}`).then((saved) => {
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setWallet((curr: any) => curr ?? parsed);
+        } catch {}
+      }
+    }).catch(() => {});
+  }, [partner?.coupleId]);
+
   // Ecoute du Wallet en temps réel + correction streak
   useEffect(() => {
     if (!partner?.coupleId) return;
@@ -261,14 +276,18 @@ export default function DashboardScreen() {
     const unsub = onSnapshot(walletRef, async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+        // Mettre à jour immédiatement pour éviter tout blocage d'affichage
+        setWallet((curr: any) => ({ ...(curr || {}), ...(data as any) }));
         const calculatedStreak = await computeStreakCached(coupleId);
         const nextWallet = { ...(data as any), streak: calculatedStreak };
         cacheWallet(coupleId, nextWallet);
+        AsyncStorage.setItem(`wallet_${coupleId}`, JSON.stringify(nextWallet)).catch(() => {});
         setWallet(nextWallet);
         if (data.streak !== calculatedStreak) updateWalletStreak(coupleId).catch(console.error);
       } else {
         const sharedWallet = await getWallet(coupleId);
         cacheWallet(coupleId, sharedWallet);
+        AsyncStorage.setItem(`wallet_${coupleId}`, JSON.stringify(sharedWallet)).catch(() => {});
         setWallet(sharedWallet);
       }
     }, (error) => {
@@ -365,7 +384,7 @@ export default function DashboardScreen() {
       ? { borderWidth: 0 } 
       : { borderWidth: 3, borderColor: fallbackBorderColor };
 
-    const borderImageSize = avatarWidth * 2.0;
+    const borderImageSize = avatarWidth * 1.35;
     const borderOffset = - (borderImageSize - avatarWidth) / 2;
 
     const innerAvatar = avatarUrl ? (
@@ -378,7 +397,7 @@ export default function DashboardScreen() {
 
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View style={{ position: 'relative', marginRight: isPartner ? 14 : -5 }}>
+        <View style={{ position: 'relative', marginRight: isPartner ? 12 : 4 }}>
           
           {/* L'avatar de base (photo, PixelAvatar ou initiale) */}
           {avatarUrl ? (
@@ -423,12 +442,14 @@ export default function DashboardScreen() {
               onPress={() => setShowMyProfile(true)}
             >
               {renderAvatar(store.avatar, store.pseudo || 'Moi', false, myProfile)}
-              <View style={{ marginLeft: 15, flex: 1 }}>
+              <View style={{ marginLeft: 16, flex: 1 }}>
                 <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }} numberOfLines={1}>{store.pseudo}</Text>
                 {myProfile?.selectedTag && myProfile.selectedTag !== 'tag_free_0' && getCosmeticById(myProfile.selectedTag) && (
-                  <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 }} numberOfLines={1}>
-                    {getCosmeticById(myProfile.selectedTag)?.emoji} {getCosmeticById(myProfile.selectedTag)?.name}
-                  </Text>
+                  <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 255, 255, 0.22)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.4)' }}>
+                    <Text style={{ fontSize: 12, color: 'white', fontWeight: '800' }} numberOfLines={1}>
+                      {getCosmeticById(myProfile.selectedTag)?.emoji} {getCosmeticById(myProfile.selectedTag)?.name}
+                    </Text>
+                  </View>
                 )}
               </View>
             </Pressable>
@@ -594,7 +615,7 @@ export default function DashboardScreen() {
                       style={[styles.categoryCard, { backgroundColor: store.isDarkMode ? 'rgba(38,28,27,0.95)' : 'rgba(245,245,247,0.95)', borderColor: store.isDarkMode ? 'rgba(80,60,58,0.8)' : '#D1D5DB' }]}
                       onPress={() => {
                         setAlertMessage(
-                          `Le thème "${cat.title}" est verrouillé. Il faut répondre à 10 questions de ce thème en mode Illimité pour le débloquer ! (${count}/10)`,
+                          `Le thème "${cat.title}" est verrouillé. Répondez ensemble à 10 questions de ce thème en mode Illimité pour le débloquer ! (${count}/10)`,
                         );
                       }}
                     >

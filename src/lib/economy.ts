@@ -475,19 +475,23 @@ export async function checkQuests(cId: string, event: QuestEvent, value: number 
   });
 }
 
-export async function updateCoupleDurationQuest(cId: string, coupleDate?: string): Promise<void> {
-  if (!coupleDate) return;
-  // Parse YYYY-MM-DD as a local calendar date; parsing it as UTC can shift
-  // the day around midnight and produce an incorrect duration.
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(coupleDate);
-  const start = match
-    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-    : new Date(coupleDate);
-  if (Number.isNaN(start.getTime())) return;
+export async function updateCoupleDurationQuest(cId: string, coupleDate?: string, fallbackStreak?: number): Promise<void> {
+  let start = new Date();
+  if (coupleDate) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(coupleDate);
+    const parsed = match
+      ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+      : new Date(coupleDate);
+    if (!Number.isNaN(parsed.getTime())) {
+      start = parsed;
+    }
+  }
   // The quest has no tier beyond one year. Capping here also prevents a
   // malformed legacy/default date from turning a new couple into a 9000-day
   // couple.
-  const days = Math.min(365, Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000)));
+  const daysFromDate = Math.min(365, Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000)));
+  const streakFallback = fallbackStreak ?? (getCachedStreak(cId) ?? 0);
+  const days = Math.min(365, Math.max(daysFromDate, streakFallback));
   const progress = await getQuestProgress(cId);
   const current = progress.couple_duration?.current ?? 0;
   if (current > days) {

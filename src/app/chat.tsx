@@ -96,6 +96,7 @@ export default function ChatScreen() {
             decryptedText = data.text || ''; // fallback si non chiffré
           }
         } catch(e) {
+          if (data.text) decryptedText = data.text;
           console.warn("Erreur de déchiffrement", e);
         }
         
@@ -163,7 +164,7 @@ export default function ChatScreen() {
         <Text style={{ textAlign: 'center', color: theme.tabIconDefault, fontSize: 16, marginBottom: 24 }}>
           Tu dois être en couple pour accéder au chat avec ton partenaire.
         </Text>
-        <Pressable onPress={() => router.replace('/dashboard')} style={[styles.sendBtn, { width: 'auto', paddingHorizontal: 20, height: 44 }]}>
+        <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={[styles.sendBtn, { width: 'auto', paddingHorizontal: 20, height: 44 }]}>
           <Text style={{ color: 'white', fontWeight: 'bold' }}>Retour à l'accueil</Text>
         </Pressable>
       </View>

@@ -436,7 +436,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
             const walletSnap = await getDoc(doc(db, 'couples', coupleKey, 'economy', 'wallet'));
             const reqCount = walletSnap.exists() ? (walletSnap.data().unlimitedStats?.[req] || 0) : 0;
             if (reqCount < 10) {
-              Alert.alert("Thème verrouillé", `Tu dois répondre à 10 questions de ce thème en mode Illimité pour le débloquer ! (${reqCount}/10)`);
+              Alert.alert("Thème verrouillé", `Répondez ensemble à 10 questions de ce thème en mode Illimité pour le débloquer ! (${reqCount}/10)`);
               router.replace('/dashboard');
               return;
             }

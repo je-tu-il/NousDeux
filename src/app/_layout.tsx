@@ -120,10 +120,7 @@ export default function RootLayout() {
   }, [uid]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      import('../components/FloatingChat').then(({ default: Chat }) => setFloatingChat(() => Chat));
-    }, 800);
-    return () => clearTimeout(timer);
+    import('../components/FloatingChat').then(({ default: Chat }) => setFloatingChat(() => Chat)).catch(() => {});
   }, []);
 
   useEffect(() => {

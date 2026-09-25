@@ -16,7 +16,7 @@ export default function AppLaunchAd() {
   const [secondsLeft, setSecondsLeft] = useState(3);
 
   useEffect(() => {
-    if (!GOOGLE_ADS_CONFIG.enabled || hasShownLaunchAdThisSession) {
+    if (!GOOGLE_ADS_CONFIG.enabled || !GOOGLE_ADS_CONFIG.enableAppLaunchAd || hasShownLaunchAdThisSession) {
       return;
     }
 

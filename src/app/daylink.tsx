@@ -1,6 +1,6 @@
-import { Link } from 'expo-router';
+import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import { ImageBackground, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ImageBackground, Platform, StyleSheet, useWindowDimensions, View, Pressable } from 'react-native';
 
 import DaylinkComponent from '@/components/Daylink';
 import { Colors } from '@/constants/Colors';
@@ -22,9 +22,9 @@ export default function DaylinkScreen() {
       <View style={styles.safeArea}>
         {/* Header avec Bouton Retour */}
         <View style={styles.headerRow}>
-          <Link href="/dashboard" style={styles.backBtn}>
+          <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>
             <ArrowLeft color={Colors.light.text} size={28} />
-          </Link>
+          </Pressable>
         </View>
         
         {/* Rendu du composant principal */}
