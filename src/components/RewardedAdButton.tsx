@@ -84,17 +84,26 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
 
     if (RewardedAd && RewardedAdEventType && !GOOGLE_ADS_CONFIG.isTestMode) {
       let adTimeout: any = null;
+      const fallbackToSimulation = () => {
+        if (adTimeout) clearTimeout(adTimeout);
+        setIsLoading(false);
+        setModalStep('watching');
+        setModalVisible(true);
+        setTimeout(async () => {
+          await recordSuccess();
+          isProcessingRef.current = false;
+        }, 2500);
+      };
+
       try {
         const rewarded = RewardedAd.createForAdRequest(getRewardedAdUnitId(), {
           requestNonPersonalizedAdsOnly: true,
         });
 
-        // Timeout de sécurité : si la pub ne charge pas en 12s, annuler sans donner de récompense
+        // Timeout de sécurité : si la pub ne charge pas en 8s, basculer gracieusement sur la simulation
         adTimeout = setTimeout(() => {
-          setIsLoading(false);
-          isProcessingRef.current = false;
-          alert("Le chargement de l'annonce a pris trop de temps. Vérifie ta connexion et réessaie.");
-        }, 12000);
+          fallbackToSimulation();
+        }, 8000);
 
         rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
           if (adTimeout) clearTimeout(adTimeout);
@@ -103,11 +112,8 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
         });
 
         rewarded.addAdEventListener(RewardedAdEventType.ERROR, (err: any) => {
-          if (adTimeout) clearTimeout(adTimeout);
-          setIsLoading(false);
-          isProcessingRef.current = false;
-          console.warn('AdMob rewarded ad error:', err);
-          alert("L'annonce n'a pas pu être chargée pour le moment. Réessaie dans un instant.");
+          console.warn('AdMob rewarded ad error, bascule sur la simulation:', err);
+          fallbackToSimulation();
         });
 
         rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, async () => {
@@ -119,11 +125,8 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
         rewarded.load();
         return;
       } catch (err) {
-        if (adTimeout) clearTimeout(adTimeout);
-        setIsLoading(false);
-        isProcessingRef.current = false;
-        console.warn('Native rewarded ad fatal exception:', err);
-        alert("Impossible de charger la publicité. Réessaie plus tard.");
+        console.warn('Native rewarded ad exception, bascule sur la simulation:', err);
+        fallbackToSimulation();
         return;
       }
     }

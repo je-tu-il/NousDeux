@@ -2,8 +2,6 @@ import CoinWallet from '@/components/CoinWallet';
 import DailyClaim from '@/components/DailyClaim';
 import PixelAvatar from '@/components/PixelAvatar';
 import StreakCalendar from '@/components/StreakCalendar';
-import GoogleAdBanner from '@/components/GoogleAdBanner';
-import AppLaunchAd from '@/components/AppLaunchAd';
 import { Colors } from '@/constants/Colors';
 import { Cosmetic, COSMETICS, getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
 import { cacheWallet, computeStreakCached, getCachedWallet, getUserProfile, getWallet, invalidateStreakCache, syncUnlimitedStats, updateWalletStreak, UserProfile } from '@/lib/economy';
@@ -426,7 +424,6 @@ export default function DashboardScreen() {
 
   return (
     <ImageBackground source={backgroundSource} style={styles.container} resizeMode={backgroundResizeMode} imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
-      <AppLaunchAd />
       <View style={[styles.safeArea, { overflow: 'visible', backgroundColor: 'transparent' }]}> 
         <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>{/* NOUVEAU HEADER : LinearGradient Mon Profil + Wallet */}
         <LinearGradient
@@ -632,9 +629,6 @@ export default function DashboardScreen() {
                     </Pressable>
                   ) : (
                     <Link href={`/unlimited?category=${cat.id}`} style={[styles.categoryCard, { backgroundColor: cardBg, borderColor: cat.border }]}>
-                      <View style={{ position: 'absolute', top: -8, right: -8, backgroundColor: cat.rarity === 'Légendaire' ? '#F59E0B' : cat.rarity === 'Épique' ? '#8B5CF6' : cat.rarity === 'Rare' ? '#3B82F6' : '#9CA3AF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, zIndex: 10, transform: [{ scale: 0.8 }] }}>
-                        <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{cat.rarity}</Text>
-                      </View>
                       {cat.icon}
                       {partnerAnsweredCategories.has(cat.id) && <View style={styles.partnerAnswerDot} />}
                       <Text style={styles.categoryCardTitle}>{cat.title}</Text>
@@ -644,10 +638,6 @@ export default function DashboardScreen() {
               );
             })}
           </View>
-
-          {/* Espace publicitaire discret */}
-          <GoogleAdBanner style={{ marginTop: 24, marginBottom: 8 }} />
-
         </View>
         </ScrollView>
 

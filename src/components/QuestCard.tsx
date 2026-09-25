@@ -229,7 +229,9 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
 
         {isWaitingForPartner && (
           <View style={styles.pendingBadge}>
-            <Text style={styles.pendingText}>⏳ En attente du partenaire</Text>
+            <Text style={styles.pendingText} numberOfLines={1}>
+              {compact ? '⏳ En attente' : '⏳ En attente partenaire'}
+            </Text>
           </View>
         )}
         
@@ -265,7 +267,7 @@ const getStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   fill:  { height: '100%', borderRadius: 4 },
   count: { fontSize: 12, fontWeight: '700', color: theme.text, minWidth: 40, textAlign: 'right' },
 
-  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   
   roadmap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   milestone: {
@@ -285,6 +287,6 @@ const getStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   
   claimedBadge: { backgroundColor: isDark ? '#3A2F35' : '#e2e8f0', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   claimedText: { color: isDark ? '#D8C9CE' : '#64748b', fontWeight: '700', fontSize: 12 },
-  pendingBadge: { backgroundColor: isDark ? 'rgba(251,191,36,0.15)' : '#FEF3C7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
-  pendingText: { color: isDark ? '#FBBF24' : '#B45309', fontWeight: '700', fontSize: 11, textAlign: 'center' }
+  pendingBadge: { backgroundColor: isDark ? 'rgba(251,191,36,0.15)' : '#FEF3C7', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10, flexShrink: 1, maxWidth: '52%' },
+  pendingText: { color: isDark ? '#FBBF24' : '#B45309', fontWeight: '700', fontSize: 10.5, textAlign: 'center' }
 });

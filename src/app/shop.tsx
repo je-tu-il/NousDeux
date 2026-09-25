@@ -41,8 +41,6 @@ import {
     getWallet,
     purchaseItem,
     saveUserProfile
-} from '../lib/economy';
-import GoogleAdBanner from '../components/GoogleAdBanner';
 import RewardedAdButton from '../components/RewardedAdButton';
 import { db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
@@ -366,13 +364,13 @@ export default function ShopScreen() {
 
       {/* Wrapper global pour centrer sur grand écran */}
       <View style={{ flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' }}>
-        {/* Bouton vers Avatar Builder */}
+        {/* Bouton vers Avatar / Profil */}
         <View style={{ paddingHorizontal: 16, paddingTop: 16, marginBottom: 12 }}>
           <Pressable 
-            style={[styles.avatarRedirectBtn, { opacity: 0.6 }]}
-            onPress={() => setShowComingSoon(true)}
+            style={styles.avatarRedirectBtn}
+            onPress={() => router.push('/settings')}
           >
-            <Text style={styles.avatarRedirectText}>👗 Modifier mon Avatar (Bientôt !)</Text>
+            <Text style={styles.avatarRedirectText}>👗 Modifier mon Avatar</Text>
           </Pressable>
         </View>
 
@@ -413,7 +411,6 @@ export default function ShopScreen() {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={<GoogleAdBanner style={{ marginVertical: 16 }} />}
         />
       </View>
 
@@ -555,12 +552,14 @@ export default function ShopScreen() {
             <Text style={[styles.modalDesc, { marginBottom: 20 }]}>
               Les tenues et avatars HD arrivent dans une prochaine mise à jour !
             </Text>
-            <Pressable 
-              style={[styles.btnConfirm, { backgroundColor: '#FF9A8B' }]} 
-              onPress={() => setShowComingSoon(false)}
-            >
-              <Text style={styles.btnConfirmText}>Compris</Text>
-            </Pressable>
+            <View style={{ width: '100%', marginTop: 8 }}>
+              <Pressable 
+                style={[styles.btnConfirm, { backgroundColor: '#FF6A88', width: '100%', flex: 0 }]} 
+                onPress={() => setShowComingSoon(false)}
+              >
+                <Text style={styles.btnConfirmText}>D'accord</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

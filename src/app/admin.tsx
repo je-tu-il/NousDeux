@@ -742,16 +742,38 @@ function CouplePanel({ couple, onUpdated }: { couple: CoupleData; onUpdated: () 
           {tab === 'wallet' && (
             <View style={s.editSection}>
               <Text style={s.editLabel}>Pétales actuels : {couple.wallet?.petals ?? 0} 🌸</Text>
-              <View style={s.row}>
+              <View style={[s.row, { alignItems: 'center', gap: 6 }]}>
+                <Pressable
+                  style={[s.signBtn, { backgroundColor: '#22c55e' }]}
+                  onPress={() => {
+                    setPetalDelta(prev => {
+                      const clean = prev.replace(/^[+-]/, '');
+                      return clean ? `+${clean}` : '+';
+                    });
+                  }}
+                >
+                  <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>+</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.signBtn, { backgroundColor: '#ef4444' }]}
+                  onPress={() => {
+                    setPetalDelta(prev => {
+                      const clean = prev.replace(/^[+-]/, '');
+                      return clean ? `-${clean}` : '-';
+                    });
+                  }}
+                >
+                  <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>-</Text>
+                </Pressable>
                 <TextInput
-                  style={s.smallInput}
+                  style={[s.smallInput, { flex: 1, marginBottom: 0 }]}
                   value={petalDelta}
                   onChangeText={setPetalDelta}
                   placeholder="+500 ou -200"
-                  keyboardType="numeric"
+                  keyboardType="default"
                   placeholderTextColor="#C4B4B2"
                 />
-                <Text style={{ color: '#A99693', fontSize: 12 }}>delta pétales</Text>
+                <Text style={{ color: '#A99693', fontSize: 12 }}>delta</Text>
               </View>
 
               {/* Presets pétales */}
@@ -1781,13 +1803,35 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
       {/* Pétales */}
       <View style={s.debugSection}>
         <Text style={s.debugTitle}>🌸 Modifier les pétales</Text>
-        <View style={s.row}>
+        <View style={[s.row, { alignItems: 'center', gap: 6 }]}>
+          <Pressable
+            style={[s.signBtn, { backgroundColor: '#22c55e' }]}
+            onPress={() => {
+              setPetalAmount(prev => {
+                const clean = prev.replace(/^[+-]/, '');
+                return clean ? `+${clean}` : '+';
+              });
+            }}
+          >
+            <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>+</Text>
+          </Pressable>
+          <Pressable
+            style={[s.signBtn, { backgroundColor: '#ef4444' }]}
+            onPress={() => {
+              setPetalAmount(prev => {
+                const clean = prev.replace(/^[+-]/, '');
+                return clean ? `-${clean}` : '-';
+              });
+            }}
+          >
+            <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>-</Text>
+          </Pressable>
           <TextInput
             style={[s.smallInput, { flex: 1, marginBottom: 0 }]}
             value={petalAmount}
             onChangeText={setPetalAmount}
             placeholder="+500 ou -200"
-            keyboardType="numeric"
+            keyboardType="default"
             placeholderTextColor="#C4B4B2"
           />
           <Pressable style={s.saveBtn} onPress={addPetals} disabled={loading}>
@@ -2206,6 +2250,7 @@ const s = StyleSheet.create({
   editLabel: { fontSize: 12, fontWeight: '700', color: '#4A3B39', marginTop: 4 },
   smallInput: { backgroundColor: '#FFF5F2', borderRadius: 10, padding: 10, fontSize: 14, color: '#4A3B39', borderWidth: 1.5, borderColor: 'rgba(255,154,139,0.2)', marginBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  signBtn: { width: 34, height: 34, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   saveBtn: { backgroundColor: '#FF6A88', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   saveBtnTxt: { color: 'white', fontWeight: '700', fontSize: 13 },
 

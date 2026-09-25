@@ -21,8 +21,8 @@ export const GOOGLE_ADS_CONFIG = {
   // Récompense en pétales offerte pour chaque vidéo
   rewardPetalsAmount: 15,
 
-  // Pub interstitielle courte au démarrage de l'application
-  enableAppLaunchAd: true,
+  // Pub interstitielle courte au démarrage de l'application (désactivée)
+  enableAppLaunchAd: false,
 
   // --- GOOGLE ADMOB (Application Android & iOS) ---
   admob: {

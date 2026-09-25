@@ -1,14 +1,10 @@
 import { collection, getDocs } from 'firebase/firestore';
-import { ChevronLeft, ChevronRight, Flame } from 'lucide-react-native';
+import { Flame } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { db } from '../lib/firebase';
 
 const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-const MONTH_NAMES = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
-];
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -40,10 +36,6 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
   const [record, setRecord] = useState<{ length: number; start: string; end: string } | null>(null);
   const [currentDates, setCurrentDates] = useState<{ start: string; end: string } | null>(null);
   const today = todayKey();
-
-  const now = new Date();
-  const [calMonth, setCalMonth] = useState(now.getMonth());
-  const [calYear, setCalYear] = useState(now.getFullYear());
 
   // Une seule lecture de la collection remplace les lectures quotidiennes du calendrier.
   useEffect(() => {
@@ -161,12 +153,7 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
     );
   }
 
-  const firstDayOfMonth = new Date(calYear, calMonth, 1).getDay();
-  const startDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
-  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-  const calCells: (number | null)[] = [];
-  for (let i = 0; i < startDay; i++) calCells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) calCells.push(d);
+
 
   return (
     <View style={[styles.container, compact && styles.compactContainer, darkMode && styles.darkContainer]}>
@@ -236,69 +223,6 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
             {record && <Text style={styles.recordDates}>Du {record.start} au {record.end}</Text>}
             <Text style={styles.legendText}>{activeDays.size} jour{activeDays.size === 1 ? '' : 's'} complété{activeDays.size === 1 ? '' : 's'} au total</Text>
           </View>
-
-          {/* Navigation mois */}
-          <View style={styles.calHeader}>
-            <Pressable
-              onPress={() => {
-                if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
-                else setCalMonth(m => m - 1);
-              }}
-              style={styles.navBtn}
-            >
-              <ChevronLeft color={darkMode ? '#F3E8E2' : '#4A3B39'} size={20} />
-            </Pressable>
-            <Text style={[styles.calMonthTitle, darkMode && { color: '#F3E8E2' }]}>
-              {MONTH_NAMES[calMonth]} {calYear}
-            </Text>
-            <Pressable
-              onPress={() => {
-                if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
-                else setCalMonth(m => m + 1);
-              }}
-              style={styles.navBtn}
-            >
-              <ChevronRight color={darkMode ? '#F3E8E2' : '#4A3B39'} size={20} />
-            </Pressable>
-          </View>
-
-          {/* En-têtes jours */}
-          <View style={styles.calGrid}>
-            {DAY_LABELS.map((l, i) => (
-              <View key={i} style={styles.calCell}>
-                <Text style={[styles.calDayLabel, darkMode && { color: '#A99693' }]}>{l}</Text>
-              </View>
-            ))}
-
-            {/* Cellules */}
-            {calCells.map((day, i) => {
-              if (day === null) return <View key={`empty-${i}`} style={styles.calCell} />;
-              const key = toKey(calYear, calMonth, day);
-              const isCellToday = key === today;
-              const isCellActive = activeDays.has(key);
-              return (
-                <View key={key} style={styles.calCell}>
-                  <View style={[
-                    styles.calDayCircle,
-                    isCellActive && styles.calDayActive,
-                    isCellToday && !isCellActive && styles.calDayToday,
-                  ]}>
-                    {isCellActive
-                      ? <Text style={styles.calCheck}>✓</Text>
-                      : <Text style={[styles.calDayNum, isCellToday && { color: '#FF9A8B', fontWeight: '800' }, darkMode && { color: '#D4B8B4' }]}>
-                          {day}
-                        </Text>}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-
-          {/* Légende */}
-          <View style={styles.legend}>
-            <View style={[styles.legendDot, { backgroundColor: '#FF6B35' }]} />
-            <Text style={[styles.legendText, darkMode && { color: '#D4B8B4' }]}>Tous les deux ont répondu</Text>
-          </View>
         </>
       )}
     </View>
@@ -348,22 +272,7 @@ const styles = StyleSheet.create({
   miniNum: { fontSize: 11, fontWeight: '600', color: '#A99693' },
   miniCheck: { fontSize: 13, fontWeight: '900', color: 'white' },
 
-  calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 10 },
-  navBtn: { padding: 6 },
-  navBtnDisabled: { opacity: 0.35 },
-  calMonthTitle: { fontSize: 16, fontWeight: '800', color: '#4A3B39' },
-  calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calCell: { width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 3 },
-  calDayLabel: { fontSize: 10, fontWeight: '700', color: '#A99693', marginBottom: 4 },
-  calDayCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
-  calDayActive: { backgroundColor: '#FF9A8B' },
-  calDayToday: { borderWidth: 2, borderColor: '#FF9A8B' },
-  calDayNum: { fontSize: 11, fontWeight: '500', color: '#4A3B39' },
-  calCheck: { fontSize: 12, fontWeight: '900', color: 'white' },
 
-  legend: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
-  legendDot: { width: 12, height: 12, borderRadius: 6 },
-  legendText: { fontSize: 12, color: '#A99693' },
   recordBox: { marginTop: 18, padding: 14, borderRadius: 14, backgroundColor: 'rgba(255,154,139,0.12)' },
   recordTitle: { fontSize: 14, fontWeight: '800', color: '#4A3B39' },
   recordValue: { fontSize: 24, fontWeight: '900', color: '#FF6B35', marginTop: 4 },

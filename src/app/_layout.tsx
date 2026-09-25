@@ -4,6 +4,7 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { doc, getDoc } from 'firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { ImageBackground, LogBox, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 
@@ -105,6 +106,20 @@ export default function RootLayout() {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    // Masquer le splash screen dès que l'auth est prête (ou après 2.5s max de sécurité)
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 2500);
+
+    if (authReady) {
+      clearTimeout(timer);
+      SplashScreen.hideAsync().catch(() => {});
+    }
+
+    return () => clearTimeout(timer);
+  }, [authReady]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
