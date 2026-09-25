@@ -120,6 +120,20 @@ export default function RootLayout() {
   }, [uid]);
 
   useEffect(() => {
+    if (Platform.OS !== 'web') {
+      try {
+        const QuickCrypto = require('react-native-quick-crypto');
+        if (QuickCrypto?.install) {
+          QuickCrypto.install();
+        }
+      } catch {}
+      try {
+        const mobileAds = require('react-native-google-mobile-ads').default;
+        if (typeof mobileAds === 'function') {
+          mobileAds().initialize().catch(() => {});
+        }
+      } catch {}
+    }
     import('../components/FloatingChat').then(({ default: Chat }) => setFloatingChat(() => Chat)).catch(() => {});
   }, []);
 

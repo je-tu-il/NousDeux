@@ -54,3 +54,15 @@ test('Calendar screen uses cover resizeMode and fallback background to avoid whi
   assert.match(calSrc, /resizeMode="cover"/, 'Calendar ImageBackground must use cover resizeMode');
   assert.match(calSrc, /backgroundColor: isDarkMode \? '#1A1514' : '#FFF5F2'/, 'Calendar must provide background color fallback');
 });
+
+test('QuestCard defines isFullyDone and crypto.ts supports cross-platform derivation', async () => {
+  const cardSrc = await read('src/components/QuestCard.tsx');
+  const cryptoSrc = await read('src/lib/crypto.ts');
+
+  assert.match(cardSrc, /const isFullyDone = naturallyNextIdx === -1;/, 'QuestCard must declare isFullyDone');
+  assert.match(cardSrc, /safeViewIdx/, 'QuestCard must safely bound viewIdx with safeViewIdx');
+  assert.match(cryptoSrc, /getSubtleCrypto/, 'crypto.ts must provide cross-platform getSubtleCrypto helper');
+  assert.match(cryptoSrc, /deriveBits/, 'crypto.ts must support deriveBits for React Native QuickCrypto compatibility');
+  assert.match(cryptoSrc, /LEGACY_SALTS/, 'crypto.ts must support legacy salts');
+});
+

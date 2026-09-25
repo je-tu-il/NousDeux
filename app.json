@@ -49,6 +49,14 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.617698669043-ioqqer8rkgih638t0a2b4d7j1sthg4un"
         }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458783268",
+          "userTrackingUsageDescription": "Cette autorisation permet d'afficher des annonces personnalisées."
+        }
       ]
     ],
     "experiments": {

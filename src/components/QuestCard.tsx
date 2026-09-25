@@ -62,6 +62,7 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
 
   // Ne pas passer sur le prochain palier de quête si la récompense précédente n'a pas encore été récupérée par l'utilisateur.
   // Une fois récupérée, passer au palier en cours (naturallyNextIdx), ou platine si tout est fini.
+  const isFullyDone = naturallyNextIdx === -1;
   const defaultIdx = firstUnclaimedIdx !== -1 
     ? firstUnclaimedIdx 
     : (isFullyDone ? 3 : naturallyNextIdx);
@@ -106,7 +107,8 @@ export default memo(function QuestCard({ quest, progress, onClaim, isHighlighted
     setViewIdx(idx);
   };
 
-  const viewTier = quest.tiers[viewIdx];
+  const safeViewIdx = Math.max(0, Math.min(viewIdx >= 0 ? viewIdx : 0, quest.tiers.length - 1));
+  const viewTier = quest.tiers[safeViewIdx];
   const targetAmount = viewTier.threshold;
   const currentAmount = progress.current ?? 0;
   const progressRatio = Math.min(currentAmount / targetAmount, 1);
