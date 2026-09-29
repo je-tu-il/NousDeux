@@ -4,7 +4,7 @@ CHIARA
 
 |A faire|BUGS|Verif|A Reflechir|
 |-|-|-|-|
-|Referencer le site|nousdeux.app.contact@gmail.com ? + rendre le mail cliquable<br />Pub web<br />Pas de pub au demarrage<br />Pu du pub en abs de la page<br />Impossible de charger la pub Reessaie plus tard<br />En attente du partenaire depasse un peu de la case de quete<br />Plus rien afficher dans le pop up quand on clic sur modifier mon avatar le bouton pour mettre d'accord est vide<br />Ne pas mettre la rareté a coté de chaque case (mettre juste l'icone amour et le nom amour<br />Le calendrier retirer le calendrier interactif du dessous<br />Dans le mode admin sur tel quand je veux ajouter des pétales ou retirer ca me met sur le mode chiffre, donc je peux pas mettre de + ou de -<br />Apk marche pas<br />Icone + version glass ?|Envoie mail noreply@bloum-5456.firebaseapp.com verif si marche + modif<br />Notif<br />|Score de corda<br />Debloquage au fur et a mesure<br />Verif Secu<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Plan de test<br />Mascotte ?<br />Swip vers le haut pour au suivant<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Son<br />Page de vente<br />Vide un peu firebase ? Code 6 chiffres<br />Secur encore plus message clé privé ?<br />Panel Modif<br />Backup Firebase<br />Animation<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Revoir certaines questions nul, pas mettre les défis dans les trucs quotidien<br />Pose de questions sur lui-même pas si fou ?<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Voir la reponse de la veille ?|
+|Referencer le site|nousdeux.app.contact@gmail.com ? + rendre le mail cliquable<br />Pub web Debut bas petale<br />Icone + version glass ?|Envoie mail noreply@bloum-5456.firebaseapp.com verif si marche + modif<br />Notif<br />|Score de corda<br />Debloquage au fur et a mesure<br />Verif Secu<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Plan de test<br />Mascotte ?<br />Swip vers le haut pour au suivant<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Son<br />Page de vente<br />Vide un peu firebase ? Code 6 chiffres<br />Secur encore plus message clé privé ?<br />Panel Modif<br />Backup Firebase<br />Animation<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Revoir certaines questions nul, pas mettre les défis dans les trucs quotidien<br />Pose de questions sur lui-même pas si fou ?<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Voir la reponse de la veille ?|
 
 
 
@@ -52,7 +52,7 @@ Logo
 
 05 Natan
 
-05 Tristan 
+05 Tristan
 
 7 Francois
 
@@ -92,7 +92,7 @@ Logo
 
 2 Theodore
 
-7 Chiara 
+7 Chiara
 
 7 Ruth
 
@@ -137,8 +137,4 @@ Corail Bleu ciel Anais
 
 
 Trait plus epais logo ?
-
-
-
-
 
