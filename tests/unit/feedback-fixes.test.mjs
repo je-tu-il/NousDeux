@@ -7,12 +7,12 @@ import test from 'node:test';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (relativePath) => readFile(resolve(root, relativePath), 'utf8');
 
-test('Dashboard removes rarity badges and launch/banner ads', async () => {
+test('Dashboard removes rarity badges and includes launch/banner ads', async () => {
   const dashSrc = await read('src/app/dashboard.tsx');
 
   assert.doesNotMatch(dashSrc, /cat\.rarity/, 'Rarity badges must not be displayed on dashboard category cards');
-  assert.doesNotMatch(dashSrc, /<AppLaunchAd/, 'AppLaunchAd must be removed from dashboard');
-  assert.doesNotMatch(dashSrc, /<GoogleAdBanner/, 'GoogleAdBanner must be removed from dashboard');
+  assert.match(dashSrc, /<AppLaunchAd/, 'AppLaunchAd must be present on dashboard');
+  assert.match(dashSrc, /<GoogleAdBanner/, 'GoogleAdBanner must be present on dashboard');
 });
 
 test('StreakCalendar removes interactive month calendar grid below', async () => {

@@ -82,64 +82,82 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
       RewardedAd = null;
     }
 
-    if (RewardedAd && RewardedAdEventType && !GOOGLE_ADS_CONFIG.isTestMode) {
+    if (RewardedAd && RewardedAdEventType) {
       let adTimeout: any = null;
-      const fallbackToSimulation = () => {
-        if (adTimeout) clearTimeout(adTimeout);
-        setIsLoading(false);
-        setModalStep('watching');
-        setModalVisible(true);
-        setTimeout(async () => {
-          await recordSuccess();
-          isProcessingRef.current = false;
-        }, 2500);
+      let hasTriedFallback = false;
+
+      const primaryUnitId = getRewardedAdUnitId();
+      const testUnitId = Platform.OS === 'ios'
+        ? GOOGLE_ADS_CONFIG.admob.test.rewardedIos
+        : GOOGLE_ADS_CONFIG.admob.test.rewardedAndroid;
+
+      const loadAndShowRewarded = (unitId: string) => {
+        try {
+          const rewarded = RewardedAd.createForAdRequest(unitId, {
+            requestNonPersonalizedAdsOnly: true,
+          });
+
+          // Timeout de sécurité : si la pub ne charge pas en 10s, avertir sans créditer
+          adTimeout = setTimeout(() => {
+            if (!hasTriedFallback && unitId !== testUnitId) {
+              hasTriedFallback = true;
+              loadAndShowRewarded(testUnitId);
+              return;
+            }
+            setIsLoading(false);
+            isProcessingRef.current = false;
+            alert("Le chargement de l'annonce a pris trop de temps. Vérifie ta connexion et réessaie.");
+          }, 10000);
+
+          rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
+            if (adTimeout) clearTimeout(adTimeout);
+            setIsLoading(false);
+            rewarded.show();
+          });
+
+          rewarded.addAdEventListener(RewardedAdEventType.ERROR, (err: any) => {
+            if (adTimeout) clearTimeout(adTimeout);
+            console.warn('AdMob rewarded ad error with unitId', unitId, err);
+            if (!hasTriedFallback && unitId !== testUnitId) {
+              hasTriedFallback = true;
+              loadAndShowRewarded(testUnitId);
+            } else {
+              setIsLoading(false);
+              isProcessingRef.current = false;
+              alert("Impossible de charger la publicité pour le moment. Réessaie dans quelques instants.");
+            }
+          });
+
+          rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, async () => {
+            // Uniquement crédité si la publicité a été réellement visionnée
+            await recordSuccess();
+            setModalVisible(true);
+            isProcessingRef.current = false;
+          });
+
+          rewarded.load();
+        } catch (err) {
+          if (adTimeout) clearTimeout(adTimeout);
+          console.warn('Native rewarded ad exception:', err);
+          if (!hasTriedFallback && unitId !== testUnitId) {
+            hasTriedFallback = true;
+            loadAndShowRewarded(testUnitId);
+          } else {
+            setIsLoading(false);
+            isProcessingRef.current = false;
+            alert("Impossible de charger la publicité. Réessaie plus tard.");
+          }
+        }
       };
 
-      try {
-        const rewarded = RewardedAd.createForAdRequest(getRewardedAdUnitId(), {
-          requestNonPersonalizedAdsOnly: true,
-        });
-
-        // Timeout de sécurité : si la pub ne charge pas en 8s, basculer gracieusement sur la simulation
-        adTimeout = setTimeout(() => {
-          fallbackToSimulation();
-        }, 8000);
-
-        rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
-          if (adTimeout) clearTimeout(adTimeout);
-          setIsLoading(false);
-          rewarded.show();
-        });
-
-        rewarded.addAdEventListener(RewardedAdEventType.ERROR, (err: any) => {
-          console.warn('AdMob rewarded ad error, bascule sur la simulation:', err);
-          fallbackToSimulation();
-        });
-
-        rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, async () => {
-          await recordSuccess();
-          setModalVisible(true);
-          isProcessingRef.current = false;
-        });
-
-        rewarded.load();
-        return;
-      } catch (err) {
-        console.warn('Native rewarded ad exception, bascule sur la simulation:', err);
-        fallbackToSimulation();
-        return;
-      }
+      loadAndShowRewarded(primaryUnitId);
+      return;
     }
 
-    // Flux de simulation (accessible quand le module AdMob natif n'est pas lié ou en mode test)
-    setModalStep('watching');
-    setModalVisible(true);
+    // Hors environnement mobile natif (ex: Web)
     setIsLoading(false);
-
-    setTimeout(async () => {
-      await recordSuccess();
-      isProcessingRef.current = false;
-    }, 2500);
+    isProcessingRef.current = false;
+    alert("Les vidéos publicitaires avec récompense sont disponibles sur l'application mobile.");
   };
 
   return (

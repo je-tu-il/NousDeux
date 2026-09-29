@@ -1,5 +1,7 @@
+import AppLaunchAd from '@/components/AppLaunchAd';
 import CoinWallet from '@/components/CoinWallet';
 import DailyClaim from '@/components/DailyClaim';
+import GoogleAdBanner from '@/components/GoogleAdBanner';
 import PixelAvatar from '@/components/PixelAvatar';
 import StreakCalendar from '@/components/StreakCalendar';
 import { Colors } from '@/constants/Colors';
@@ -424,6 +426,7 @@ export default function DashboardScreen() {
 
   return (
     <ImageBackground source={backgroundSource} style={styles.container} resizeMode={backgroundResizeMode} imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
+      <AppLaunchAd />
       <View style={[styles.safeArea, { overflow: 'visible', backgroundColor: 'transparent' }]}> 
         <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>{/* NOUVEAU HEADER : LinearGradient Mon Profil + Wallet */}
         <LinearGradient
@@ -639,6 +642,7 @@ export default function DashboardScreen() {
             })}
           </View>
         </View>
+        <GoogleAdBanner />
         </ScrollView>
 
       {/* â”€â”€ Modal Mon Profil â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}

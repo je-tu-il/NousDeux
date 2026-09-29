@@ -11,7 +11,8 @@ test('Google Ads configuration provides test IDs and platform resolution', async
   const adsSrc = await read('src/constants/ads.ts');
 
   assert.match(adsSrc, /GOOGLE_ADS_CONFIG/, 'ads.ts must export GOOGLE_ADS_CONFIG');
-  assert.match(adsSrc, /enableAppLaunchAd:\s*false/, 'App launch ad must be disabled per user request');
+  assert.match(adsSrc, /enableAppLaunchAd:\s*true/, 'App launch ad must be enabled per user clarification');
+  assert.match(adsSrc, /enableBannerAds:\s*true/, 'Banner ads must be enabled per user clarification');
   assert.match(adsSrc, /maxDailyRewardedVideos:\s*4/, 'ads.ts must configure maxDailyRewardedVideos to 4');
   assert.match(adsSrc, /getBannerAdUnitId/, 'ads.ts must export getBannerAdUnitId');
   assert.match(adsSrc, /getRewardedAdUnitId/, 'ads.ts must export getRewardedAdUnitId');
@@ -25,15 +26,15 @@ test('Google Ads configuration provides test IDs and platform resolution', async
   assert.match(adsSrc, /3237675418/, 'ads.ts must contain Android rewarded/interstitial ID');
 });
 
-test('RewardedAdButton is integrated in shop, while banner and launch ads are disabled', async () => {
+test('RewardedAdButton is integrated in shop, and ads are configured', async () => {
   const shopSrc = await read('src/app/shop.tsx');
   const bannerSrc = await read('src/components/GoogleAdBanner.tsx');
   const rewardedSrc = await read('src/components/RewardedAdButton.tsx');
   const launchAdSrc = await read('src/components/AppLaunchAd.tsx');
 
   assert.match(shopSrc, /<RewardedAdButton/, 'shop.tsx must render RewardedAdButton');
-  assert.match(bannerSrc, /return null/, 'GoogleAdBanner must return null (disabled per user request)');
-  assert.match(launchAdSrc, /return null/, 'AppLaunchAd must return null (disabled per user request)');
+  assert.match(bannerSrc, /BannerAdComponent/, 'GoogleAdBanner must support BannerAdComponent');
+  assert.match(launchAdSrc, /InterstitialAd/, 'AppLaunchAd must support InterstitialAd');
   assert.match(rewardedSrc, /awardBonusPetals/, 'RewardedAdButton must award petals upon completion');
   assert.match(rewardedSrc, /maxDailyRewardedVideos/, 'RewardedAdButton must check maxDailyRewardedVideos');
 });

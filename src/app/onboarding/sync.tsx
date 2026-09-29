@@ -198,8 +198,25 @@ export default function SyncScreen() {
 
         const myDoc = await getDoc(doc(db, 'users', myUid));
         const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
-        const myData = myDoc.exists() ? myDoc.data() : {};
-        const partnerData = partnerDoc.exists() ? partnerDoc.data() : {};
+
+        // Garde défensive : les deux documents utilisateur DOIVENT exister
+        if (!myDoc.exists() || !partnerDoc.exists()) {
+          const missing = !myDoc.exists() ? 'ton compte' : 'le compte du partenaire';
+          const msg = `Impossible de lier : ${missing} n'a pas été trouvé dans la base. Reconnecte-toi ou demande à ton partenaire de se reconnecter.`;
+          setErrorMessage(msg);
+          setModalState({
+            visible: true,
+            type: 'error',
+            title: 'Compte introuvable',
+            message: msg,
+          });
+          setLoading(false);
+          isLinking.current = false;
+          return;
+        }
+
+        const myData = myDoc.data();
+        const partnerData = partnerDoc.data();
 
         // Empêcher de lier un utilisateur déjà en couple
         if (partnerData.linkedTo && partnerData.linkedTo !== myUid) {
@@ -253,24 +270,37 @@ export default function SyncScreen() {
           ? (myData.previousLinkedAt || partnerData.previousLinkedAt)
           : nowIso;
 
+        // Utilisation de set(merge:true) au lieu de update() pour éviter
+        // l'erreur "No document to update" si un document est supprimé
+        // entre la vérification et l'écriture (race condition)
         const linkBatch = writeBatch(db);
-        linkBatch.update(doc(db, "users", myUid!), {
+        linkBatch.set(doc(db, "users", myUid!), {
           linkedTo: partnerUid,
-          coupleDate: deleteField(),
-          proposedDate: deleteField(),
           needsDate: true,
           lastPartner: partnerUid,
           linkedAt: effectiveLinkedAt,
-        });
-        linkBatch.update(doc(db, "users", partnerUid), {
+        }, { merge: true });
+        linkBatch.set(doc(db, "users", partnerUid), {
           linkedTo: myUid,
-          coupleDate: deleteField(),
-          proposedDate: deleteField(),
           needsDate: true,
           lastPartner: myUid,
           linkedAt: effectiveLinkedAt,
-        });
+        }, { merge: true });
         await linkBatch.commit();
+        // Supprimer les champs obsolètes séparément (deleteField ne fonctionne
+        // pas avec set+merge dans un batch car il nécessite un update)
+        const cleanupBatch = writeBatch(db);
+        cleanupBatch.update(doc(db, "users", myUid!), {
+          coupleDate: deleteField(),
+          proposedDate: deleteField(),
+        });
+        cleanupBatch.update(doc(db, "users", partnerUid), {
+          coupleDate: deleteField(),
+          proposedDate: deleteField(),
+        });
+        await cleanupBatch.commit().catch(() => {
+          // Non bloquant : les champs seront écrasés par la page date
+        });
         // Cosmetic ownership is personal. Re-pairing must not reset the
         // account's equipped items; the new partner reads this profile.
         state.setPartnerCache(null, '', null);

@@ -41,6 +41,21 @@ module.exports = async (req, res) => {
          throw new Error('Cannot pair with yourself');
       }
 
+      // Verify both user documents exist before attempting to link
+      const userARef = db.collection('users').doc(partnerUserId);
+      const userBRef = db.collection('users').doc(requesterUserId);
+      const [userADoc, userBDoc] = await Promise.all([
+        t.get(userARef),
+        t.get(userBRef),
+      ]);
+
+      if (!userADoc.exists) {
+        throw new Error('Partner user account not found');
+      }
+      if (!userBDoc.exists) {
+        throw new Error('Your user account not found. Please re-login.');
+      }
+
       // Create new couple
       const coupleRef = db.collection('couples').doc();
       t.set(coupleRef, {
@@ -49,12 +64,9 @@ module.exports = async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // Update both users
-      const userARef = db.collection('users').doc(partnerUserId);
-      const userBRef = db.collection('users').doc(requesterUserId);
-      
-      t.update(userARef, { coupleId: coupleRef.id });
-      t.update(userBRef, { coupleId: coupleRef.id });
+      // Update both users — use set(merge) for resilience against race conditions
+      t.set(userARef, { coupleId: coupleRef.id }, { merge: true });
+      t.set(userBRef, { coupleId: coupleRef.id }, { merge: true });
       
       // Delete the consumed code
       t.delete(codeRef);

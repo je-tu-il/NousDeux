@@ -41,6 +41,8 @@ import {
     getWallet,
     purchaseItem,
     saveUserProfile
+} from '../lib/economy';
+import GoogleAdBanner from '../components/GoogleAdBanner';
 import RewardedAdButton from '../components/RewardedAdButton';
 import { db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
@@ -411,6 +413,7 @@ export default function ShopScreen() {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={<GoogleAdBanner style={{ marginVertical: 16 }} />}
         />
       </View>
 
