@@ -8,6 +8,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { ImageBackground, LogBox, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 const originalError = console.error;
 console.error = (...args) => {
   if (typeof args[0] === 'string' && args[0].includes('M_ID')) return;
@@ -56,62 +58,74 @@ export default function RootLayout() {
       router.replace('/onboarding/login');
       if (Platform.OS === 'web') window.location.reload();
     };
+
+    const authFallbackTimer = setTimeout(() => {
+      setAuthReady(true);
+    }, 1500);
+
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setFirebaseUser(user);
       const syncAuthState = async () => {
-        if (!user && useOnboardingStore.getState().uid) {
-          await clearDeletedSession();
-        } else if (user) {
-          // Firebase Auth is the source of truth after a refresh/reconnection.
-          // The persisted Zustand UID can be empty or stale while Auth is restoring.
-          const store = useOnboardingStore.getState();
-          if (store.uid !== user.uid) store.setUid(user.uid);
-          try {
-            await user.reload();
-          } catch (error: any) {
-            if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-user-token') {
-              void clearDeletedSession();
-              return;
-            }
-          }
-          // Synchroniser le profil Firestore pour éviter de forcer l'onboarding sur un nouveau navigateur
-          try {
-            const userSnap = await getDoc(doc(db, 'users', user.uid));
-            if (userSnap.exists()) {
-              const uData = userSnap.data();
-              if (uData.pseudo && store.pseudo !== uData.pseudo) store.setPseudo(uData.pseudo);
-              if (uData.age && store.age !== uData.age) store.setAge(uData.age);
-              const avatarToSet = uData.avatarUrl || uData.avatar || null;
-              if (store.avatar !== avatarToSet) store.setAvatar(avatarToSet);
-              if (uData.pairingCode && store.myCode !== uData.pairingCode) store.setMyCode(uData.pairingCode);
-              store.setSynced(Boolean(uData.linkedTo));
-            }
+        try {
+          if (!user && useOnboardingStore.getState().uid) {
+            await clearDeletedSession();
+          } else if (user) {
+            // Firebase Auth is the source of truth after a refresh/reconnection.
+            // The persisted Zustand UID can be empty or stale while Auth is restoring.
+            const store = useOnboardingStore.getState();
+            if (store.uid !== user.uid) store.setUid(user.uid);
             try {
-              const { getUserProfile } = await import('@/lib/economy');
-              const p = await getUserProfile(user.uid);
-              if (p) {
-                if (p.selectedBackground) store.setSelectedCosmetics(p.selectedBackground, p.selectedBorder, p.selectedTag);
-                if (p.avatar) store.setAvatarConfig(p.avatar);
+              await user.reload();
+            } catch (error: any) {
+              if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-user-token') {
+                void clearDeletedSession();
+                return;
               }
-            } catch (errProfile) {
-              console.error('Erreur chargement userProfile :', errProfile);
             }
-          } catch (err) {
-            console.error('Erreur chargement profil Firestore :', err);
+            // Synchroniser le profil Firestore pour éviter de forcer l'onboarding sur un nouveau navigateur
+            try {
+              const userSnap = await getDoc(doc(db, 'users', user.uid));
+              if (userSnap.exists()) {
+                const uData = userSnap.data();
+                if (uData.pseudo && store.pseudo !== uData.pseudo) store.setPseudo(uData.pseudo);
+                if (uData.age && store.age !== uData.age) store.setAge(uData.age);
+                const avatarToSet = uData.avatarUrl || uData.avatar || null;
+                if (store.avatar !== avatarToSet) store.setAvatar(avatarToSet);
+                if (uData.pairingCode && store.myCode !== uData.pairingCode) store.setMyCode(uData.pairingCode);
+                store.setSynced(Boolean(uData.linkedTo));
+              }
+              try {
+                const { getUserProfile } = await import('@/lib/economy');
+                const p = await getUserProfile(user.uid);
+                if (p) {
+                  if (p.selectedBackground) store.setSelectedCosmetics(p.selectedBackground, p.selectedBorder, p.selectedTag);
+                  if (p.avatar) store.setAvatarConfig(p.avatar);
+                }
+              } catch (errProfile) {
+                console.error('Erreur chargement userProfile :', errProfile);
+              }
+            } catch (err) {
+              console.error('Erreur chargement profil Firestore :', err);
+            }
           }
+        } finally {
+          clearTimeout(authFallbackTimer);
+          setAuthReady(true);
         }
-        setAuthReady(true);
       };
       void syncAuthState();
     });
-    return unsubscribe;
+    return () => {
+      clearTimeout(authFallbackTimer);
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
-    // Masquer le splash screen dès que l'auth est prête (ou après 2.5s max de sécurité)
+    // Masquer le splash screen dès que l'auth est prête (ou après 1.5s max de sécurité)
     const timer = setTimeout(() => {
       SplashScreen.hideAsync().catch(() => {});
-    }, 2500);
+    }, 1500);
 
     if (authReady) {
       clearTimeout(timer);
@@ -136,12 +150,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      try {
-        const QuickCrypto = require('react-native-quick-crypto');
-        if (QuickCrypto?.install) {
-          QuickCrypto.install();
-        }
-      } catch {}
       try {
         const mobileAds = require('react-native-google-mobile-ads').default;
         if (typeof mobileAds === 'function') {

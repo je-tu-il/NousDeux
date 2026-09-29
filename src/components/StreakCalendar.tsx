@@ -231,7 +231,8 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    width: '100%',
+    alignSelf: 'stretch',
     backgroundColor: '#FFF0EB',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 106, 136, 0.35)',

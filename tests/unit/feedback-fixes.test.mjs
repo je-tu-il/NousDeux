@@ -44,9 +44,9 @@ test('Root layout dismisses splash screen cleanly and avoids getting stuck', asy
   assert.match(layoutSrc, /SplashScreen\.hideAsync/, '_layout.tsx must call SplashScreen.hideAsync');
 });
 
-test('Shop modifiers navigate directly and ensure valid confirm button', async () => {
+test('Shop modifier button triggers coming soon popup with valid confirm button', async () => {
   const shopSrc = await read('src/app/shop.tsx');
 
-  assert.match(shopSrc, /router\.push\('\/settings'\)/, 'Modifier mon avatar button must navigate to settings directly');
+  assert.match(shopSrc, /setShowComingSoon\(true\)/, 'Modifier mon avatar button must open coming soon modal');
   assert.match(shopSrc, /D'accord/, 'Coming soon modal must display D\'accord on confirm button');
 });

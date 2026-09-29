@@ -13,10 +13,15 @@ export default function Index() {
       setHydrated(true);
       return;
     }
+    const timer = setTimeout(() => {
+      setHydrated(true);
+    }, 500);
     const unsub = useOnboardingStore.persist.onFinishHydration(() => {
+      clearTimeout(timer);
       setHydrated(true);
     });
     return () => {
+      clearTimeout(timer);
       unsub();
     };
   }, []);

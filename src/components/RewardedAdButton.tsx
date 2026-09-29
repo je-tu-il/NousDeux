@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CheckCircle2, Film, Sparkles } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GOOGLE_ADS_CONFIG, getRewardedAdUnitId } from '../constants/ads';
 import { Colors } from '../constants/Colors';
 import { awardBonusPetals } from '../lib/economy';
@@ -74,10 +74,12 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
     // Tentative chargement natif Mobile (AdMob Rewarded)
     let RewardedAd: any = null;
     let RewardedAdEventType: any = null;
+    let AdEventType: any = null;
     try {
       const mobileAds = require('react-native-google-mobile-ads');
       RewardedAd = mobileAds.RewardedAd;
       RewardedAdEventType = mobileAds.RewardedAdEventType;
+      AdEventType = mobileAds.AdEventType;
     } catch {
       RewardedAd = null;
     }
@@ -90,6 +92,10 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
       const testUnitId = Platform.OS === 'ios'
         ? GOOGLE_ADS_CONFIG.admob.test.rewardedIos
         : GOOGLE_ADS_CONFIG.admob.test.rewardedAndroid;
+
+      // AdEventType.ERROR (ou RewardedAdEventType.ERROR en compatibilité)
+      const errorEvent = AdEventType?.ERROR ?? (RewardedAdEventType as any)?.ERROR ?? 'error';
+      const closedEvent = AdEventType?.CLOSED ?? 'closed';
 
       const loadAndShowRewarded = (unitId: string) => {
         try {
@@ -115,7 +121,7 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
             rewarded.show();
           });
 
-          rewarded.addAdEventListener(RewardedAdEventType.ERROR, (err: any) => {
+          rewarded.addAdEventListener(errorEvent, (err: any) => {
             if (adTimeout) clearTimeout(adTimeout);
             console.warn('AdMob rewarded ad error with unitId', unitId, err);
             if (!hasTriedFallback && unitId !== testUnitId) {
@@ -132,6 +138,11 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
             // Uniquement crédité si la publicité a été réellement visionnée
             await recordSuccess();
             setModalVisible(true);
+            isProcessingRef.current = false;
+          });
+
+          rewarded.addAdEventListener(closedEvent, () => {
+            setIsLoading(false);
             isProcessingRef.current = false;
           });
 

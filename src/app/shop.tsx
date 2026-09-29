@@ -370,7 +370,7 @@ export default function ShopScreen() {
         <View style={{ paddingHorizontal: 16, paddingTop: 16, marginBottom: 12 }}>
           <Pressable 
             style={styles.avatarRedirectBtn}
-            onPress={() => router.push('/settings')}
+            onPress={() => setShowComingSoon(true)}
           >
             <Text style={styles.avatarRedirectText}>👗 Modifier mon Avatar</Text>
           </Pressable>
@@ -553,7 +553,7 @@ export default function ShopScreen() {
           <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Bientôt disponible !</Text>
             <Text style={[styles.modalDesc, { marginBottom: 20 }]}>
-              Les tenues et avatars HD arrivent dans une prochaine mise à jour !
+              La personnalisation de l'avatar arrive très prochainement dans une future mise à jour de NousDeux ✨
             </Text>
             <View style={{ width: '100%', marginTop: 8 }}>
               <Pressable 
