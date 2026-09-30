@@ -69,5 +69,19 @@ test('app.json uses NousDeux icon and theme for splash screen without default st
   assert.equal(splashPlugin[1].image, './assets/images/icon.png', 'Splash must use NousDeux icon.png');
   assert.equal(splashPlugin[1].backgroundColor, '#FFF5F2', 'Splash light background must match NousDeux warm theme');
   assert.equal(splashPlugin[1].dark?.backgroundColor, '#1A1514', 'Splash dark background must match NousDeux dark theme');
+
+  const androidAdaptive = appJson.expo.android?.adaptiveIcon;
+  assert.ok(androidAdaptive, 'android.adaptiveIcon must be configured');
+  assert.equal(androidAdaptive.backgroundColor, '#FFF5F2', 'Adaptive icon background must be #FFF5F2');
+  assert.equal(androidAdaptive.foregroundImage, './assets/images/android-icon-foreground.png');
+  assert.equal(androidAdaptive.backgroundImage, undefined, 'Adaptive icon must not define a backgroundImage');
+});
+
+test('build-android workflow builds standalone release APK with JS bundling', async () => {
+  const workflowSrc = await read('.github/workflows/build-android.yml');
+
+  assert.match(workflowSrc, /assembleRelease/, 'Workflow must build assembleRelease so JS bundle is included offline');
+  assert.match(workflowSrc, /signingConfig signingConfigs\.debug/, 'Workflow must configure debug signing for sideloading');
+  assert.match(workflowSrc, /apk\/release/, 'Workflow must collect APK from release output directory');
 });
 

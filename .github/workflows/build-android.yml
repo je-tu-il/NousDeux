@@ -48,18 +48,43 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      - name: Build Android APK
+      - name: Configure signing for standalone APK
+        run: |
+          node -e '
+            const fs = require("fs");
+            const file = "android/app/build.gradle";
+            if (fs.existsSync(file)) {
+              let content = fs.readFileSync(file, "utf8");
+              if (content.includes("signingConfig signingConfigs.release")) {
+                content = content.replace(/signingConfig signingConfigs\.release/g, "signingConfig signingConfigs.debug");
+              } else if (!content.match(/release\s*\{[^}]*signingConfig/)) {
+                content = content.replace(/(release\s*\{)/, "$1\n            signingConfig signingConfigs.debug");
+              }
+              fs.writeFileSync(file, content);
+              console.log("Configured standalone release APK signing with debug keystore");
+            }
+          '
+
+      - name: Build Standalone Release APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --max-workers=2
+        run: ./gradlew assembleRelease --no-daemon --max-workers=2
         env:
           GRADLE_OPTS: >-
             -Dorg.gradle.caching=false
             -Dorg.gradle.parallel=false
+            -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m"
 
       - name: Prepare APK Output
         run: |
           mkdir -p build-output
-          cp android/app/build/outputs/apk/debug/*.apk build-output/NousDeux.apk
+          APK_FILE=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -n "$APK_FILE" ]; then
+            cp "$APK_FILE" build-output/NousDeux.apk
+            echo "Successfully prepared $APK_FILE as build-output/NousDeux.apk"
+          else
+            echo "Error: No release APK found in android/app/build/outputs/apk/release"
+            exit 1
+          fi
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
