@@ -20,7 +20,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.pixelthings.nousdeuxapp"
+      "package": "com.pixelthings.nousdeux"
     },
     "web": {
       "output": "single",
