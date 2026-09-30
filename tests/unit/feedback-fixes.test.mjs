@@ -50,3 +50,24 @@ test('Shop modifier button triggers coming soon popup with valid confirm button'
   assert.match(shopSrc, /setShowComingSoon\(true\)/, 'Modifier mon avatar button must open coming soon modal');
   assert.match(shopSrc, /D'accord/, 'Coming soon modal must display D\'accord on confirm button');
 });
+
+test('metro.config.js enforces canonical single resolution for @firebase/app and @firebase/auth', async () => {
+  const metroSrc = await read('metro.config.js');
+
+  assert.match(metroSrc, /resolveRequest/, 'metro.config.js must define resolveRequest');
+  assert.match(metroSrc, /@firebase\/app/, 'metro.config.js must canonically resolve @firebase/app');
+  assert.match(metroSrc, /@firebase\/auth/, 'metro.config.js must canonically resolve @firebase/auth');
+});
+
+test('app.json uses NousDeux icon and theme for splash screen without default starter assets', async () => {
+  const appJson = JSON.parse(await read('app.json'));
+  const splashPlugin = appJson.expo.plugins.find(
+    (p) => Array.isArray(p) && p[0] === 'expo-splash-screen'
+  );
+
+  assert.ok(splashPlugin, 'expo-splash-screen plugin must be configured in app.json');
+  assert.equal(splashPlugin[1].image, './assets/images/icon.png', 'Splash must use NousDeux icon.png');
+  assert.equal(splashPlugin[1].backgroundColor, '#FFF5F2', 'Splash light background must match NousDeux warm theme');
+  assert.equal(splashPlugin[1].dark?.backgroundColor, '#1A1514', 'Splash dark background must match NousDeux dark theme');
+});
+

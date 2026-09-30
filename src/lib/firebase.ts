@@ -31,10 +31,22 @@ if (Platform.OS === 'web') {
 } else {
   try {
     firebaseAuth = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage),
+      persistence: typeof getReactNativePersistence === 'function' ? getReactNativePersistence(AsyncStorage) : undefined,
     });
-  } catch {
-    firebaseAuth = getAuth(app);
+  } catch (err) {
+    try {
+      firebaseAuth = getAuth(app);
+    } catch (e) {
+      console.warn('[Firebase] Fallback getAuth warning:', e);
+      firebaseAuth = {
+        currentUser: null,
+        onAuthStateChanged: (cb: (user: any) => void) => {
+          cb(null);
+          return () => {};
+        },
+        signOut: async () => {},
+      };
+    }
   }
 }
 

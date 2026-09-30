@@ -22,7 +22,7 @@ export default function RootLayout() {
   const { width: windowWidth } = useWindowDimensions();
   const [FloatingChat, setFloatingChat] = useState<React.ComponentType | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState(auth.currentUser);
+  const [firebaseUser, setFirebaseUser] = useState(auth?.currentUser ?? null);
   const segments = useSegments();
   const router = useRouter();
   const uid = useOnboardingStore((state) => state.uid);
@@ -48,7 +48,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     const clearDeletedSession = async () => {
-      await auth.signOut().catch(() => {});
+      if (auth?.signOut) await auth.signOut().catch(() => {});
       const store = useOnboardingStore.getState();
       store.setUid(null);
       store.setPseudo('');
@@ -62,6 +62,11 @@ export default function RootLayout() {
     const authFallbackTimer = setTimeout(() => {
       setAuthReady(true);
     }, 1500);
+
+    if (!auth?.onAuthStateChanged) {
+      setAuthReady(true);
+      return () => clearTimeout(authFallbackTimer);
+    }
 
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setFirebaseUser(user);
