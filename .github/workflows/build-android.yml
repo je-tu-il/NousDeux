@@ -55,6 +55,28 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
+      - name: Setup deterministic signing keystore
+        run: |
+          mkdir -p android/app
+          if [ -f credentials/debug.keystore ]; then
+            echo "Using committed credentials/debug.keystore"
+            cp credentials/debug.keystore android/app/debug.keystore
+          fi
+          if ! keytool -list -keystore android/app/debug.keystore -storepass android > /dev/null 2>&1; then
+            echo "Generating standard debug keystore..."
+            keytool -genkeypair -v \
+              -keystore android/app/debug.keystore \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          echo "=== Keystore Certificate Fingerprints ==="
+          keytool -list -v -keystore android/app/debug.keystore -alias androiddebugkey -storepass android | grep -E "SHA1:|SHA256:" || true
+
       - name: Configure signing for standalone APK
         run: |
           node -e '
@@ -93,9 +115,17 @@ jobs:
             exit 1
           fi
 
+      - name: Extract APK Fingerprints for Firebase
+        run: |
+          echo "=========================================================="
+          echo "👉 ADD THIS SHA-1 TO FIREBASE CONSOLE FOR GOOGLE SIGN-IN :"
+          echo "=========================================================="
+          keytool -printcert -jarfile build-output/NousDeux.apk | grep -E "SHA1:|SHA256:" | tee build-output/apk-fingerprints.txt || true
+          echo "=========================================================="
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: NousDeux-Android-APK
-          path: build-output/NousDeux.apk
+          path: build-output/
           retention-days: 14

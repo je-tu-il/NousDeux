@@ -180,6 +180,8 @@ export default function LoginScreen() {
         } catch (redirectError: any) {
           setLoginError(`La redirection Google a échoué : ${redirectError?.message ?? 'erreur inconnue'}`);
         }
+      } else if (error?.message?.includes('DEVELOPER_ERROR') || error?.code === '10') {
+        setLoginError("Configuration Google manquante : l'empreinte SHA-1 de l'APK doit être ajoutée dans la console Firebase pour autoriser la connexion.");
       } else {
         setLoginError(`Erreur de connexion : ${error?.message ?? 'erreur inconnue'}`);
       }
