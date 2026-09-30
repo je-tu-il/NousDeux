@@ -16,6 +16,7 @@ import { ArrowLeft, Send, CheckCircle2, Mail, MessageSquare, User } from 'lucide
 import { db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useOnboardingStore } from '../store/onboardingStore';
+import { ContactEmailLink } from '../components/ContactEmailLink';
 
 type ContactCategory = 'bug' | 'suggestion' | 'account' | 'other';
 
@@ -203,6 +204,12 @@ export default function ContactScreen() {
                 </LinearGradient>
               </Pressable>
             </Animated.View>
+
+            {/* Contact direct email */}
+            <Animated.View entering={FadeInUp.delay(280).duration(400)} style={styles.directContactBox}>
+              <Text style={styles.directContactLabel}>Tu préfères nous écrire directement ?</Text>
+              <ContactEmailLink subject="Contact direct NousDeux" />
+            </Animated.View>
           </>
         )}
       </ScrollView>
@@ -269,4 +276,19 @@ const styles = StyleSheet.create({
   successSub:   { fontSize: 15, color: '#A99693', textAlign: 'center', lineHeight: 24 },
   backHome:     { marginTop: 16, backgroundColor: 'rgba(255,154,139,0.15)', paddingHorizontal: 28, paddingVertical: 12, borderRadius: 20 },
   backHomeText: { color: '#FF6A88', fontWeight: '700', fontSize: 15 },
+  directContactBox: {
+    marginTop: 24,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,154,139,0.25)',
+    alignItems: 'center',
+  },
+  directContactLabel: {
+    fontSize: 13,
+    color: '#6B5B59',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
 });

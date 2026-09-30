@@ -4,6 +4,9 @@ import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 
+import { ContactEmailLink } from '../components/ContactEmailLink';
+import { openContactEmail } from '../lib/contact';
+
 const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', backgroundColor: '#FFF5F2' },
   scroll: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 20 : 50, width: '100%', maxWidth: 600, alignSelf: 'center' },
@@ -91,11 +94,14 @@ export default function TermsScreen() {
             Les présentes CGU sont soumises au droit français. Tout litige sera porté devant les juridictions compétentes françaises.
           </Section>
 
-          <Section title="10. Contact">
-            Pour toute question relative aux présentes CGU :{' '}
+          <Section
+            title="10. Contact"
+            action={<ContactEmailLink subject="Question relative aux CGU NousDeux" />}
+          >
+            Pour toute question relative aux présentes CGU, vous pouvez nous écrire directement à :{' '}
             <Text
               style={{ fontWeight: '700', color: '#FF6A88', textDecorationLine: 'underline' }}
-              onPress={() => Linking.openURL('mailto:nousdeux.app.contact@gmail.com')}
+              onPress={() => openContactEmail('Question relative aux CGU NousDeux')}
             >
               nousdeux.app.contact@gmail.com
             </Text>
@@ -106,11 +112,12 @@ export default function TermsScreen() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, action }: { title: string; children?: React.ReactNode; action?: React.ReactNode }) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.sectionBody}>{children}</Text>
+      {children ? <Text style={styles.sectionBody}>{children}</Text> : null}
+      {action}
     </View>
   );
 }

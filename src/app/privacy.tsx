@@ -4,6 +4,9 @@ import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 
+import { ContactEmailLink } from '../components/ContactEmailLink';
+import { openContactEmail } from '../lib/contact';
+
 const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', backgroundColor: '#FFF5F2' },
   scroll: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 20 : 50, width: '100%', maxWidth: 600, alignSelf: 'center' },
@@ -38,13 +41,16 @@ export default function PrivacyScreen() {
         <Animated.View entering={FadeInUp.duration(500)} style={styles.card}>
           <Text style={styles.lastUpdated}>Dernière mise à jour : 6 août 2026</Text>
 
-          <Section title="1. Qui sommes-nous ?">
+          <Section
+            title="1. Qui sommes-nous ?"
+            action={<ContactEmailLink subject="Contact - Qui sommes-nous NousDeux" />}
+          >
             NousDeux est une application permettant à deux partenaires de répondre ensemble à des questions quotidiennes.{'\n\n'}
             Responsable du traitement : NousDeux (projet personnel).{'\n'}
             Contact :{' '}
             <Text
               style={{ fontWeight: '700', color: '#FF6A88', textDecorationLine: 'underline' }}
-              onPress={() => Linking.openURL('mailto:nousdeux.app.contact@gmail.com')}
+              onPress={() => openContactEmail('Contact NousDeux')}
             >
               nousdeux.app.contact@gmail.com
             </Text>
@@ -77,17 +83,20 @@ export default function PrivacyScreen() {
             En cas de suppression de compte via Paramètres → Zone Danger → Supprimer le compte, toutes vos données personnelles et vos réponses sont supprimées définitivement dans un délai de 30 jours.
           </Section>
 
-          <Section title="6. Vos droits (RGPD)">
+          <Section
+            title="6. Vos droits (RGPD)"
+            action={<ContactEmailLink subject="Exercice de mes droits RGPD - NousDeux" />}
+          >
             Vous disposez des droits suivants :{'\n\n'}
             • <B>Droit d'accès</B> : vous pouvez consulter vos données dans l'application (profil, réponses).{'\n\n'}
             • <B>Droit de rectification</B> : vous pouvez modifier vos données dans Paramètres.{'\n\n'}
             • <B>Droit à l'effacement</B> : vous pouvez supprimer votre compte et toutes vos données via Paramètres → Zone Danger.{'\n\n'}
-            • <B>Droit à la portabilité</B> : contactez-nous à l'adresse ci-dessus.{'\n\n'}
+            • <B>Droit à la portabilité</B> : contactez-nous à l'adresse ci-dessous.{'\n\n'}
             • <B>Droit d'opposition</B> : vous pouvez cesser d'utiliser l'application à tout moment.{'\n\n'}
-            Pour exercer vos droits, contactez :{' '}
+            Pour exercer vos droits, vous pouvez nous écrire directement à :{' '}
             <Text
               style={{ fontWeight: '700', color: '#FF6A88', textDecorationLine: 'underline' }}
-              onPress={() => Linking.openURL('mailto:nousdeux.app.contact@gmail.com')}
+              onPress={() => openContactEmail('Exercice de mes droits RGPD - NousDeux')}
             >
               nousdeux.app.contact@gmail.com
             </Text>
@@ -106,11 +115,14 @@ export default function PrivacyScreen() {
             Cette politique peut être mise à jour. En cas de modification substantielle, nous vous en informerons lors de votre prochaine connexion.
           </Section>
 
-          <Section title="10. Contact & réclamation">
-            Pour toute question :{' '}
+          <Section
+            title="10. Contact & réclamation"
+            action={<ContactEmailLink subject="Contact & Réclamation NousDeux" />}
+          >
+            Pour toute question relative à la protection de vos données :{' '}
             <Text
               style={{ fontWeight: '700', color: '#FF6A88', textDecorationLine: 'underline' }}
-              onPress={() => Linking.openURL('mailto:nousdeux.app.contact@gmail.com')}
+              onPress={() => openContactEmail('Contact & Réclamation NousDeux')}
             >
               nousdeux.app.contact@gmail.com
             </Text>
@@ -123,11 +135,12 @@ export default function PrivacyScreen() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, action }: { title: string; children?: React.ReactNode; action?: React.ReactNode }) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.sectionBody}>{children}</Text>
+      {children ? <Text style={styles.sectionBody}>{children}</Text> : null}
+      {action}
     </View>
   );
 }

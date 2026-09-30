@@ -42,6 +42,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate Android image assets
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pngcheck
+          pngcheck -v assets/images/nousdeux_dark_background.png
+          pngcheck assets/images/*.png
+
       - name: Prebuild native Android project
         run: npx expo prebuild --platform android --clean --no-install
 

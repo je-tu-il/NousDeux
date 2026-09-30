@@ -12,6 +12,7 @@ import { ActivityIndicator, Alert, Image, ImageBackground, Modal, Platform, Pres
 import Animated, { Easing, FadeIn, FadeInUp, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { isUserAdmin } from '@/constants/admins';
 import UIModal, { UIModalType } from '@/components/UIModal';
+import { CONTACT_EMAIL, openContactEmail } from '@/lib/contact';
 
 // Durée du debounce pour pseudo/age (ms)
 const DEBOUNCE_DELAY = 1000;
@@ -530,19 +531,35 @@ export default function SettingsScreen() {
         {/* Contact & Support */}
         <Animated.View entering={FadeInUp.duration(600).delay(280)} style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Support</Text>
-          <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
+          <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, gap: 12 }]}>
             <Link href="/contact" asChild>
               <Pressable style={styles.supportRow}>
                 <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,154,139,0.15)' }]}>
                   <Mail color={theme.tint} size={22} />
                 </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.supportTitle, { color: theme.text }]}>Nous contacter</Text>
-                    <Text style={styles.supportSub}>Bug, suggestion, question…</Text>
-                  </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.supportTitle, { color: theme.text }]}>Formulaire de contact</Text>
+                  <Text style={styles.supportSub}>Bug, suggestion, question…</Text>
+                </View>
                 <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
               </Pressable>
             </Link>
+            <View style={styles.divider} />
+            <Pressable
+              style={styles.supportRow}
+              onPress={() => openContactEmail('Support NousDeux')}
+            >
+              <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,106,136,0.15)' }]}>
+                <Mail color="#FF6A88" size={22} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.supportTitle, { color: theme.text }]}>Email direct</Text>
+                <Text style={[styles.supportSub, { color: '#FF6A88', textDecorationLine: 'underline' }]}>
+                  {CONTACT_EMAIL}
+                </Text>
+              </View>
+              <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
+            </Pressable>
           </View>
         </Animated.View>
 
