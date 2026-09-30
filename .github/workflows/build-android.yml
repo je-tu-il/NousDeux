@@ -10,21 +10,16 @@ jobs:
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: true
-          android: false
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: false
+      - name: Free disk space quickly
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,6 +33,11 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+
+      - name: Setup Gradle Cache
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: false
 
       - name: Install dependencies
         run: npm ci
@@ -57,25 +57,56 @@ jobs:
 
       - name: Setup deterministic signing keystore
         run: |
-          mkdir -p android/app
+          set -euo pipefail
+
+          mkdir -p android/app credentials
+
+          KEYSTORE="android/app/debug.keystore"
+          ALIAS="androiddebugkey"
+          STORE_PASSWORD="android"
+          KEY_PASSWORD="android"
+
           if [ -f credentials/debug.keystore ]; then
             echo "Using committed credentials/debug.keystore"
-            cp credentials/debug.keystore android/app/debug.keystore
+            cp credentials/debug.keystore "$KEYSTORE"
           fi
-          if ! keytool -list -keystore android/app/debug.keystore -storepass android > /dev/null 2>&1; then
-            echo "Generating standard debug keystore..."
+
+          # Check both the keystore password and the required alias.
+          if ! keytool -list \
+              -keystore "$KEYSTORE" \
+              -alias "$ALIAS" \
+              -storepass "$STORE_PASSWORD" \
+              >/dev/null 2>&1; then
+            echo "Keystore is missing alias '$ALIAS'; generating a standard debug keystore"
+            rm -f "$KEYSTORE"
+
             keytool -genkeypair -v \
-              -keystore android/app/debug.keystore \
-              -alias androiddebugkey \
+              -keystore "$KEYSTORE" \
+              -alias "$ALIAS" \
               -keyalg RSA \
               -keysize 2048 \
               -validity 10000 \
-              -storepass android \
-              -keypass android \
+              -storepass "$STORE_PASSWORD" \
+              -keypass "$KEY_PASSWORD" \
               -dname "CN=Android Debug,O=Android,C=US"
+
+            cp "$KEYSTORE" credentials/debug.keystore
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add credentials/debug.keystore
+            if ! git diff --cached --quiet; then
+              git commit -m "chore(android): persist valid Java debug.keystore with androiddebugkey alias" || true
+              git push origin main || true
+            fi
           fi
+
           echo "=== Keystore Certificate Fingerprints ==="
-          keytool -list -v -keystore android/app/debug.keystore -alias androiddebugkey -storepass android | grep -E "SHA1:|SHA256:" || true
+          keytool -list \
+            -v \
+            -keystore "$KEYSTORE" \
+            -alias "$ALIAS" \
+            -storepass "$STORE_PASSWORD" |
+            grep -E 'SHA1:|SHA256:' || true
 
       - name: Configure signing for standalone APK
         run: |
@@ -96,11 +127,11 @@ jobs:
 
       - name: Build Standalone Release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon --max-workers=2
+        run: ./gradlew assembleRelease --no-daemon --parallel --build-cache --max-workers=4
         env:
           GRADLE_OPTS: >-
-            -Dorg.gradle.caching=false
-            -Dorg.gradle.parallel=false
+            -Dorg.gradle.caching=true
+            -Dorg.gradle.parallel=true
             -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m"
 
       - name: Prepare APK Output
@@ -122,6 +153,10 @@ jobs:
           echo "=========================================================="
           keytool -printcert -jarfile build-output/NousDeux.apk | grep -E "SHA1:|SHA256:" | tee build-output/apk-fingerprints.txt || true
           echo "=========================================================="
+          echo "### 🔑 Empreinte SHA-1 pour Firebase (Connexion Google)" >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          keytool -printcert -jarfile build-output/NousDeux.apk | grep -E "SHA1:|SHA256:" >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
