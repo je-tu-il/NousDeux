@@ -21,7 +21,7 @@ export default function DaylinkScreen() {
       resizeMode="cover"
       imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}
     >
-      <View style={[styles.safeArea, { paddingTop: topInset + 14 }]}>
+      <View style={[styles.safeArea, { paddingTop: topInset + 14, maxWidth: windowWidth >= 700 ? 680 : 500 }]}>
         {/* Header avec Bouton Retour */}
         <View style={styles.headerRow}>
           <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>

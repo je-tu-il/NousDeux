@@ -52,7 +52,7 @@ export default function QuestsScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const topInset = useTopInset();
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
-  const styles = getStyles(theme);
+  const styles = getStyles(theme, windowWidth);
   const background = getCosmeticById(store.selectedBackground);
   const backgroundSource = getCosmeticImage(background, store.isDarkMode) || (store.isDarkMode
     ? require('../../assets/images/nousdeux_dark_background.png')
@@ -346,7 +346,7 @@ export default function QuestsScreen() {
   );
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, windowWidth: number = 400) => StyleSheet.create({
   root: {
     flex: 1,
     width: '100%',
@@ -387,7 +387,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    maxWidth: 500,
+    maxWidth: windowWidth >= 700 ? 700 : 500,
     alignSelf: 'center',
     width: '100%',
   },
@@ -399,7 +399,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   listContent: {
     padding: 16,
     paddingBottom: 40,
-    maxWidth: 500,
+    maxWidth: windowWidth >= 700 ? 700 : 500,
     width: '100%',
     alignSelf: 'center',
   },

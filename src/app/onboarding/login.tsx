@@ -98,7 +98,15 @@ export default function LoginScreen() {
       }
       router.replace('/onboarding/pseudo');
     } catch (error: any) {
-      setLoginError(`Connexion réussie, mais le profil est inaccessible : ${error?.message ?? 'erreur Firestore'}`);
+      console.warn("Erreur chargement profil post-connexion :", error);
+      // Même en cas d'erreur transitoire Firestore, l'utilisateur a réussi sa connexion Google.
+      // On l'avance vers le paramétrage de son profil pour éviter de le piéger sur l'écran login.
+      const currentStore = useOnboardingStore.getState();
+      if (currentStore.pseudo && currentStore.age) {
+        router.replace('/dashboard');
+      } else {
+        router.replace('/onboarding/pseudo');
+      }
     } finally {
       setIsSigningIn(false);
     }
@@ -254,8 +262,8 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', overflow: 'hidden' },
-  content: { flex: 1, justifyContent: 'center', padding: 30, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  container: { flex: 1, width: '100%', height: '100%', backgroundColor: '#FFF5F2', overflow: 'hidden' },
+  content: { flex: 1, justifyContent: 'center', padding: 30, width: '100%', maxWidth: 540, alignSelf: 'center' },
   title: { fontSize: 36, fontWeight: '900', marginBottom: 10, textAlign: 'center' },
   subtitle: { fontSize: 18, opacity: 0.8, textAlign: 'center', marginBottom: 40, lineHeight: 26 },
   consentBox: {

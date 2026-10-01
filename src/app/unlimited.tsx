@@ -23,7 +23,7 @@ export default function UnlimitedScreen() {
       resizeMode="cover"
       imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}
     >
-      <View style={[styles.safeArea as any, { paddingTop: topInset + 14 }]}>
+      <View style={[styles.safeArea as any, { paddingTop: topInset + 14, maxWidth: windowWidth >= 700 ? 680 : 500 }]}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn as any}>
             <ArrowLeft color={Colors.light.text} size={28} />

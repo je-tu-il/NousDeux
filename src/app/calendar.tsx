@@ -7,11 +7,12 @@ import { router } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ImageBackground, Platform, StyleSheet, Text, View, Pressable } from 'react-native';
+import { ActivityIndicator, ImageBackground, Platform, StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
 import { useTopInset } from '@/hooks/useTopInset';
 
 export default function CalendarScreen() {
   const topInset = useTopInset();
+  const { width: windowWidth } = useWindowDimensions();
   const isDarkMode = useOnboardingStore((s) => s.isDarkMode);
   const theme  = isDarkMode ? Colors.dark : Colors.light;
   const myUid  = useOnboardingStore((s) => s.uid);
@@ -44,7 +45,7 @@ export default function CalendarScreen() {
       resizeMode="cover"
       imageStyle={{ width: '100%', height: '100%', objectPosition: 'center' } as any}
     >
-      <View style={[styles.safeArea, { paddingTop: topInset + 10 }]}>
+      <View style={[styles.safeArea, { paddingTop: topInset + 10, maxWidth: windowWidth >= 700 ? 680 : 500 }]}>
         {/* En-tête */}
         <View style={styles.header}>
           <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>

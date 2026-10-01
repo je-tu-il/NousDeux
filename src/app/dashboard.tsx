@@ -38,7 +38,7 @@ export default function DashboardScreen() {
   };
   
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
-  const styles: any = getStyles(theme);
+  const styles: any = getStyles(theme, windowWidth);
   const background = getCosmeticById(store.selectedBackground);
   const backgroundSource = getCosmeticImage(background, store.isDarkMode) || (store.isDarkMode
     ? require('../../assets/images/nousdeux_dark_background.png')
@@ -768,10 +768,10 @@ export default function DashboardScreen() {
   );
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, windowWidth: number = 400) => StyleSheet.create({
   headerBanner: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 20, borderRadius: 30, marginBottom: 20 },
   container: { flex: 1, width: '100%', height: '100%', minHeight: Platform.OS === 'web' ? 700 : 0, overflow: 'hidden', backgroundColor: 'transparent' },
-  safeArea: { flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  safeArea: { flex: 1, width: '100%', maxWidth: windowWidth >= 640 ? 720 : 500, alignSelf: 'center' },
   scrollContent: { padding: 20, paddingTop: Platform.OS === 'web' ? 20 : 10, paddingBottom: 24 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 },
   userAvatar: { width: 70, height: 70, borderRadius: 4, borderWidth: 3, borderColor: 'white', overflow: 'hidden' },
@@ -809,7 +809,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: theme.text, letterSpacing: 0.3 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
-  categoryCardWrapper: { width: '48%', marginBottom: 12 },
+  categoryCardWrapper: { width: windowWidth >= 640 ? '31.5%' : '48%', marginBottom: 12 },
   categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1.5, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },
   categoryCardTitle: { fontSize: 15, fontWeight: '700', color: theme.text },
   partnerAnswerDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#16A34A', borderWidth: 3, borderColor: '#FFFFFF', position: 'absolute', top: 5, right: 5, shadowColor: '#16A34A', shadowOpacity: 0.55, shadowRadius: 5, elevation: 5 },

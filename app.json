@@ -11,7 +11,8 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.pixelthings.nousdeuxapp",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {

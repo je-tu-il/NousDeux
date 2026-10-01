@@ -226,3 +226,21 @@ test('metro.config.js redirects react-native-google-mobile-ads to web mock when 
   assert.ok(mock.default.InterstitialAd, 'mock has InterstitialAd');
   assert.ok(mock.default.RewardedAd, 'mock has RewardedAd');
 });
+
+test('root layout and html prevent bottom white band and handle activeUser routing', async () => {
+  const layoutSrc = await read('src/app/_layout.tsx');
+  const htmlSrc = await read('src/app/+html.tsx');
+
+  assert.doesNotMatch(layoutSrc, /scale:\s*0\.75/, 'Scale 0.75 hack must be removed to avoid web gaps and blurry rendering');
+  assert.match(layoutSrc, /activeUser\s*=\s*firebaseUser\s*\|\|\s*auth\?\.currentUser/, 'Active user must check auth.currentUser to prevent redirect bounce');
+  assert.match(htmlSrc, /viewport-fit=cover/, '+html.tsx must set viewport-fit=cover');
+  assert.match(htmlSrc, /background-color:\s*#FFF5F2/, '+html.tsx must set global background color to avoid white bar');
+});
+
+test('dashboard and app.json support tablet and iPad layout without empty void', async () => {
+  const dashSrc = await read('src/app/dashboard.tsx');
+  const appJson = JSON.parse(await read('app.json'));
+
+  assert.equal(appJson.expo.ios.supportsTablet, true, 'app.json must support tablets for iOS');
+  assert.match(dashSrc, /windowWidth\s*>=\s*640/, 'dashboard must adapt category grid and safeArea for tablet widths');
+});

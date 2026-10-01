@@ -27,7 +27,7 @@ export default function SettingsScreen() {
   const topInset = useTopInset();
   // ✅ FIX CRITIQUE : utiliser le bon thème selon isDarkMode
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
-  const styles = getStyles(theme);
+  const styles = getStyles(theme, windowWidth);
 
   const [pseudo, setPseudo] = useState(store.pseudo.slice(0, MAX_PSEUDO_LENGTH));
   const [age, setAge] = useState(store.age);
@@ -775,17 +775,17 @@ function DarkModeToggle({ isDark, onToggle, theme, styles }: { isDark: boolean; 
 }
 
 // ── Styles adaptés au thème ───────────────────────────────────────────────────
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, windowWidth: number = 400) => StyleSheet.create({
   container: { flex: 1, width: '100%', height: '100%', minHeight: '100vh' as any, backgroundColor: 'transparent' },
   bgImage: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 },
   headerFixedContainer: {
     width: '100%',
-    maxWidth: 500,
+    maxWidth: windowWidth >= 700 ? 680 : 500,
     alignSelf: 'center',
     paddingHorizontal: 20,
     zIndex: 10,
   },
-  safeArea: { flex: 1, paddingHorizontal: 20, paddingTop: 10, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  safeArea: { flex: 1, paddingHorizontal: 20, paddingTop: 10, width: '100%', maxWidth: windowWidth >= 700 ? 680 : 500, alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.glassBackground, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 24, fontWeight: '800' },

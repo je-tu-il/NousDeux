@@ -59,7 +59,6 @@ export default function RootLayout() {
       store.setAvatar(null);
       store.setSynced(false);
       router.replace('/onboarding/login');
-      if (Platform.OS === 'web') window.location.reload();
     };
 
     const authFallbackTimer = setTimeout(() => {
@@ -75,9 +74,7 @@ export default function RootLayout() {
       setFirebaseUser(user);
       const syncAuthState = async () => {
         try {
-          if (!user && useOnboardingStore.getState().uid) {
-            await clearDeletedSession();
-          } else if (user) {
+          if (user) {
             // Firebase Auth is the source of truth after a refresh/reconnection.
             // The persisted Zustand UID can be empty or stale while Auth is restoring.
             const store = useOnboardingStore.getState();
@@ -181,28 +178,36 @@ export default function RootLayout() {
       return;
     }
 
+    const activeUser = firebaseUser || auth?.currentUser;
+
     // Sans session Firebase, seul l'écran de connexion (et ses pages
     // d'information) est accessible. L'UID persistant du store ne suffit pas.
     const publicRoutes = ['login', 'terms', 'privacy', 'contact'];
-    if (!firebaseUser && !publicRoutes.includes(currentRoute)) {
+    if (!activeUser && !publicRoutes.includes(currentRoute)) {
       router.replace('/onboarding/login');
       return;
     }
 
-    if (firebaseUser && !uid) {
+    if (!activeUser) {
       return;
     }
 
     const isOnboarding = segments[0] === 'onboarding';
 
-    // Empêcher de rester sur login une fois le profil déjà authentifié et rempli
-    if (firebaseUser && pseudo && age && currentRoute === 'login') {
-      router.replace('/dashboard');
+    // Empêcher de rester sur login une fois le compte connecté
+    if (currentRoute === 'login') {
+      if (pseudo && age) {
+        router.replace('/dashboard');
+      } else if (!pseudo) {
+        router.replace('/onboarding/pseudo');
+      } else if (!age) {
+        router.replace('/onboarding/age');
+      }
       return;
     }
 
     // Un profil connecté tentant d'accéder aux routes privées doit d'abord compléter ses informations
-    if (!isOnboarding && firebaseUser) {
+    if (!isOnboarding) {
       if (!pseudo) {
         router.replace('/onboarding/pseudo');
         return;
@@ -223,13 +228,7 @@ export default function RootLayout() {
   const isGradient = bgCosmetic && !getCosmeticImage(bgCosmetic, isDark);
   const bgColors = isGradient ? parseGradientColors(bgCosmetic.preview) : null;
 
-  const webScaleStyle = Platform.OS === 'web' ? {
-    position: 'absolute' as const,
-    width: '133.333333%',
-    height: '133.333333%' as any,
-    transform: [{ scale: 0.75 }],
-    transformOrigin: 'top left' as any,
-  } : StyleSheet.absoluteFill;
+  const webScaleStyle = StyleSheet.absoluteFill;
 
   return (
     <SafeAreaProvider style={{ flex: 1 }}>
