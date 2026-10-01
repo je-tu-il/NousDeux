@@ -456,6 +456,11 @@ export default function SyncScreen() {
                 autoCapitalize="characters"
                 value={partnerCode}
                 onChangeText={(t) => setPartnerCode(t.toUpperCase())}
+                returnKeyType="done"
+                onSubmitEditing={handleLink}
+                onKeyPress={(e: any) => {
+                  if (e.nativeEvent.key === 'Enter') handleLink();
+                }}
               />
               <Pressable 
                 style={({ pressed }) => [

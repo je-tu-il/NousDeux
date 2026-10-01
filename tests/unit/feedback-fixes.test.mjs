@@ -244,3 +244,54 @@ test('dashboard and app.json support tablet and iPad layout without empty void',
   assert.equal(appJson.expo.ios.supportsTablet, true, 'app.json must support tablets for iOS');
   assert.match(dashSrc, /windowWidth\s*>=\s*640/, 'dashboard must adapt category grid and safeArea for tablet widths');
 });
+
+test('github workflows have cancel-in-progress concurrency configured to prevent duplicate builds', async () => {
+  const androidWf = await read('.github/workflows/build-android.yml');
+  const iosWf = await read('.github/workflows/build-ios.yml');
+
+  assert.match(androidWf, /concurrency:/, 'Android workflow must configure concurrency');
+  assert.match(androidWf, /cancel-in-progress:\s*true/, 'Android workflow must cancel in progress runs');
+  assert.match(iosWf, /concurrency:/, 'iOS workflow must configure concurrency');
+  assert.match(iosWf, /cancel-in-progress:\s*true/, 'iOS workflow must cancel in progress runs');
+});
+
+test('root layout uses fade animation to eliminate tablet screen border rounding glitch during transitions', async () => {
+  const layoutSrc = await read('src/app/_layout.tsx');
+  assert.match(layoutSrc, /animation:.*'fade'/, 'Stack screenOptions must use fade animation');
+});
+
+test('all text inputs support Enter key submission on mobile, web, and tablet keyboards', async () => {
+  const pseudoSrc = await read('src/app/onboarding/pseudo.tsx');
+  assert.match(pseudoSrc, /onSubmitEditing=\{handleNext\}/);
+  assert.match(pseudoSrc, /onKeyPress/);
+
+  const syncSrc = await read('src/app/onboarding/sync.tsx');
+  assert.match(syncSrc, /onSubmitEditing=\{handleLink\}/);
+  assert.match(syncSrc, /onKeyPress/);
+
+  const dateSrc = await read('src/app/onboarding/date.tsx');
+  assert.match(dateSrc, /onKeyPress/);
+
+  const daylinkSrc = await read('src/components/Daylink.tsx');
+  assert.match(daylinkSrc, /submitBehavior="submit"/);
+  assert.match(daylinkSrc, /onKeyPress/);
+
+  const unlimitedSrc = await read('src/components/UnlimitedQuestions.tsx');
+  assert.match(unlimitedSrc, /submitBehavior="submit"/);
+  assert.match(unlimitedSrc, /onKeyPress/);
+
+  const chatSrc = await read('src/app/chat.tsx');
+  assert.match(chatSrc, /submitBehavior="submit"/);
+  assert.match(chatSrc, /onSubmitEditing=\{handleSend\}/);
+  assert.match(chatSrc, /onKeyPress/);
+
+  const floatingChatSrc = await read('src/components/FloatingChat.tsx');
+  assert.match(floatingChatSrc, /submitBehavior="submit"/);
+  assert.match(floatingChatSrc, /onSubmitEditing=\{handleSend\}/);
+  assert.match(floatingChatSrc, /onKeyPress/);
+
+  const settingsSrc = await read('src/app/settings.tsx');
+  assert.match(settingsSrc, /onSubmitEditing=\{submitPseudo\}/);
+  assert.match(settingsSrc, /onSubmitEditing=\{submitAge\}/);
+});
+

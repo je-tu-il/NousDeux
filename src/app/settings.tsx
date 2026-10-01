@@ -8,7 +8,7 @@ import { arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, o
 import { deleteUser, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithPopup, signOut } from 'firebase/auth';
 import { ArrowLeft, Camera, Check, CheckCircle2, Copy, FileText, HeartCrack, LogOut, Mail, Shield, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ImageBackground, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeInUp, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { isUserAdmin } from '@/constants/admins';
 import UIModal, { UIModalType } from '@/components/UIModal';
@@ -120,6 +120,22 @@ export default function SettingsScreen() {
     debounceTimer.current = setTimeout(() => {
       saveToFirebase({ age: value.trim() });
     }, DEBOUNCE_DELAY);
+  };
+
+  const submitPseudo = () => {
+    Keyboard.dismiss();
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (pseudo.trim()) {
+      saveToFirebase({ pseudo: pseudo.trim() });
+    }
+  };
+
+  const submitAge = () => {
+    Keyboard.dismiss();
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (age.trim()) {
+      saveToFirebase({ age: age.trim() });
+    }
   };
 
   // ── Changer la photo — appareil photo ou galerie avec suppression des métadonnées ────────
@@ -457,6 +473,13 @@ export default function SettingsScreen() {
                 maxLength={MAX_PSEUDO_LENGTH}
                 placeholder="Ton pseudo"
                 placeholderTextColor={theme.tabIconDefault}
+                returnKeyType="done"
+                onSubmitEditing={submitPseudo}
+                onKeyPress={(e) => {
+                  if (e.nativeEvent.key === 'Enter') {
+                    submitPseudo();
+                  }
+                }}
               />
               <Text style={[styles.inputHint, { color: theme.tabIconDefault }]}>
                 {pseudo.length}/{MAX_PSEUDO_LENGTH} caractères maximum
@@ -471,6 +494,13 @@ export default function SettingsScreen() {
                 keyboardType="numeric"
                 placeholder="Ton âge"
                 placeholderTextColor={theme.tabIconDefault}
+                returnKeyType="done"
+                onSubmitEditing={submitAge}
+                onKeyPress={(e) => {
+                  if (e.nativeEvent.key === 'Enter') {
+                    submitAge();
+                  }
+                }}
               />
 
               {isAlone && (

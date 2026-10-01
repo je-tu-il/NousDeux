@@ -63,7 +63,10 @@ export default function PseudoScreen() {
               onChangeText={(value) => setLocalPseudo(value.slice(0, MAX_PSEUDO_LENGTH))}
               maxLength={MAX_PSEUDO_LENGTH}
               onSubmitEditing={handleNext}
-              returnKeyType="next"
+              onKeyPress={(e: any) => {
+                if (e.nativeEvent.key === 'Enter') handleNext();
+              }}
+              returnKeyType="done"
               autoFocus
             />
             <Text style={[styles.limitText, { color: theme.text }]}>

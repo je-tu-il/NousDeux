@@ -303,6 +303,9 @@ export default function DateScreen() {
                           placeholderTextColor="#C4A8A4"
                           returnKeyType="next"
                           onSubmitEditing={() => monthRef.current?.focus()}
+                          onKeyPress={(e: any) => {
+                            if (e.nativeEvent.key === 'Enter') monthRef.current?.focus();
+                          }}
                           inputAccessoryViewID="dateAccessory"
                         />
                       </View>
@@ -319,6 +322,9 @@ export default function DateScreen() {
                           placeholderTextColor="#C4A8A4"
                           returnKeyType="next"
                           onSubmitEditing={() => yearRef.current?.focus()}
+                          onKeyPress={(e: any) => {
+                            if (e.nativeEvent.key === 'Enter') yearRef.current?.focus();
+                          }}
                           inputAccessoryViewID="dateAccessory"
                         />
                       </View>
@@ -335,6 +341,9 @@ export default function DateScreen() {
                           placeholderTextColor="#C4A8A4"
                           returnKeyType="done"
                           onSubmitEditing={handleSubmit}
+                          onKeyPress={(e: any) => {
+                            if (e.nativeEvent.key === 'Enter') handleSubmit();
+                          }}
                           inputAccessoryViewID="dateAccessory"
                         />
                       </View>

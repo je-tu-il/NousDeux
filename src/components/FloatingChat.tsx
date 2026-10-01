@@ -309,9 +309,12 @@ export default function FloatingChat() {
               editable={isLinked}
               multiline
               maxLength={500}
+              returnKeyType="send"
+              submitBehavior="submit"
+              onSubmitEditing={handleSend}
               onKeyPress={(e: any) => {
-                if (isLinked && Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
-                  e.preventDefault();
+                if (isLinked && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                  e.preventDefault?.();
                   handleSend();
                 }
               }}

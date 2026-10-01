@@ -213,9 +213,12 @@ export default function ChatScreen() {
           editable={isLinked}
           multiline
           maxLength={1000}
+          returnKeyType="send"
+          submitBehavior="submit"
+          onSubmitEditing={handleSend}
           onKeyPress={(e: any) => {
-            if (isLinked && Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
-              e.preventDefault();
+            if (isLinked && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+              e.preventDefault?.();
               handleSend();
             }
           }}

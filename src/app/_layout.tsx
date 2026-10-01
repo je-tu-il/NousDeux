@@ -238,7 +238,7 @@ export default function RootLayout() {
         {isGradient && bgColors ? (
           <LinearGradient colors={bgColors as [string, string]} style={StyleSheet.absoluteFill}>
             <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
-              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }} />
+              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
             </View>
           </LinearGradient>
         ) : (
@@ -252,7 +252,7 @@ export default function RootLayout() {
             blurRadius={0}
           >
             <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
-              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }} />
+              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
             </View>
           </ImageBackground>
         )}

@@ -408,10 +408,11 @@ export default function Daylink() {
                 multiline
                 maxLength={2000}
                 returnKeyType="send"
+                submitBehavior="submit"
                 onSubmitEditing={() => handleSubmit()}
-                onKeyPress={(event) => {
-                  if (Platform.OS === 'web' && event.nativeEvent.key === 'Enter' && !(event.nativeEvent as any).shiftKey) {
-                    event.preventDefault();
+                onKeyPress={(event: any) => {
+                  if (event.nativeEvent.key === 'Enter' && !event.nativeEvent.shiftKey) {
+                    event.preventDefault?.();
                     handleSubmit();
                   }
                 }}
