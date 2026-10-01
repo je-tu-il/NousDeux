@@ -5,8 +5,11 @@ import { doc, getDoc } from 'firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import FloatingToast from '@/components/FloatingToast';
 import { useEffect, useState } from 'react';
 import { ImageBackground, LogBox, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -229,31 +232,35 @@ export default function RootLayout() {
   } : StyleSheet.absoluteFill;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }] as any}>
-      <View style={webScaleStyle as any}>
-      {isGradient && bgColors ? (
-        <LinearGradient colors={bgColors as [string, string]} style={StyleSheet.absoluteFill}>
-          <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
-            <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }} />
-          </View>
-        </LinearGradient>
-      ) : (
-        <ImageBackground
-          source={bgImage}
-          style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }]}
-          resizeMode={backgroundResizeMode}
-          imageStyle={{
-            ...(Platform.OS === 'web' ? { objectPosition: bgCosmetic?.imagePosition || (windowWidth < 600 ? 'center bottom' : 'center') } : {}) 
-          } as any}
-          blurRadius={0}
-        >
-          <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
-            <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }} />
-          </View>
-        </ImageBackground>
-      )}
+    <SafeAreaProvider style={{ flex: 1 }}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }] as any}>
+        <StatusBar style={isDark ? 'light' : 'dark'} translucent backgroundColor="transparent" />
+        <View style={webScaleStyle as any}>
+        {isGradient && bgColors ? (
+          <LinearGradient colors={bgColors as [string, string]} style={StyleSheet.absoluteFill}>
+            <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
+              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }} />
+            </View>
+          </LinearGradient>
+        ) : (
+          <ImageBackground
+            source={bgImage}
+            style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }]}
+            resizeMode={backgroundResizeMode}
+            imageStyle={{
+              ...(Platform.OS === 'web' ? { objectPosition: bgCosmetic?.imagePosition || (windowWidth < 600 ? 'center bottom' : 'center') } : {}) 
+            } as any}
+            blurRadius={0}
+          >
+            <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
+              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }} />
+            </View>
+          </ImageBackground>
+        )}
+        </View>
+        {FloatingChat ? <FloatingChat /> : null}
+        <FloatingToast />
       </View>
-      {FloatingChat ? <FloatingChat /> : null}
-    </View>
+    </SafeAreaProvider>
   );
 }

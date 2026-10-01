@@ -98,7 +98,6 @@ export default function ShopScreen() {
   const [selectedItem,  setSelectedItem]  = useState<Cosmetic | null>(null);
   const [isPurchasing,  setIsPurchasing]  = useState(false);
   const [userProfile,   setUserProfile]   = useState<UserProfile | null>(null);
-  const [showComingSoon, setShowComingSoon] = useState(false);
   const [modalState, setModalState] = useState<{
     visible: boolean;
     type?: UIModalType;
@@ -366,16 +365,6 @@ export default function ShopScreen() {
 
       {/* Wrapper global pour centrer sur grand écran */}
       <View style={{ flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' }}>
-        {/* Bouton vers Avatar / Profil */}
-        <View style={{ paddingHorizontal: 16, paddingTop: 16, marginBottom: 12 }}>
-          <Pressable 
-            style={styles.avatarRedirectBtn}
-            onPress={() => setShowComingSoon(true)}
-          >
-            <Text style={styles.avatarRedirectText}>👗 Modifier mon Avatar</Text>
-          </Pressable>
-        </View>
-
         {/* Bouton Publicité Récompensée (+15 Pétales) */}
         <View style={{ marginBottom: 14 }}>
           <RewardedAdButton
@@ -547,25 +536,6 @@ export default function ShopScreen() {
         </Pressable>
       </Modal>
 
-      {/* Modale d'alerte Bientôt */}
-      <Modal visible={showComingSoon} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowComingSoon(false)}>
-          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Bientôt disponible !</Text>
-            <Text style={[styles.modalDesc, { marginBottom: 20 }]}>
-              La personnalisation de l'avatar arrive très prochainement dans une future mise à jour de NousDeux ✨
-            </Text>
-            <View style={{ width: '100%', marginTop: 8 }}>
-              <Pressable 
-                style={[styles.btnConfirm, { backgroundColor: '#FF6A88', width: '100%', flex: 0 }]} 
-                onPress={() => setShowComingSoon(false)}
-              >
-                <Text style={styles.btnConfirmText}>D'accord</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       <UIModal
         visible={modalState.visible}

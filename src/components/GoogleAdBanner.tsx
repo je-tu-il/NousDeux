@@ -106,7 +106,8 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 12,
+    marginTop: 8,
+    marginBottom: 2,
   },
   testBanner: {
     height: 48,

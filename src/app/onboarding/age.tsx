@@ -63,14 +63,31 @@ export default function AgeScreen() {
             <Text style={[styles.subtitle, { color: theme.text }]}>Pour adapter l'expérience.</Text>
           </Animated.View>
 
-          <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.pickerContainer}>
+          <Animated.View 
+            entering={FadeInUp.duration(800).delay(200)} 
+            style={[
+              styles.pickerContainer, 
+              { 
+                backgroundColor: store.isDarkMode ? 'rgba(35, 28, 27, 0.85)' : 'rgba(255,255,255,0.75)', 
+                borderColor: theme.tint 
+              }
+            ]}
+          >
             <Picker
               selectedValue={age || "18"}
               onValueChange={(itemValue) => setAge(itemValue)}
               style={styles.picker}
+              itemStyle={styles.pickerItem}
+              dropdownIconColor={theme.tint}
             >
               {ageOptions.map((num) => (
-                <Picker.Item key={num} label={num} value={num} color={theme.text} />
+                <Picker.Item 
+                  key={num} 
+                  label={num} 
+                  value={num} 
+                  color={theme.text} 
+                  style={styles.pickerItem} 
+                />
               ))}
             </Picker>
           </Animated.View>
@@ -98,8 +115,29 @@ const styles = StyleSheet.create({
   content: { flex: 1, justifyContent: 'center' },
   title: { fontSize: 32, fontWeight: '800', marginBottom: 10, textAlign: 'center' },
   subtitle: { fontSize: 16, opacity: 0.7, textAlign: 'center', marginBottom: 40 },
-  pickerContainer: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 20, overflow: 'hidden', borderWidth: 2, borderColor: '#FF9A8B', height: 200, justifyContent: 'center', zIndex: 100, elevation: 10 },
-  picker: { width: 150, height: 200, alignSelf: 'center', backgroundColor: 'transparent', borderWidth: 0, zIndex: 100 },
+  pickerContainer: { 
+    borderRadius: 20, 
+    overflow: 'hidden', 
+    borderWidth: 2, 
+    height: 200, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    zIndex: 100, 
+    elevation: 10 
+  },
+  picker: { 
+    width: Platform.OS === 'android' ? '100%' : 160, 
+    height: 200, 
+    alignSelf: 'center', 
+    backgroundColor: 'transparent', 
+    borderWidth: 0, 
+    zIndex: 100 
+  },
+  pickerItem: {
+    textAlign: 'center',
+    fontSize: 24,
+    fontWeight: '700',
+  },
   footer: { alignItems: 'center', paddingBottom: Platform.OS === 'web' ? 40 : 60 },
   nextButton: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 15, elevation: 10 },
 });

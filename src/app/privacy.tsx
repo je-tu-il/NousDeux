@@ -41,19 +41,9 @@ export default function PrivacyScreen() {
         <Animated.View entering={FadeInUp.duration(500)} style={styles.card}>
           <Text style={styles.lastUpdated}>Dernière mise à jour : 6 août 2026</Text>
 
-          <Section
-            title="1. Qui sommes-nous ?"
-            action={<ContactEmailLink subject="Contact - Qui sommes-nous NousDeux" />}
-          >
+          <Section title="1. Qui sommes-nous ?">
             NousDeux est une application permettant à deux partenaires de répondre ensemble à des questions quotidiennes.{'\n\n'}
-            Responsable du traitement : NousDeux (projet personnel).{'\n'}
-            Contact :{' '}
-            <Text
-              style={{ fontWeight: '700', color: '#FF6A88', textDecorationLine: 'underline' }}
-              onPress={() => openContactEmail('Contact NousDeux')}
-            >
-              nousdeux.app.contact@gmail.com
-            </Text>
+            Responsable du traitement : NousDeux (projet personnel). Pour nous contacter, veuillez vous référer à la section 10 en bas de cette page.
           </Section>
 
           <Section title="2. Données collectées">
@@ -83,23 +73,14 @@ export default function PrivacyScreen() {
             En cas de suppression de compte via Paramètres → Zone Danger → Supprimer le compte, toutes vos données personnelles et vos réponses sont supprimées définitivement dans un délai de 30 jours.
           </Section>
 
-          <Section
-            title="6. Vos droits (RGPD)"
-            action={<ContactEmailLink subject="Exercice de mes droits RGPD - NousDeux" />}
-          >
+          <Section title="6. Vos droits (RGPD)">
             Vous disposez des droits suivants :{'\n\n'}
             • <B>Droit d'accès</B> : vous pouvez consulter vos données dans l'application (profil, réponses).{'\n\n'}
             • <B>Droit de rectification</B> : vous pouvez modifier vos données dans Paramètres.{'\n\n'}
             • <B>Droit à l'effacement</B> : vous pouvez supprimer votre compte et toutes vos données via Paramètres → Zone Danger.{'\n\n'}
-            • <B>Droit à la portabilité</B> : contactez-nous à l'adresse ci-dessous.{'\n\n'}
+            • <B>Droit à la portabilité</B> : vous pouvez demander l'export de vos données.{'\n\n'}
             • <B>Droit d'opposition</B> : vous pouvez cesser d'utiliser l'application à tout moment.{'\n\n'}
-            Pour exercer vos droits, vous pouvez nous écrire directement à :{' '}
-            <Text
-              style={{ fontWeight: '700', color: '#FF6A88', textDecorationLine: 'underline' }}
-              onPress={() => openContactEmail('Exercice de mes droits RGPD - NousDeux')}
-            >
-              nousdeux.app.contact@gmail.com
-            </Text>
+            Pour exercer l'un de ces droits, vous pouvez nous écrire directement via le bouton de contact en section 10 ci-dessous.
           </Section>
 
           <Section title="7. Sécurité">
@@ -117,16 +98,9 @@ export default function PrivacyScreen() {
 
           <Section
             title="10. Contact & réclamation"
-            action={<ContactEmailLink subject="Contact & Réclamation NousDeux" />}
+            action={<ContactEmailLink label="nousdeux.app.contact@gmail.com" subject="Contact & Réclamation NousDeux" />}
           >
-            Pour toute question relative à la protection de vos données :{' '}
-            <Text
-              style={{ fontWeight: '700', color: '#FF6A88', textDecorationLine: 'underline' }}
-              onPress={() => openContactEmail('Contact & Réclamation NousDeux')}
-            >
-              nousdeux.app.contact@gmail.com
-            </Text>
-            {'\n\n'}
+            Pour toute question relative à la protection de vos données ou l'exercice de vos droits, vous pouvez nous contacter directement ci-dessus.{'\n\n'}
             Vous avez également le droit d'introduire une réclamation auprès de la <B>CNIL</B> (Commission Nationale de l'Informatique et des Libertés) : www.cnil.fr
           </Section>
         </Animated.View>

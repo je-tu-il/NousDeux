@@ -16,6 +16,7 @@ import { collection, doc, getDocs, onSnapshot } from 'firebase/firestore';
 import { Brain, CalendarHeart, Camera, Coffee, Flame, Heart, HeartHandshake, Home, Infinity as InfinityIcon, Lock, MessageCircle, Rocket, Settings, Smile, Split, Star, Trophy, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string; coupleId?: string };
@@ -427,7 +428,7 @@ export default function DashboardScreen() {
   return (
     <ImageBackground source={backgroundSource} style={styles.container} resizeMode={backgroundResizeMode} imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
       <AppLaunchAd />
-      <View style={[styles.safeArea, { overflow: 'visible', backgroundColor: 'transparent' }]}> 
+      <SafeAreaView edges={['top']} style={[styles.safeArea, { overflow: 'visible', backgroundColor: 'transparent' }]}> 
         <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>{/* NOUVEAU HEADER : LinearGradient Mon Profil + Wallet */}
         <LinearGradient
           colors={[theme.gradientStart, theme.gradientEnd]}
@@ -760,7 +761,7 @@ export default function DashboardScreen() {
         </View>
       </Modal>
 
-      </View>
+      </SafeAreaView>
     </ImageBackground>
   );
 }
@@ -769,7 +770,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   headerBanner: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 20, borderRadius: 30, marginBottom: 20 },
   container: { flex: 1, width: '100%', height: '100%', minHeight: Platform.OS === 'web' ? 700 : 0, overflow: 'hidden', backgroundColor: 'transparent' },
   safeArea: { flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' },
-  scrollContent: { padding: 20, paddingTop: Platform.OS === 'web' ? 40 : 60, paddingBottom: 100 },
+  scrollContent: { padding: 20, paddingTop: Platform.OS === 'web' ? 20 : 10, paddingBottom: 24 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 },
   userAvatar: { width: 70, height: 70, borderRadius: 4, borderWidth: 3, borderColor: 'white', overflow: 'hidden' },
   welcome: { fontSize: 28, fontWeight: '900', marginBottom: 6 },
@@ -784,12 +785,27 @@ const getStyles = (theme: any) => StyleSheet.create({
   cardDesc: { fontSize: 16, opacity: 0.7 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   halfCardWrapper: { flex: 1 },
-  smallCard: { flexDirection: 'row', padding: 16, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 12, height: 80, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  smallCard: { flexDirection: 'row', padding: 16, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 12, minHeight: 80, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
   smallCardTitle: { fontSize: 16, fontWeight: 'bold' },
   lockText: { fontSize: 13, fontWeight: 'bold', opacity: 0.8 },
   
-  sectionHeader: { marginTop: 10, marginBottom: 15, paddingHorizontal: 5 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
+  sectionHeader: { 
+    marginTop: 16, 
+    marginBottom: 14, 
+    alignSelf: 'flex-start',
+    backgroundColor: theme.glassBackground,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.cardBorder,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: theme.text, letterSpacing: 0.3 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
   categoryCardWrapper: { width: '48%', marginBottom: 12 },
   categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1.5, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },

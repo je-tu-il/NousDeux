@@ -347,7 +347,7 @@ export default function Daylink() {
       <Animated.View
         entering={FadeInUp.duration(800).springify()}
         layout={Layout.springify()}
-        style={[styles.card, { borderColor: theme.cardBorder }]}
+        style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
       >
         <LinearGradient
           colors={[theme.gradientStart, theme.gradientEnd]}
@@ -392,9 +392,17 @@ export default function Daylink() {
           {!isSubmitted ? (
             <Animated.View entering={FadeIn.delay(300)}>
               <TextInput
-                style={[styles.input, { color: theme.text, borderColor: theme.tint }]}
+                style={[
+                  styles.input, 
+                  { 
+                    color: theme.text, 
+                    borderColor: theme.tint,
+                    backgroundColor: store.isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.02)',
+                    textAlignVertical: 'top',
+                  }
+                ]}
                 placeholder="Écris ce que tu ressens..."
-                placeholderTextColor="#A99693"
+                placeholderTextColor={store.isDarkMode ? '#A89997' : '#A99693'}
                 value={myAnswer}
                 onChangeText={setMyAnswer}
                 multiline
@@ -408,7 +416,7 @@ export default function Daylink() {
                   }
                 }}
               />
-              <Text style={{ textAlign: 'right', fontSize: 12, color: '#A99693', marginTop: -14, marginBottom: 14, marginRight: 8 }}>
+              <Text style={{ textAlign: 'right', fontSize: 12, color: store.isDarkMode ? '#A89997' : '#A99693', marginTop: -14, marginBottom: 14, marginRight: 8 }}>
                 {myAnswer.length} / 2000
               </Text>
               <Pressable
@@ -427,7 +435,13 @@ export default function Daylink() {
           ) : (
             <Animated.View entering={FadeIn} layout={Layout.springify()}>
               {/* Ma réponse — toujours visible après soumission */}
-              <View style={[styles.myAnswerBox, { borderColor: theme.tint }]}>
+              <View style={[
+                styles.myAnswerBox, 
+                { 
+                  borderColor: theme.tint,
+                  backgroundColor: store.isDarkMode ? 'rgba(255,154,139,0.12)' : 'rgba(255,154,139,0.06)'
+                }
+              ]}>
                 <Text style={[styles.myAnswerLabel, { color: theme.tint }]}>Ta réponse 🔒</Text>
                 <Text style={[styles.myAnswerText, { color: theme.text }]}>{myAnswer}</Text>
               </View>
@@ -466,7 +480,6 @@ const styles = StyleSheet.create({
     borderRadius: 24, borderWidth: 1, overflow: 'hidden',
     shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.2, shadowRadius: 20, elevation: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
     flexShrink: 1,
     maxHeight: '100%',
   },

@@ -1,11 +1,15 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { useOnboardingStore } from '@/store/onboardingStore';
 
-const NOTIFICATION_KEYS = [
+export const NOTIFICATION_KEYS = [
   'daily-question',
   'daily-wheel',
   'daily-quest',
   'daily-streak',
+  'solo-invite',
+  'solo-questions',
+  'solo-profile',
 ] as const;
 
 Notifications.setNotificationHandler({
@@ -39,12 +43,21 @@ export async function scheduleDailyReminders(): Promise<void> {
   await configureAndroidChannel();
   await Notifications.cancelAllScheduledNotificationsAsync();
 
-  const reminders = [
-    { key: NOTIFICATION_KEYS[0], hour: 19, title: 'Question du jour', body: 'Votre question vous attend. Gardez votre serie en vie !' },
-    { key: NOTIFICATION_KEYS[1], hour: 20, title: 'Roulette quotidienne', body: 'La roulette du jour est disponible.' },
-    { key: NOTIFICATION_KEYS[2], hour: 21, title: 'Quete terminee', body: 'Une recompense vous attend peut-etre dans vos quetes.' },
-    { key: NOTIFICATION_KEYS[3], hour: 22, title: 'Attention a votre serie', body: 'Pensez a repondre avant minuit pour ne pas perdre votre streak.' },
-  ];
+  const store = useOnboardingStore.getState();
+  const isCouple = Boolean(store.isSynced && store.partnerUid);
+
+  const reminders = isCouple
+    ? [
+        { key: 'daily-question', hour: 19, title: 'Question du jour 💖', body: 'Votre question en amoureux vous attend. Répondez ensemble pour faire grandir votre flamme !' },
+        { key: 'daily-wheel', hour: 20, title: 'Roue de la complicité 🎡', body: 'Faites tourner la roue pour remporter des pétales et des gages mignons ou coquins !' },
+        { key: 'daily-quest', hour: 21, title: 'Quête en duo 🏆', body: 'Une récompense vous attend peut-être dans vos défis de couple.' },
+        { key: 'daily-streak', hour: 22, title: 'Attention à votre flamme 🔥', body: 'Pensez à répondre avant minuit pour conserver votre série de jours consécutifs !' },
+      ]
+    : [
+        { key: 'solo-invite', hour: 18, title: 'Invitez votre moitié 💌', body: 'Partagez votre code NousDeux pour débloquer les questions du jour et la roue de la complicité !' },
+        { key: 'solo-questions', hour: 20, title: 'Questions à volonté 💭', body: 'Explorez nos centaines de questions pour découvrir des thèmes profonds ou amusants.' },
+        { key: 'solo-profile', hour: 21, title: 'Personnalisez votre profil 🌸', body: 'Choisissez votre avatar et vos cosmétiques en attendant de synchroniser votre moitié !' },
+      ];
 
   await Promise.all(reminders.map((reminder) => Notifications.scheduleNotificationAsync({
     identifier: `nousdeux-${reminder.key}`,

@@ -67,11 +67,11 @@ test('contact.tsx provides direct email contact option', async () => {
   assert.match(contactSrc, /directContactBox/, 'contact.tsx must render directContactBox');
 });
 
-test('settings.tsx provides direct email option in Support section', async () => {
+test('settings.tsx links to contact screen without exposing direct email row', async () => {
   const settingsSrc = await read('src/app/settings.tsx');
 
-  assert.match(settingsSrc, /openContactEmail/, 'settings.tsx must allow opening contact email');
-  assert.match(settingsSrc, /CONTACT_EMAIL/, 'settings.tsx must display CONTACT_EMAIL');
+  assert.match(settingsSrc, /\/contact/, 'settings.tsx must link to contact screen');
+  assert.ok(!settingsSrc.includes('CONTACT_EMAIL'), 'settings.tsx must not show direct contact email');
 });
 
 test('build-android workflow validates PNG assets with pngcheck before expo prebuild', async () => {

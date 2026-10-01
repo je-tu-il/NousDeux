@@ -44,11 +44,10 @@ test('Root layout dismisses splash screen cleanly and avoids getting stuck', asy
   assert.match(layoutSrc, /SplashScreen\.hideAsync/, '_layout.tsx must call SplashScreen.hideAsync');
 });
 
-test('Shop modifier button triggers coming soon popup with valid confirm button', async () => {
+test('Shop hides modifier mon avatar button until avatar customization is released', async () => {
   const shopSrc = await read('src/app/shop.tsx');
 
-  assert.match(shopSrc, /setShowComingSoon\(true\)/, 'Modifier mon avatar button must open coming soon modal');
-  assert.match(shopSrc, /D'accord/, 'Coming soon modal must display D\'accord on confirm button');
+  assert.doesNotMatch(shopSrc, /Modifier mon Avatar/, 'Modifier mon avatar button must be hidden');
 });
 
 test('metro.config.js enforces canonical single resolution for @firebase/app and @firebase/auth', async () => {
@@ -84,4 +83,42 @@ test('build-android workflow builds standalone release APK with JS bundling', as
   assert.match(workflowSrc, /signingConfig signingConfigs\.debug/, 'Workflow must configure debug signing for sideloading');
   assert.match(workflowSrc, /apk\/release/, 'Workflow must collect APK from release output directory');
 });
+
+test('app.json configures expo-image-picker with camera and photos permissions', async () => {
+  const appJson = JSON.parse(await read('app.json'));
+  const plugins = appJson.expo.plugins;
+  const imagePickerPlugin = plugins.find((p) => Array.isArray(p) && p[0] === 'expo-image-picker');
+
+  assert.ok(imagePickerPlugin, 'app.json must declare expo-image-picker plugin');
+  assert.ok(imagePickerPlugin[1].cameraPermission, 'Must declare cameraPermission');
+  assert.ok(imagePickerPlugin[1].photosPermission, 'Must declare photosPermission');
+});
+
+test('avatarPicker utility strips metadata and disables EXIF', async () => {
+  const pickerSrc = await read('src/lib/avatarPicker.ts');
+
+  assert.match(pickerSrc, /stripMetadataAndCompress/, 'Must export stripMetadataAndCompress');
+  assert.match(pickerSrc, /takePhotoWithCamera/, 'Must export takePhotoWithCamera');
+  assert.match(pickerSrc, /pickImageFromGallery/, 'Must export pickImageFromGallery');
+  assert.match(pickerSrc, /exif:\s*false/, 'Must disable EXIF metadata extraction');
+});
+
+test('notifications.ts adapts reminders for couple vs solo users', async () => {
+  const notifSrc = await read('src/lib/notifications.ts');
+
+  assert.match(notifSrc, /isCouple/, 'Must determine couple status');
+  assert.match(notifSrc, /solo-invite/, 'Must schedule solo invitation reminders');
+  assert.match(notifSrc, /daily-question/, 'Must schedule couple daily question reminders');
+});
+
+test('settings.tsx and avatar.tsx use AvatarPickerModal for camera and gallery choice', async () => {
+  const avatarSrc = await read('src/app/onboarding/avatar.tsx');
+  const settingsSrc = await read('src/app/settings.tsx');
+
+  assert.match(avatarSrc, /AvatarPickerModal/, 'avatar.tsx must render AvatarPickerModal');
+  assert.match(avatarSrc, /handleTakePhoto/, 'avatar.tsx must support camera capture');
+  assert.match(settingsSrc, /AvatarPickerModal/, 'settings.tsx must render AvatarPickerModal');
+  assert.match(settingsSrc, /handleTakePhoto/, 'settings.tsx must support camera capture');
+});
+
 

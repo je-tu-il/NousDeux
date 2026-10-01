@@ -12,7 +12,9 @@ import { ActivityIndicator, Alert, Image, ImageBackground, Modal, Platform, Pres
 import Animated, { Easing, FadeIn, FadeInUp, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { isUserAdmin } from '@/constants/admins';
 import UIModal, { UIModalType } from '@/components/UIModal';
-import { CONTACT_EMAIL, openContactEmail } from '@/lib/contact';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AvatarPickerModal from '@/components/AvatarPickerModal';
+import { takePhotoWithCamera, pickImageFromGallery } from '@/lib/avatarPicker';
 
 // Durée du debounce pour pseudo/age (ms)
 const DEBOUNCE_DELAY = 1000;
@@ -118,34 +120,50 @@ export default function SettingsScreen() {
     }, DEBOUNCE_DELAY);
   };
 
-  // ── Changer la photo — sauvegarde immédiate ──────────────────────────────
-  const pickImage = async () => {
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
+  // ── Changer la photo — appareil photo ou galerie avec suppression des métadonnées ────────
+  const [avatarPickerVisible, setAvatarPickerVisible] = useState(false);
+
+  const handlePhotoPicked = async (cleanDataUri: string) => {
+    setAvatar(cleanDataUri);
+    await saveToFirebase({ avatarUrl: cleanDataUri });
+  };
+
+  const handleTakePhoto = async () => {
+    const res = await takePhotoWithCamera();
+    if (!res.success) {
+      if (res.permissionDenied) {
         setModalState({
           visible: true,
           type: 'permission',
-          title: 'Accès requis',
-          message: "Nous avons besoin de la permission d'accès à tes photos pour changer ton avatar.",
+          title: 'Accès appareil photo requis',
+          message: "Nous avons besoin de la permission d'accès à votre appareil photo pour vous prendre en photo.",
         });
-        return;
       }
+      return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.2,
-      base64: true,
-    });
+    await handlePhotoPicked(res.dataUri);
+  };
 
-    if (!result.canceled && result.assets && result.assets[0].base64) {
-      const newAvatar = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      setAvatar(newAvatar);
-      // Sauvegarde immédiate de la photo sans debounce
-      await saveToFirebase({ avatarUrl: newAvatar });
+  const handlePickGallery = async () => {
+    const res = await pickImageFromGallery();
+    if (!res.success) {
+      if (res.permissionDenied) {
+        setModalState({
+          visible: true,
+          type: 'permission',
+          title: 'Accès photos requis',
+          message: "Nous avons besoin de la permission d'accès à vos photos pour changer votre photo de profil.",
+        });
+      }
+      return;
     }
+    await handlePhotoPicked(res.dataUri);
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatar(null);
+    store.setAvatar(null);
+    await saveToFirebase({ avatarUrl: null });
   };
 
   // ── Désynchronisation ────────────────────────────────────────────────────
@@ -369,40 +387,41 @@ export default function SettingsScreen() {
       {store.isDarkMode && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
       )}
-      <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 60 }}>
+      <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+        <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
 
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/dashboard')} style={styles.backButton}>
-            <ArrowLeft color={theme.text} size={28} />
-          </Pressable>
-          <Text style={[styles.title, { color: theme.text }]}>Paramètres</Text>
+          {/* Header */}
+          <View style={styles.header}>
+            <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/dashboard')} style={styles.backButton}>
+              <ArrowLeft color={theme.text} size={28} />
+            </Pressable>
+            <Text style={[styles.title, { color: theme.text }]}>Paramètres</Text>
 
-          {/* Indicateur de sauvegarde */}
-          <View style={styles.saveIndicator}>
-            {savedIndicator === 'saving' && (
-              <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.saveChip}>
-                <ActivityIndicator size="small" color={theme.tint} />
-                <Text style={[styles.saveChipText, { color: theme.tint }]}>Sauvegarde...</Text>
-              </Animated.View>
-            )}
-            {savedIndicator === 'saved' && (
-              <Animated.View entering={FadeIn} exiting={FadeOut} style={[styles.saveChip, { backgroundColor: 'rgba(34,197,94,0.12)' }]}>
-                <Check color="#22c55e" size={16} />
-                <Text style={[styles.saveChipText, { color: '#22c55e' }]}>Sauvegardé</Text>
-              </Animated.View>
-            )}
+            {/* Indicateur de sauvegarde */}
+            <View style={styles.saveIndicator}>
+              {savedIndicator === 'saving' && (
+                <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.saveChip}>
+                  <ActivityIndicator size="small" color={theme.tint} />
+                  <Text style={[styles.saveChipText, { color: theme.tint }]}>Sauvegarde...</Text>
+                </Animated.View>
+              )}
+              {savedIndicator === 'saved' && (
+                <Animated.View entering={FadeIn} exiting={FadeOut} style={[styles.saveChip, { backgroundColor: 'rgba(34,197,94,0.12)' }]}>
+                  <Check color="#22c55e" size={16} />
+                  <Text style={[styles.saveChipText, { color: '#22c55e' }]}>Sauvegardé</Text>
+                </Animated.View>
+              )}
+            </View>
           </View>
-        </View>
 
-        {/* Formulaire Profil */}
-        <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Mon Profil</Text>
+          {/* Formulaire Profil */}
+          <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Mon Profil</Text>
 
-          <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, alignItems: 'center' }]}>
+            <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, alignItems: 'center' }]}>
 
-            {/* Photo de profil — sauvegarde immédiate au changement */}
-            <Pressable style={[styles.avatarWrapper, { borderColor: theme.tint }]} onPress={pickImage}>
+              {/* Photo de profil — avec choix appareil photo / galerie / suppression */}
+              <Pressable style={[styles.avatarWrapper, { borderColor: theme.tint }]} onPress={() => setAvatarPickerVisible(true)}>
               {avatar ? (
                 <Image source={{ uri: avatar }} style={styles.avatarImage} />
               ) : (
@@ -544,22 +563,6 @@ export default function SettingsScreen() {
                 <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
               </Pressable>
             </Link>
-            <View style={styles.divider} />
-            <Pressable
-              style={styles.supportRow}
-              onPress={() => openContactEmail('Support NousDeux')}
-            >
-              <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,106,136,0.15)' }]}>
-                <Mail color="#FF6A88" size={22} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.supportTitle, { color: theme.text }]}>Email direct</Text>
-                <Text style={[styles.supportSub, { color: '#FF6A88', textDecorationLine: 'underline' }]}>
-                  {CONTACT_EMAIL}
-                </Text>
-              </View>
-              <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
-            </Pressable>
           </View>
         </Animated.View>
 
@@ -629,6 +632,16 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
       </ScrollView>
+      </SafeAreaView>
+
+      <AvatarPickerModal
+        visible={avatarPickerVisible}
+        onClose={() => setAvatarPickerVisible(false)}
+        onTakePhoto={handleTakePhoto}
+        onPickGallery={handlePickGallery}
+        onRemovePhoto={avatar ? handleRemoveAvatar : undefined}
+        hasPhoto={!!avatar}
+      />
 
       {/* Modal Désynchronisation */}
       <Modal visible={showDisconnectModal} transparent animationType="fade">
@@ -761,8 +774,8 @@ function DarkModeToggle({ isDark, onToggle, theme, styles }: { isDark: boolean; 
 const getStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, width: '100%', height: '100%', minHeight: '100vh' as any, backgroundColor: 'transparent' },
   bgImage: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 },
-  safeArea: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 40 : 60, width: '100%', maxWidth: 500, alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 40 },
+  safeArea: { flex: 1, paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 12, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30 },
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.glassBackground, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 24, fontWeight: '800' },
   saveIndicator: { width: 110, alignItems: 'flex-end' },
@@ -776,6 +789,9 @@ const getStyles = (theme: any) => StyleSheet.create({
     height: 50,
     borderRadius: 15,
     paddingHorizontal: 15,
+    paddingVertical: 0,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
     fontSize: 16,
     marginBottom: 20,
     borderWidth: 1,
@@ -805,8 +821,8 @@ const getStyles = (theme: any) => StyleSheet.create({
   modalConfirm: { flex: 1, height: 50, borderRadius: 25, backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center', shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10 },
   modalConfirmText: { fontSize: 16, fontWeight: 'bold', color: 'white' },
   codeBox: { width: '100%', alignItems: 'center' },
-  codeDisplay: { flexDirection: 'row', alignItems: 'center', gap: 16, borderWidth: 2, borderStyle: 'dashed', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 20 },
-  codeText: { fontSize: 32, fontWeight: '900', letterSpacing: 8 },
+  codeDisplay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, borderWidth: 2, borderStyle: 'dashed', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 20, maxWidth: '100%' },
+  codeText: { fontSize: 26, fontWeight: '900', letterSpacing: 6, textAlign: 'center' },
   disconnectButton: {
     flexDirection: 'row', height: 50, borderRadius: 25,
     backgroundColor: '#FF8C00',

@@ -9,11 +9,14 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, deleteField } from 'firebase/firestore';
 import UIModal, { UIModalType } from '@/components/UIModal';
+import AvatarPickerModal from '@/components/AvatarPickerModal';
+import { takePhotoWithCamera, pickImageFromGallery } from '@/lib/avatarPicker';
 
 export default function AvatarScreen() {
   const store = useOnboardingStore((state) => state);
   const [image, setImage] = useState<string | null>(store.avatar);
   const [loading, setLoading] = useState(false);
+  const [pickerVisible, setPickerVisible] = useState(false);
   const [modalState, setModalState] = useState<{
     visible: boolean;
     type?: UIModalType;
@@ -22,87 +25,36 @@ export default function AvatarScreen() {
   }>({ visible: false });
   const theme = Colors.light;
 
-  const compressImageToDataUri = async (uri: string, maxDim = 256): Promise<string> => {
-    // Sur Web, utiliser HTML Canvas pour garantir une compression légère immédiate
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      return new Promise((resolve) => {
-        const img = new (window as any).Image();
-        img.onload = () => {
-          let width = img.width;
-          let height = img.height;
-          if (width > height) {
-            if (width > maxDim) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            }
-          } else {
-            if (height > maxDim) {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', 0.6));
-          } else {
-            resolve(uri);
-          }
-        };
-        img.onerror = () => resolve(uri);
-        img.src = uri;
-      });
-    }
-
-    // Sur mobile natif (iOS / Android), utiliser ImageManipulator
-    try {
-      const ImageManipulator = await import('expo-image-manipulator');
-      const manipResult = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: maxDim, height: maxDim } }],
-        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-      );
-      if (manipResult.base64) {
-        return `data:image/jpeg;base64,${manipResult.base64}`;
-      }
-    } catch (err) {
-      console.warn('ImageManipulator error:', err);
-    }
-    return uri;
-  };
-
-  const pickImage = async () => {
-    // Demander la permission
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
+  const handleTakePhoto = async () => {
+    const res = await takePhotoWithCamera();
+    if (!res.success) {
+      if (res.permissionDenied) {
         setModalState({
           visible: true,
           type: 'permission',
-          title: 'Accès requis',
+          title: 'Accès appareil photo requis',
+          message: "Nous avons besoin de la permission d'accès à votre appareil photo pour vous prendre en photo.",
+        });
+      }
+      return;
+    }
+    setImage(res.dataUri);
+  };
+
+  const handlePickGallery = async () => {
+    const res = await pickImageFromGallery();
+    if (!res.success) {
+      if (res.permissionDenied) {
+        setModalState({
+          visible: true,
+          type: 'permission',
+          title: 'Accès photos requis',
           message: "Nous avons besoin de la permission d'accès à tes photos pour cela.",
         });
-        return;
       }
+      return;
     }
-
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets && result.assets[0]) {
-      const asset = result.assets[0];
-      const rawUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-      const compressed = await compressImageToDataUri(rawUri, 256);
-      setImage(compressed);
-    }
+    setImage(res.dataUri);
   };
 
   const handleRemovePhoto = async () => {
@@ -179,7 +131,7 @@ export default function AvatarScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.imageContainer}>
-            <Pressable style={[styles.imageWrapper, { borderColor: theme.tint }]} onPress={pickImage}>
+            <Pressable style={[styles.imageWrapper, { borderColor: theme.tint }]} onPress={() => setPickerVisible(true)}>
               {image ? (
                 <>
                   <Image source={{ uri: image }} style={styles.image} />
@@ -209,7 +161,7 @@ export default function AvatarScreen() {
                 styles.button, 
                 { backgroundColor: image ? theme.tint : 'rgba(255,255,255,0.4)', opacity: pressed || loading ? 0.8 : 1 }
               ]} 
-              onPress={image ? handleNext : pickImage}
+              onPress={image ? handleNext : () => setPickerVisible(true)}
               disabled={loading}
             >
               <Text style={[styles.buttonText, { color: image ? 'white' : theme.text }]}>
@@ -224,6 +176,15 @@ export default function AvatarScreen() {
           </Animated.View>
         </View>
       </View>
+
+      <AvatarPickerModal
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        onTakePhoto={handleTakePhoto}
+        onPickGallery={handlePickGallery}
+        onRemovePhoto={image ? handleRemovePhoto : undefined}
+        hasPhoto={!!image}
+      />
 
       <UIModal
         visible={modalState.visible}

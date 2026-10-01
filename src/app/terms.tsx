@@ -96,15 +96,9 @@ export default function TermsScreen() {
 
           <Section
             title="10. Contact"
-            action={<ContactEmailLink subject="Question relative aux CGU NousDeux" />}
+            action={<ContactEmailLink label="nousdeux.app.contact@gmail.com" subject="Question relative aux CGU NousDeux" />}
           >
-            Pour toute question relative aux présentes CGU, vous pouvez nous écrire directement à :{' '}
-            <Text
-              style={{ fontWeight: '700', color: '#FF6A88', textDecorationLine: 'underline' }}
-              onPress={() => openContactEmail('Question relative aux CGU NousDeux')}
-            >
-              nousdeux.app.contact@gmail.com
-            </Text>
+            Pour toute question relative aux présentes CGU, vous pouvez nous contacter directement via le bouton ci-dessus.
           </Section>
         </Animated.View>
       </ScrollView>

@@ -1,11 +1,12 @@
-import { Linking, Alert } from 'react-native';
+import { Linking } from 'react-native';
+import { useToastStore } from '../store/toastStore';
 
 export const CONTACT_EMAIL = 'nousdeux.app.contact@gmail.com';
 
 /**
  * Ouvre le client de messagerie par défaut avec l'adresse de contact NousDeux.
  * En cas d'échec (absence de client email configuré sur l'appareil),
- * copie l'adresse dans le presse-papier et affiche une alerte d'information.
+ * copie l'adresse dans le presse-papier et affiche un toast discret de 2s.
  */
 export async function openContactEmail(subject = 'Contact NousDeux'): Promise<boolean> {
   const query = subject ? `?subject=${encodeURIComponent(subject)}` : '';
@@ -24,12 +25,9 @@ export async function openContactEmail(subject = 'Contact NousDeux'): Promise<bo
   try {
     const Clipboard = await import('expo-clipboard');
     await Clipboard.setStringAsync(CONTACT_EMAIL);
-    Alert.alert(
-      'Email copié',
-      `L'adresse ${CONTACT_EMAIL} a été copiée dans votre presse-papier.`
-    );
+    useToastStore.getState().showToast('E-mail copié ! 📋');
   } catch {
-    Alert.alert('Contact', `Contactez-nous à l'adresse : ${CONTACT_EMAIL}`);
+    useToastStore.getState().showToast(CONTACT_EMAIL);
   }
   return false;
 }
