@@ -17,6 +17,14 @@ config.resolver.unstable_enablePackageExports = false;
 // Canonical resolution for @firebase/app and @firebase/auth on native platforms
 // This eliminates the dual module hazard where auth registers on one copy and initializeApp runs on another.
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === 'web') {
+    if (moduleName === 'react-native-google-mobile-ads') {
+      return {
+        filePath: path.resolve(__dirname, 'src/mocks/react-native-google-mobile-ads.web.js'),
+        type: 'sourceFile',
+      };
+    }
+  }
   if (platform !== 'web') {
     if (moduleName === '@firebase/app' || moduleName === 'firebase/app') {
       return {

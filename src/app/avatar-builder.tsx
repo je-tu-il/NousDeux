@@ -35,7 +35,7 @@ export default function AvatarBuilderScreen() {
             Encore un peu de patience !
           </Text>
         </View>
-      </SafeAreaView>
+      </View>
     </ImageBackground>
   );
 }

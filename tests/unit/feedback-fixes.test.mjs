@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -187,5 +187,42 @@ test('cosmetics and cards use solid borders without dashed traits glitches', asy
   assert.doesNotMatch(unlimSrc, /borderStyle:\s*'dashed'/, 'UnlimitedQuestions.tsx must not use dashed border');
 });
 
+test('all JSX and TSX files in src/ have valid syntax and balanced tags without parse errors', async () => {
+  const { readdirSync, statSync, readFileSync } = await import('node:fs');
+  const path = await import('node:path');
+  const parser = await import('@babel/parser');
 
+  const filesWithErrors = [];
+  function scan(dir) {
+    for (const item of readdirSync(dir)) {
+      const full = path.join(dir, item);
+      if (statSync(full).isDirectory()) {
+        if (item !== 'node_modules' && item !== '.git') scan(full);
+      } else if (full.endsWith('.tsx') || full.endsWith('.jsx')) {
+        const code = readFileSync(full, 'utf8');
+        try {
+          parser.parse(code, {
+            sourceType: 'module',
+            plugins: ['jsx', 'typescript'],
+          });
+        } catch (err) {
+          filesWithErrors.push(`${full}: ${err.message}`);
+        }
+      }
+    }
+  }
 
+  scan(resolve(root, 'src'));
+  assert.equal(filesWithErrors.length, 0, `JSX syntax parse errors found: \n${filesWithErrors.join('\n')}`);
+});
+
+test('metro.config.js redirects react-native-google-mobile-ads to web mock when platform is web', async () => {
+  const metroContent = await read('metro.config.js');
+  assert.ok(metroContent.includes("platform === 'web'"), 'metro.config.js checks platform === web');
+  assert.ok(metroContent.includes('react-native-google-mobile-ads'), 'metro.config.js handles react-native-google-mobile-ads');
+
+  const mock = await import(pathToFileURL(resolve(root, 'src/mocks/react-native-google-mobile-ads.web.js')).href);
+  assert.ok(mock.default.BannerAd, 'mock has BannerAd');
+  assert.ok(mock.default.InterstitialAd, 'mock has InterstitialAd');
+  assert.ok(mock.default.RewardedAd, 'mock has RewardedAd');
+});

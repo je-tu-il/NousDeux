@@ -28,6 +28,14 @@ jobs:
       - name: Prebuild native iOS project
         run: npx expo prebuild --platform ios --clean --no-install
 
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
       - name: Install CocoaPods
         working-directory: ios
         run: pod install
@@ -35,12 +43,13 @@ jobs:
       - name: Build Xcode Archive
         run: |
           cd ios
-          xcodebuild clean archive \
+          xcodebuild archive \
             -workspace nousdeux.xcworkspace \
             -scheme nousdeux \
             -configuration Release \
             -archivePath $PWD/build/nousdeux.xcarchive \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
