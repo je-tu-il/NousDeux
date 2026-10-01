@@ -90,8 +90,10 @@ export default function FloatingChat() {
 
   useEffect(() => {
     setDragResponder(PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 3 || Math.abs(gesture.dy) > 3,
+      onMoveShouldSetPanResponderCapture: (_, gesture) => Math.abs(gesture.dx) > 3 || Math.abs(gesture.dy) > 3,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => { dragStart.current = positionRef.current; },
       onPanResponderMove: (_, gesture) => {
@@ -268,8 +270,14 @@ export default function FloatingChat() {
         >
           <View style={styles.header} {...(dragResponder?.panHandlers ?? {})}>
             <Text style={styles.headerTitle}>{isLinked ? 'Chat 🔒' : 'Chat 🔒 (Lecture seule)'}</Text>
-            <Pressable onPress={() => setIsOpen(false)} style={styles.closeBtn}>
-              <X color="#4A3B39" size={20} />
+            <Pressable 
+              onPress={() => setIsOpen(false)} 
+              style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+              accessibilityRole="button"
+              accessibilityLabel="Fermer le chat"
+            >
+              <X color="#4A3B39" size={22} />
             </Pressable>
           </View>
           
@@ -392,7 +400,14 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' ? { cursor: 'grab', userSelect: 'none' } : {}),
   },
   headerTitle: { fontSize: 16, fontWeight: '700', color: '#4A3B39' },
-  closeBtn: { padding: 4 },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
   listContent: { padding: 12, gap: 8 },
   bubbleWrapper: { width: '100%', marginBottom: 8 },
   bubbleRight: { alignItems: 'flex-end' },

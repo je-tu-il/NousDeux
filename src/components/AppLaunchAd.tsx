@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Heart, Sparkles, X } from 'lucide-react-native';
 import { GOOGLE_ADS_CONFIG, getInterstitialAdUnitId } from '../constants/ads';
+import { useSegments } from 'expo-router';
 import { Colors } from '../constants/Colors';
 import { useOnboardingStore } from '../store/onboardingStore';
 
@@ -9,14 +10,30 @@ import { useOnboardingStore } from '../store/onboardingStore';
 let hasShownLaunchAdThisSession = false;
 
 export default function AppLaunchAd() {
-  const isDarkMode = useOnboardingStore((s) => s.isDarkMode);
+  const store = useOnboardingStore();
+  const segments = useSegments();
+  const isDarkMode = store.isDarkMode;
   const theme = isDarkMode ? Colors.dark : Colors.light;
+
+  // Pas de pub au démarrage si toujours en cours d'onboarding ou de synchro (nom, âge, code, date de couple...)
+  const isOnboarding = segments[0] === 'onboarding';
+  const isSyncComplete = Boolean(
+    store.uid &&
+    store.pseudo &&
+    store.age &&
+    store.isSynced &&
+    store.partnerUid
+  );
 
   const [visible, setVisible] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(3);
 
   useEffect(() => {
     if (!GOOGLE_ADS_CONFIG.enabled || !GOOGLE_ADS_CONFIG.enableAppLaunchAd || hasShownLaunchAdThisSession) {
+      return;
+    }
+
+    if (isOnboarding || !isSyncComplete) {
       return;
     }
 
@@ -89,7 +106,7 @@ export default function AppLaunchAd() {
     return () => clearInterval(interval);
   }, []);
 
-  if (!visible) return null;
+  if (!visible || isOnboarding || !isSyncComplete) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade">

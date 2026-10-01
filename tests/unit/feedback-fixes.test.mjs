@@ -121,4 +121,31 @@ test('settings.tsx and avatar.tsx use AvatarPickerModal for camera and gallery c
   assert.match(settingsSrc, /handleTakePhoto/, 'settings.tsx must support camera capture');
 });
 
+test('AppLaunchAd prevents showing interstitial ads during onboarding or incomplete sync', async () => {
+  const adSrc = await read('src/components/AppLaunchAd.tsx');
+
+  assert.match(adSrc, /isOnboarding/, 'AppLaunchAd must check isOnboarding');
+  assert.match(adSrc, /isSyncComplete/, 'AppLaunchAd must check isSyncComplete');
+  assert.match(adSrc, /if\s*\(\s*isOnboarding\s*\|\|\s*!isSyncComplete\s*\)/, 'AppLaunchAd must abort when not synced or onboarding');
+});
+
+test('FloatingChat close button has enlarged hitbox and does not get hijacked by pan responder', async () => {
+  const chatSrc = await read('src/components/FloatingChat.tsx');
+
+  assert.match(chatSrc, /hitSlop=\{\{\s*top:\s*16/, 'Close button must have generous hitSlop');
+  assert.match(chatSrc, /onStartShouldSetPanResponder:\s*\(\)\s*=>\s*false/, 'Pan responder must not capture initial touch on start');
+  assert.match(chatSrc, /width:\s*36,\s*height:\s*36/, 'Close button must have minimum width and height');
+});
+
+test('date.tsx handles iOS keyboard dismiss, auto-advance, and KeyboardAvoidingView', async () => {
+  const dateSrc = await read('src/app/onboarding/date.tsx');
+
+  assert.match(dateSrc, /KeyboardAvoidingView/, 'date.tsx must wrap with KeyboardAvoidingView');
+  assert.match(dateSrc, /TouchableWithoutFeedback[\s\S]*Keyboard\.dismiss/, 'date.tsx must dismiss keyboard on background tap');
+  assert.match(dateSrc, /InputAccessoryView/, 'date.tsx must define InputAccessoryView on iOS');
+  assert.match(dateSrc, /handleDayChange[\s\S]*monthRef\.current\?\.focus\(\)/, 'date.tsx must auto-advance from day to month');
+  assert.match(dateSrc, /handleMonthChange[\s\S]*yearRef\.current\?\.focus\(\)/, 'date.tsx must auto-advance from month to year');
+});
+
+
 
