@@ -28,6 +28,7 @@ import {
 } from 'react-native';
 import CoinWallet from '../components/CoinWallet';
 import UIModal, { UIModalType } from '../components/UIModal';
+import { useTopInset } from '@/hooks/useTopInset';
 import { BACKGROUNDS, BORDERS, Cosmetic, TAGS, UnlockCondition, isOwned, parseGradientColors } from '../data/cosmetics';
 import { QUESTS } from '../data/quests';
 import {
@@ -81,6 +82,7 @@ const TAB_DATA: Record<TabType, Cosmetic[]> = {
 export default function ShopScreen() {
   const store = useOnboardingStore((state) => state);
   const { width: windowWidth } = useWindowDimensions();
+  const topInset = useTopInset();
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
   const styles = getStyles(theme);
   const background = getCosmeticById(store.selectedBackground);
@@ -265,14 +267,30 @@ export default function ShopScreen() {
             )
           )}
           {item.type === 'border' && (
-            item.image ? (
-              <Image source={item.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-            ) : (
-              <View style={[
-                styles.borderPreview,
-                { borderColor: parseGradientColors(item.preview)[0] },
-              ]} />
-            )
+            <View style={styles.borderCardWrapper}>
+              <View style={styles.avatarMiniBase}>
+                {store.avatar ? (
+                  <Image source={{ uri: store.avatar }} style={{ width: '100%', height: '100%', borderRadius: 12 }} />
+                ) : (
+                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>
+                    {(store.pseudo || 'M')[0]}
+                  </Text>
+                )}
+              </View>
+              {item.image ? (
+                <View pointerEvents="none" style={styles.borderCardImageOverlay}>
+                  <Image source={item.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                </View>
+              ) : (
+                <View 
+                  pointerEvents="none" 
+                  style={[
+                    styles.borderCardCssOverlay,
+                    { borderColor: parseGradientColors(item.preview)[0] || '#FF9A8B' },
+                  ]} 
+                />
+              )}
+            </View>
           )}
           {item.type === 'tag' && (
             <View style={styles.tagPreviewBox}>
@@ -354,7 +372,7 @@ export default function ShopScreen() {
         <LinearGradient
           colors={['#FF9A8B', '#FF6A88']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          style={styles.header}
+          style={[styles.header, { paddingTop: topInset + 8 }]}
         >
           <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>
             <ArrowLeft color="white" size={24} />
@@ -425,24 +443,22 @@ export default function ShopScreen() {
                   )
                 )}
                 {selectedItem.type === 'border' && (
-                  <>
-                    <View style={{ width: 106, height: 106, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FF9A8B', justifyContent: 'center', alignItems: 'center' }}>
+                  <View style={{ width: 140, height: 140, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+                    <View style={{ width: 90, height: 90, borderRadius: 18, overflow: 'hidden', backgroundColor: '#FF9A8B', justifyContent: 'center', alignItems: 'center' }}>
                       {store.avatar ? (
                         <Image source={{ uri: store.avatar }} style={{ width: '100%', height: '100%' }} />
                       ) : (
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 40 }}>{(store.pseudo || 'M')[0]}</Text>
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 34 }}>{(store.pseudo || 'M')[0]}</Text>
                       )}
                     </View>
                     {selectedItem.image ? (
-                      <View pointerEvents="none" style={{ position: 'absolute', width: 212, height: 212, top: -53, left: -53, zIndex: 2 }}>
+                      <View pointerEvents="none" style={{ position: 'absolute', width: 130, height: 130, justifyContent: 'center', alignItems: 'center', zIndex: 2 }}>
                         <Image source={selectedItem.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
                       </View>
                     ) : (
-                      <View pointerEvents="none" style={{ position: 'absolute', width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', zIndex: 2 }}>
-                        <View style={{ width: 106, height: 106, borderRadius: 10, borderStyle: selectedItem.preview.includes('dashed') ? 'dashed' : selectedItem.preview.includes('dotted') ? 'dotted' : 'solid', borderWidth: parseInt(selectedItem.preview.match(/\d+px/)?.[0] || '3px'), borderColor: parseGradientColors(selectedItem.preview)[0] }} />
-                      </View>
+                      <View pointerEvents="none" style={{ position: 'absolute', width: 90, height: 90, borderRadius: 18, borderWidth: 3.5, borderStyle: 'solid', borderColor: parseGradientColors(selectedItem.preview)[0] || '#FF9A8B', zIndex: 2 }} />
                     )}
-                  </>
+                  </View>
                 )}
                 {selectedItem.type === 'tag' && (
                   <View style={{ flex: 1, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' }}>
@@ -557,8 +573,7 @@ const getStyles = (theme: any) => StyleSheet.create({
 
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
-    paddingTop: Platform.OS === 'ios' ? 50 : 14,
+    paddingHorizontal: 16, paddingBottom: 14,
   },
   backBtn:     { padding: 4 },
   headerTitle: { color: 'white', fontSize: 18, fontWeight: '800', flex: 1 },
@@ -616,7 +631,39 @@ const getStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.glassBackground,
   },
   bgPreview:    { width: '100%', height: '100%' },
-  borderPreview: { width: '70%', height: '70%', borderWidth: 5, borderRadius: 18, borderStyle: 'dashed' },
+  borderCardWrapper: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  avatarMiniBase: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#FF9A8B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  borderCardImageOverlay: {
+    position: 'absolute',
+    width: 74,
+    height: 74,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  borderCardCssOverlay: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 3,
+    borderStyle: 'solid',
+    zIndex: 2,
+  },
   tagPreviewBox: { 
     alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8,
     backgroundColor: theme.glassBackground, borderRadius: 16,

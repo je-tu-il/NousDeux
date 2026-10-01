@@ -902,7 +902,7 @@ const getStyles = (theme: typeof Colors.light | typeof Colors.dark) => StyleShee
   nextButton: { flexDirection: 'row', padding: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#A855F7', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10 },
   nextButtonDisabled: { backgroundColor: '#E9D5FF', shadowOpacity: 0 },
   nextButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  movedOnBox: { alignItems: 'center', gap: 6, paddingVertical: 20, paddingHorizontal: 16, backgroundColor: 'rgba(168,85,247,0.06)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(168,85,247,0.2)', borderStyle: 'dashed', marginBottom: 4 },
+  movedOnBox: { alignItems: 'center', gap: 6, paddingVertical: 20, paddingHorizontal: 16, backgroundColor: 'rgba(168,85,247,0.06)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(168,85,247,0.2)', borderStyle: 'solid', marginBottom: 4 },
   movedOnEmoji: { fontSize: 28 },
   movedOnTitle: { fontSize: 15, fontWeight: '700', color: '#A855F7', textAlign: 'center' },
   movedOnSub: { fontSize: 12, color: '#A99693', fontStyle: 'italic', textAlign: 'center' },

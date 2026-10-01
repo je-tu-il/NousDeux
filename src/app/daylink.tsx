@@ -6,9 +6,11 @@ import DaylinkComponent from '@/components/Daylink';
 import { Colors } from '@/constants/Colors';
 import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 import { useOnboardingStore } from '@/store/onboardingStore';
+import { useTopInset } from '@/hooks/useTopInset';
 
 export default function DaylinkScreen() {
   const store = useOnboardingStore();
+  const topInset = useTopInset();
   const { width: windowWidth } = useWindowDimensions();
   const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));
 
@@ -19,7 +21,7 @@ export default function DaylinkScreen() {
       resizeMode="cover"
       imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}
     >
-      <View style={styles.safeArea}>
+      <View style={[styles.safeArea, { paddingTop: topInset + 14 }]}>
         {/* Header avec Bouton Retour */}
         <View style={styles.headerRow}>
           <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>
@@ -46,7 +48,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     padding: 20,
-    paddingTop: Platform.OS === 'web' ? 40 : 60,
     width: '100%',
     maxWidth: 500,
     alignSelf: 'center'

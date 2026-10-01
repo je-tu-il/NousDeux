@@ -109,7 +109,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', marginBottom: 12 },
   outlineButton: { borderWidth: 2, padding: 16, borderRadius: 16, alignItems: 'center' },
   outlineButtonText: { fontSize: 16, fontWeight: 'bold' },
-  codeBox: { borderWidth: 2, borderStyle: 'dashed', padding: 16, borderRadius: 16, alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.5)' },
+  codeBox: { borderWidth: 1.5, borderStyle: 'solid', padding: 16, borderRadius: 16, alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.5)' },
   myCodeText: { fontSize: 28, fontWeight: '900', letterSpacing: 6 },
   divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
   line: { flex: 1, height: 1 },

@@ -3,19 +3,21 @@ import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Palette } from 'lucide-react-native';
-import { ImageBackground, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ImageBackground, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useTopInset } from '@/hooks/useTopInset';
 
 export default function AvatarBuilderScreen() {
   const store = useOnboardingStore((state) => state);
   const { width: windowWidth } = useWindowDimensions();
   const router = useRouter();
+  const topInset = useTopInset();
   const theme = Colors[store.isDarkMode ? 'dark' : 'light'];
   const styles = getStyles(theme);
 
   return (
     <ImageBackground source={getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'))} style={styles.container} resizeMode="cover">
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={styles.header}>
+      <View style={{ flex: 1 }}>
+        <View style={[styles.header, { paddingTop: topInset + 10 }]}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft color={theme.icon} size={28} />
           </Pressable>
@@ -45,7 +47,6 @@ const getStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 10,
     paddingBottom: 20,
   },
   backButton: {

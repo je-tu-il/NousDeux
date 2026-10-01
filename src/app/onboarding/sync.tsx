@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
 
   hintText: { fontSize: 12, textAlign: 'center', marginBottom: 12, opacity: 0.8 },
   codeContainer: { alignItems: 'center', marginBottom: 20 },
-  codeBox: { flexDirection: 'row', alignItems: 'center', gap: 16, borderWidth: 2, borderStyle: 'dashed', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 20, marginBottom: 20 },
+  codeBox: { flexDirection: 'row', alignItems: 'center', gap: 16, borderWidth: 1.5, borderStyle: 'solid', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 20, marginBottom: 20 },
   codeText: { fontSize: 36, fontWeight: '900', letterSpacing: 8 },
   shareButton: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 20, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
   shareText: { color: 'white', fontSize: 16, fontWeight: 'bold' },

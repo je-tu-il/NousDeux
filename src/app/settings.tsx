@@ -15,6 +15,7 @@ import UIModal, { UIModalType } from '@/components/UIModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AvatarPickerModal from '@/components/AvatarPickerModal';
 import { takePhotoWithCamera, pickImageFromGallery } from '@/lib/avatarPicker';
+import { useTopInset } from '@/hooks/useTopInset';
 
 // Durée du debounce pour pseudo/age (ms)
 const DEBOUNCE_DELAY = 1000;
@@ -23,6 +24,7 @@ const MAX_PSEUDO_LENGTH = 18;
 export default function SettingsScreen() {
   const store = useOnboardingStore((state) => state);
   const { width: windowWidth } = useWindowDimensions();
+  const topInset = useTopInset();
   // ✅ FIX CRITIQUE : utiliser le bon thème selon isDarkMode
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
   const styles = getStyles(theme);
@@ -387,10 +389,9 @@ export default function SettingsScreen() {
       {store.isDarkMode && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
       )}
-      <SafeAreaView edges={['top']} style={{ flex: 1 }}>
-        <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-
-          {/* Header */}
+      <View style={{ flex: 1 }}>
+        {/* Header fixé au-dessus du scroll avec topInset */}
+        <View style={[styles.headerFixedContainer, { paddingTop: topInset + 8 }]}>
           <View style={styles.header}>
             <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/dashboard')} style={styles.backButton}>
               <ArrowLeft color={theme.text} size={28} />
@@ -413,6 +414,9 @@ export default function SettingsScreen() {
               )}
             </View>
           </View>
+        </View>
+
+        <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 60, paddingTop: 10 }} showsVerticalScrollIndicator={false}>
 
           {/* Formulaire Profil */}
           <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.section}>
@@ -632,7 +636,7 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
       </ScrollView>
-      </SafeAreaView>
+      </View>
 
       <AvatarPickerModal
         visible={avatarPickerVisible}
@@ -774,8 +778,15 @@ function DarkModeToggle({ isDark, onToggle, theme, styles }: { isDark: boolean; 
 const getStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, width: '100%', height: '100%', minHeight: '100vh' as any, backgroundColor: 'transparent' },
   bgImage: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 },
-  safeArea: { flex: 1, paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 12, width: '100%', maxWidth: 500, alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30 },
+  headerFixedContainer: {
+    width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    zIndex: 10,
+  },
+  safeArea: { flex: 1, paddingHorizontal: 20, paddingTop: 10, width: '100%', maxWidth: 500, alignSelf: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.glassBackground, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 24, fontWeight: '800' },
   saveIndicator: { width: 110, alignItems: 'flex-end' },
@@ -821,7 +832,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   modalConfirm: { flex: 1, height: 50, borderRadius: 25, backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center', shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10 },
   modalConfirmText: { fontSize: 16, fontWeight: 'bold', color: 'white' },
   codeBox: { width: '100%', alignItems: 'center' },
-  codeDisplay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, borderWidth: 2, borderStyle: 'dashed', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 20, maxWidth: '100%' },
+  codeDisplay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, borderWidth: 1.5, borderStyle: 'solid', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 20, maxWidth: '100%' },
   codeText: { fontSize: 26, fontWeight: '900', letterSpacing: 6, textAlign: 'center' },
   disconnectButton: {
     flexDirection: 'row', height: 50, borderRadius: 25,

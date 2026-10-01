@@ -147,5 +147,45 @@ test('date.tsx handles iOS keyboard dismiss, auto-advance, and KeyboardAvoidingV
   assert.match(dateSrc, /handleMonthChange[\s\S]*yearRef\.current\?\.focus\(\)/, 'date.tsx must auto-advance from month to year');
 });
 
+test('useTopInset provides safe Android and iOS clearance across headers', async () => {
+  const hookSrc = await read('src/hooks/useTopInset.ts');
+  assert.match(hookSrc, /StatusBar\.currentHeight/, 'useTopInset must check StatusBar.currentHeight on Android');
+  assert.match(hookSrc, /Math\.max\([^)]*38\)/, 'useTopInset must enforce at least 38dp minimum on Android');
+
+  const shopSrc = await read('src/app/shop.tsx');
+  assert.match(shopSrc, /useTopInset/, 'shop.tsx must import and use useTopInset');
+
+  const settingsSrc = await read('src/app/settings.tsx');
+  assert.match(settingsSrc, /useTopInset/, 'settings.tsx must import and use useTopInset');
+  assert.match(settingsSrc, /headerFixedContainer/, 'settings.tsx must fix header above scroll view');
+
+  const chatSrc = await read('src/app/chat.tsx');
+  assert.match(chatSrc, /useTopInset/, 'chat.tsx must import and use useTopInset');
+
+  const contactSrc = await read('src/app/contact.tsx');
+  assert.match(contactSrc, /useTopInset/, 'contact.tsx must import and use useTopInset');
+
+  const adminSrc = await read('src/app/admin.tsx');
+  assert.match(adminSrc, /useTopInset/, 'admin.tsx must import and use useTopInset');
+});
+
+test('cosmetics and cards use solid borders without dashed traits glitches', async () => {
+  const shopSrc = await read('src/app/shop.tsx');
+  assert.doesNotMatch(shopSrc, /borderStyle:\s*'dashed'/, 'shop.tsx must not use dashed borders');
+  assert.match(shopSrc, /avatarMiniBase/, 'shop.tsx must render mini avatar base inside border cards');
+
+  const settingsSrc = await read('src/app/settings.tsx');
+  assert.doesNotMatch(settingsSrc, /borderStyle:\s*'dashed'/, 'settings.tsx must not use dashed border for pairing code');
+
+  const pairingSrc = await read('src/app/pairing.tsx');
+  assert.doesNotMatch(pairingSrc, /borderStyle:\s*'dashed'/, 'pairing.tsx must not use dashed border');
+
+  const syncSrc = await read('src/app/onboarding/sync.tsx');
+  assert.doesNotMatch(syncSrc, /borderStyle:\s*'dashed'/, 'sync.tsx must not use dashed border');
+
+  const unlimSrc = await read('src/components/UnlimitedQuestions.tsx');
+  assert.doesNotMatch(unlimSrc, /borderStyle:\s*'dashed'/, 'UnlimitedQuestions.tsx must not use dashed border');
+});
+
 
 

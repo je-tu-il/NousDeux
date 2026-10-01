@@ -8,8 +8,10 @@ import { doc, getDoc } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ImageBackground, Platform, StyleSheet, Text, View, Pressable } from 'react-native';
+import { useTopInset } from '@/hooks/useTopInset';
 
 export default function CalendarScreen() {
+  const topInset = useTopInset();
   const isDarkMode = useOnboardingStore((s) => s.isDarkMode);
   const theme  = isDarkMode ? Colors.dark : Colors.light;
   const myUid  = useOnboardingStore((s) => s.uid);
@@ -42,7 +44,7 @@ export default function CalendarScreen() {
       resizeMode="cover"
       imageStyle={{ width: '100%', height: '100%', objectPosition: 'center' } as any}
     >
-      <View style={styles.safeArea}>
+      <View style={[styles.safeArea, { paddingTop: topInset + 10 }]}>
         {/* En-tête */}
         <View style={styles.header}>
           <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>
@@ -70,7 +72,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, width: '100%' },
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'web' ? 18 : 44,
     paddingHorizontal: 20,
     paddingBottom: 20,
     width: '100%',

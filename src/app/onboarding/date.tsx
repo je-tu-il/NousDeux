@@ -21,8 +21,10 @@ import { ArrowLeft, ArrowRight, CalendarDays, Loader2 } from 'lucide-react-nativ
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
+import { useTopInset } from '@/hooks/useTopInset';
 
 export default function DateScreen() {
+  const topInset = useTopInset();
   const [day, setDay]     = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear]   = useState('');
@@ -237,7 +239,7 @@ export default function DateScreen() {
       style={[styles.container, { backgroundColor: store.isDarkMode ? '#1A1514' : '#FFF5F2' }]}
       resizeMode="cover"
     >
-      <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
@@ -251,7 +253,7 @@ export default function DateScreen() {
               showsVerticalScrollIndicator={false}
             >
               {/* Header avec bouton retour */}
-              <View style={styles.header}>
+              <View style={[styles.header, { paddingTop: topInset + 4 }]}>
                 <Pressable
                   style={styles.backBtn}
                   onPress={() => {
@@ -371,7 +373,7 @@ export default function DateScreen() {
             </ScrollView>
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
 
       {Platform.OS === 'ios' && (
         <InputAccessoryView nativeID="dateAccessory">
@@ -402,7 +404,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     justifyContent: 'space-between',
   },
-  header: { width: '100%', flexDirection: 'row', alignItems: 'center', paddingTop: 10, marginBottom: 10 },
+  header: { width: '100%', flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   backBtn: { padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.4)' },
   content: { flexGrow: 1, justifyContent: 'center', paddingBottom: 24 },
   title: { fontSize: 32, fontWeight: '900', marginBottom: 15, textAlign: 'center' },

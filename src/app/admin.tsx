@@ -60,6 +60,7 @@ import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { ADMIN_UIDS_LIST, isUserAdmin } from '../constants/admins';
+import { useTopInset } from '@/hooks/useTopInset';
 
 const ADMIN_UIDS = ADMIN_UIDS_LIST;
 
@@ -2019,6 +2020,7 @@ function MessagesTab({ messages, loading, onRefresh, onMarkRead }: {
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export default function AdminScreen() {
+  const topInset = useTopInset();
   const [authUid, setAuthUid] = useState<string | null>(auth.currentUser?.uid ?? null);
   const [authReady, setAuthReady] = useState(Boolean(auth.currentUser));
   useEffect(() => onAuthStateChanged(auth, user => {
@@ -2132,7 +2134,7 @@ export default function AdminScreen() {
   return (
     <View style={s.container}>
       {/* Header */}
-      <LinearGradient colors={['#1A0A00', '#3D2B1F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.header}>
+      <LinearGradient colors={['#1A0A00', '#3D2B1F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.header, { paddingTop: topInset + 8 }]}>
         <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/dashboard')} style={s.backBtn}>
           <ArrowLeft color="white" size={24} />
         </Pressable>
@@ -2186,8 +2188,7 @@ const s = StyleSheet.create({
 
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
-    paddingTop: Platform.OS === 'ios' ? 50 : 14,
+    paddingHorizontal: 16, paddingBottom: 14,
   },
   backBtn: { padding: 4 },
   refreshBtn: { padding: 4 },

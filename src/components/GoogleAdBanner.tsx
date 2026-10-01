@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderStyle: 'dashed',
+    borderStyle: 'solid',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

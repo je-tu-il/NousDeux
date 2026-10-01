@@ -18,12 +18,14 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { useTopInset } from '@/hooks/useTopInset';
 
 type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string; coupleId?: string };
 
 export default function DashboardScreen() {
   const store = useOnboardingStore((state) => state);
   const { width: windowWidth } = useWindowDimensions();
+  const topInset = useTopInset();
   const segments = useSegments();
   const redirectGuardRef = useRef<string | null>(null);
 
@@ -381,9 +383,9 @@ export default function DashboardScreen() {
     const avatarWidth = isPartner ? 28 : 70;
     
     // Si c'est une bordure image, pas de bordure CSS
-    const borderStyle = cosmeticBorder?.image 
+    const borderStyle: any = cosmeticBorder?.image 
       ? { borderWidth: 0 } 
-      : { borderWidth: 3, borderColor: fallbackBorderColor };
+      : { borderWidth: 3, borderColor: fallbackBorderColor, borderStyle: 'solid' };
 
     const borderImageSize = avatarWidth * 1.35;
     const borderOffset = - (borderImageSize - avatarWidth) / 2;
@@ -428,7 +430,7 @@ export default function DashboardScreen() {
   return (
     <ImageBackground source={backgroundSource} style={styles.container} resizeMode={backgroundResizeMode} imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
       <AppLaunchAd />
-      <SafeAreaView edges={['top']} style={[styles.safeArea, { overflow: 'visible', backgroundColor: 'transparent' }]}> 
+      <View style={[styles.safeArea, { overflow: 'visible', backgroundColor: 'transparent', paddingTop: topInset }]}> 
         <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>{/* NOUVEAU HEADER : LinearGradient Mon Profil + Wallet */}
         <LinearGradient
           colors={[theme.gradientStart, theme.gradientEnd]}
@@ -738,7 +740,7 @@ export default function DashboardScreen() {
               {unlockedCosmetic?.type === 'background' ? (
                  unlockedCosmetic.image ? <ImageBackground source={unlockedCosmetic.image} style={{ width: '100%', height: '100%' }} /> : <LinearGradient colors={parseGradientColors(unlockedCosmetic.preview) as [string, string]} style={{ width: '100%', height: '100%' }} />
               ) : unlockedCosmetic?.type === 'border' ? (
-                 unlockedCosmetic.image ? <Image source={unlockedCosmetic.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" /> : <View style={{ width: '70%', height: '70%', borderWidth: 5, borderRadius: 18, borderStyle: 'dashed', borderColor: parseGradientColors(unlockedCosmetic.preview)[0] }} />
+                 unlockedCosmetic.image ? <Image source={unlockedCosmetic.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" /> : <View style={{ width: '70%', height: '70%', borderWidth: 3, borderRadius: 18, borderStyle: 'solid', borderColor: parseGradientColors(unlockedCosmetic.preview)[0] || theme.tint }} />
               ) : (
                  <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' }}>
                    <Text style={{ fontSize: 30 }}>{unlockedCosmetic?.emoji}</Text>
@@ -761,7 +763,7 @@ export default function DashboardScreen() {
         </View>
       </Modal>
 
-      </SafeAreaView>
+      </View>
     </ImageBackground>
   );
 }

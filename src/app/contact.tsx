@@ -17,6 +17,7 @@ import { db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { ContactEmailLink } from '../components/ContactEmailLink';
+import { useTopInset } from '@/hooks/useTopInset';
 
 type ContactCategory = 'bug' | 'suggestion' | 'account' | 'other';
 
@@ -29,6 +30,7 @@ const CATEGORIES: { id: ContactCategory; label: string; emoji: string }[] = [
 
 export default function ContactScreen() {
   const store = useOnboardingStore(s => s);
+  const topInset = useTopInset();
 
   const [name,     setName]     = useState(store.pseudo || '');
   const [email,    setEmail]    = useState('');
@@ -75,7 +77,7 @@ export default function ContactScreen() {
       <LinearGradient
         colors={['#FF9A8B', '#FF6A88']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={styles.header}
+        style={[styles.header, { paddingTop: topInset + 8 }]}
       >
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <ArrowLeft color="white" size={24} />
@@ -221,8 +223,7 @@ const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: '#FFF5F2' },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 14,
-    paddingTop: Platform.OS === 'ios' ? 50 : 14,
+    paddingHorizontal: 16, paddingBottom: 14,
     gap: 12,
   },
   backBtn:      { padding: 4 },

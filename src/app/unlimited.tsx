@@ -6,11 +6,13 @@ import UnlimitedQuestions from '@/components/UnlimitedQuestions';
 import { Colors } from '@/constants/Colors';
 import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 import { useOnboardingStore } from '@/store/onboardingStore';
+import { useTopInset } from '@/hooks/useTopInset';
 
 export default function UnlimitedScreen() {
   const { category } = useLocalSearchParams<{ category?: string }>();
   const categoryFilter = Array.isArray(category) ? category[0] : category;
   const store = useOnboardingStore();
+  const topInset = useTopInset();
   const { width: windowWidth } = useWindowDimensions();
   const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));
   
@@ -21,7 +23,7 @@ export default function UnlimitedScreen() {
       resizeMode="cover"
       imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}
     >
-      <View style={styles.safeArea as any}>
+      <View style={[styles.safeArea as any, { paddingTop: topInset + 14 }]}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn as any}>
             <ArrowLeft color={Colors.light.text} size={28} />
@@ -39,7 +41,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     padding: 20,
-    paddingTop: Platform.OS === 'web' ? 40 : 60,
     width: '100%',
     maxWidth: 500,
     alignSelf: 'center',

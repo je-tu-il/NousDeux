@@ -8,6 +8,7 @@ import { useOnboardingStore } from '../store/onboardingStore';
 import { Colors } from '../constants/Colors';
 import { encryptText, decryptText } from '../lib/crypto';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
+import { useTopInset } from '@/hooks/useTopInset';
 
 interface Message {
   id: string;
@@ -20,6 +21,7 @@ interface Message {
 export default function ChatScreen() {
   const store = useOnboardingStore((state) => state);
   const router = useRouter();
+  const topInset = useTopInset();
   
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
   const styles = getStyles(theme);
@@ -174,7 +176,7 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.root}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topInset + 8 }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <ArrowLeft color="#FF9A8B" size={24} />
         </Pressable>
@@ -237,8 +239,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    paddingTop: Platform.OS === 'ios' ? 50 : 14,
+    paddingHorizontal: 16, paddingBottom: 14,
     backgroundColor: theme.background,
     borderBottomWidth: 1, borderBottomColor: '#F0E5E2',
     zIndex: 10,

@@ -29,6 +29,7 @@ import { QUESTS } from '../data/quests';
 import { checkQuests, claimQuestReward, computeStreakCached, getCachedWallet, getQuestProgress, QuestProgressMap, QuestTier, syncUnlimitedStats, updateCoupleDurationQuest } from '../lib/economy';
 import { auth, db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
+import { useTopInset } from '@/hooks/useTopInset';
 
 const TIER_RANK: Record<string, number> = { platinum: 4, gold: 3, silver: 2, bronze: 1 };
 const questProgressCache = new Map<string, QuestProgressMap>();
@@ -49,6 +50,7 @@ async function getCoupleId(uid: string): Promise<string | null> {
 export default function QuestsScreen() {
   const store = useOnboardingStore((state) => state);
   const { width: windowWidth } = useWindowDimensions();
+  const topInset = useTopInset();
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
   const styles = getStyles(theme);
   const background = getCosmeticById(store.selectedBackground);
@@ -258,7 +260,7 @@ export default function QuestsScreen() {
         <LinearGradient
           colors={['#FF9A8B', '#FF6A88']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          style={styles.header}
+          style={[styles.header, { paddingTop: topInset + 8 }]}
         >
           <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>
             <ArrowLeft color="white" size={24} />
@@ -307,7 +309,7 @@ export default function QuestsScreen() {
                       end={{ x: 1, y: 1 }}
                     >
                       {unlockedCosmetic.type === 'border' && (
-                        <View style={{ width: '80%', height: '80%', borderRadius: 12, borderStyle: unlockedCosmetic.preview.includes('dashed') ? 'dashed' : unlockedCosmetic.preview.includes('dotted') ? 'dotted' : 'solid', borderWidth: parseInt(unlockedCosmetic.preview.match(/\d+px/)?.[0] || '3px'), borderColor: parseGradientColors(unlockedCosmetic.preview)[0] }} />
+                        <View style={{ width: '80%', height: '80%', borderRadius: 12, borderStyle: 'solid', borderWidth: 3, borderColor: parseGradientColors(unlockedCosmetic.preview)[0] || theme.tint }} />
                       )}
                       {unlockedCosmetic.type === 'tag' && (
                         <Text style={{ fontSize: 60 }}>{unlockedCosmetic.emoji}</Text>
@@ -362,8 +364,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    paddingTop: Platform.OS === 'ios' ? 50 : 14,
+    paddingBottom: 14,
     gap: 12,
   },
   backBtn:       { padding: 4 },

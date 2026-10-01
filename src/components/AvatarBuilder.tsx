@@ -17,6 +17,7 @@ import { Check, ChevronLeft, Lock, Palette, Shirt, Eye, Smile, Sparkles, Wand2 }
 
 import { Colors } from '../constants/Colors';
 import PixelAvatar from './PixelAvatar';
+import { useTopInset } from '@/hooks/useTopInset';
 import {
   AvatarConfig, DEFAULT_AVATAR, SKIN_TONES, HAIR_COLORS,
   HAIRS, EYES, MOUTHS, OUTFITS, HATS, ACCESSORIES,
@@ -113,6 +114,7 @@ export default function AvatarBuilder({
   onPurchase,
   walletPetals = 0,
 }: AvatarBuilderProps) {
+  const topInset = useTopInset();
   const myUid = useOnboardingStore(s => s.uid);
   const [config, setConfig] = useState<AvatarConfig>({ ...DEFAULT_AVATAR, ...initialConfig });
   const [activeTab, setActiveTab] = useState<EditorTab>('body');
@@ -291,7 +293,7 @@ export default function AvatarBuilder({
       <LinearGradient
         colors={['#FF9A8B', '#FF6A88']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={styles.header}
+        style={[styles.header, { paddingTop: topInset + 8 }]}
       >
         {onClose && (
           <Pressable onPress={onClose} style={styles.backBtn}>
@@ -365,8 +367,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    paddingTop: Platform.OS === 'ios' ? 50 : 14,
+    paddingBottom: 14,
   },
   backBtn:      { padding: 4, marginRight: 8 },
   headerTitle:  { flex: 1, color: 'white', fontSize: 18, fontWeight: '800' },

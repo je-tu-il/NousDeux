@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.08)',
-    borderStyle: 'dashed',
+    borderStyle: 'solid',
     backgroundColor: 'rgba(0,0,0,0.02)',
     alignItems: 'center',
     marginBottom: 16,

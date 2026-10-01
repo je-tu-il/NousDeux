@@ -6,10 +6,11 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 
 import { ContactEmailLink } from '../components/ContactEmailLink';
 import { openContactEmail } from '../lib/contact';
+import { useTopInset } from '@/hooks/useTopInset';
 
 const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', backgroundColor: '#FFF5F2' },
-  scroll: { flex: 1, padding: 20, paddingTop: Platform.OS === 'web' ? 20 : 50, width: '100%', maxWidth: 600, alignSelf: 'center' },
+  scroll: { flex: 1, padding: 20, width: '100%', maxWidth: 600, alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 10 },
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.95)', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
   titleContainer: { flex: 1, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
@@ -22,13 +23,14 @@ const styles = StyleSheet.create({
 });
 
 export default function TermsScreen() {
+  const topInset = useTopInset();
   return (
     <ImageBackground
       source={require('../../assets/images/settings_bg.png')}
       style={styles.container}
       resizeMode="cover"
     >
-      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 60 }}>
+      <ScrollView style={[styles.scroll, { paddingTop: topInset + 12 }]} contentContainerStyle={{ paddingBottom: 60 }}>
         {/* Header */}
         <View style={styles.header}>
           <Pressable style={styles.backBtn} onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }}>
