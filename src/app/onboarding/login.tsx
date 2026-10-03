@@ -103,12 +103,8 @@ export default function LoginScreen() {
         useOnboardingStore.getState().resetSession();
         setUid(user.uid);
         setHasAcceptedTerms(true);
-        const code = await ensureUserPairingCode(user.uid);
+        const code = await ensureUserPairingCode(user.uid, null);
         setMyCode(code);
-        const initialPseudo = user.displayName ? user.displayName.split(' ')[0] : '';
-        if (initialPseudo) {
-          setPseudo(initialPseudo);
-        }
         if (user.photoURL) {
           setAvatar(user.photoURL);
         }

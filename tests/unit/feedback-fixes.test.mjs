@@ -326,4 +326,27 @@ test('login and settings cleanly sign out GoogleSignin and prevent redirect boun
   assert.match(layoutSrc, /GoogleSignin\.signOut/, '_layout.tsx must clear GoogleSignin on session clear');
 });
 
+test('onboarding screens prevent whitescreens, format distortion and ghost session carry-over', async () => {
+  const ageSrc = await read('src/app/onboarding/age.tsx');
+  const avatarSrc = await read('src/app/onboarding/avatar.tsx');
+  const pseudoSrc = await read('src/app/onboarding/pseudo.tsx');
+  const layoutSrc = await read('src/app/_layout.tsx');
+
+  // 1. age.tsx defines store and theme
+  assert.match(ageSrc, /const store = useOnboardingStore\(\)/, 'age.tsx must define store to prevent ReferenceError');
+  assert.match(ageSrc, /const theme = store\.isDarkMode \? Colors\.dark : Colors\.light/, 'age.tsx must define theme safely');
+
+  // 2. avatar.tsx does not call undefined compressImageToDataUri
+  assert.doesNotMatch(avatarSrc, /compressImageToDataUri/, 'avatar.tsx must not call undefined compressImageToDataUri');
+  assert.match(avatarSrc, /stripMetadataAndCompress/, 'avatar.tsx must use stripMetadataAndCompress');
+
+  // 3. pseudo.tsx disables KeyboardAvoidingView on web to prevent Safari collapse
+  assert.match(pseudoSrc, /enabled=\{Platform\.OS !== 'web'\}/, 'pseudo.tsx must disable KeyboardAvoidingView on web');
+
+  // 4. _layout.tsx cleans ghost session state when users doc does not exist
+  assert.match(layoutSrc, /store\.setPseudo\(''\)/, '_layout.tsx must clear pseudo when user doc does not exist');
+  assert.match(layoutSrc, /store\.setAge\(''\)/, '_layout.tsx must clear age when user doc does not exist');
+  assert.match(layoutSrc, /store\.setSynced\(false\)/, '_layout.tsx must clear synced status when user doc does not exist');
+});
+
 

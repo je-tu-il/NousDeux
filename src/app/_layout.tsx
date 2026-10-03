@@ -102,7 +102,13 @@ export default function RootLayout() {
                 store.setSynced(Boolean(uData.linkedTo));
               } else {
                 // Le compte Firestore n'existe pas encore ou a été supprimé
-                const code = await ensureUserPairingCode(user.uid, store.myCode);
+                // Nettoyer les données locales de session pour éviter la persistance fantôme
+                store.setPseudo('');
+                store.setAge('');
+                store.setAvatar(null);
+                store.setSynced(false);
+                store.clearPartnerCache();
+                const code = await ensureUserPairingCode(user.uid, null);
                 store.setMyCode(code);
               }
               try {

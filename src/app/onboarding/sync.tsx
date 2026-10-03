@@ -11,6 +11,7 @@ import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, getDocs, setDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
 import UIModal, { UIModalType } from '@/components/UIModal';
 import { ensureUserPairingCode, generatePairingCode } from '@/lib/pairing';
+import { useTopInset } from '@/hooks/useTopInset';
 
 const generateCode = generatePairingCode;
 
@@ -65,6 +66,7 @@ export default function SyncScreen() {
       : require('../../../assets/images/nousdeux_warm_background.png'));
 
   const isLinking = React.useRef(false);
+  const topInset = useTopInset();
 
   useEffect(() => {
     const state = useOnboardingStore.getState();
@@ -343,7 +345,7 @@ export default function SyncScreen() {
 
   if (success) {
     return (
-      <ImageBackground source={backgroundSource} style={styles.container} resizeMode="cover" imageStyle={styles.backgroundImage}>
+      <View style={styles.container}>
         <View style={[styles.successContent, { flex: 1, justifyContent: 'center', padding: 20 }]}>
           <Animated.View entering={ZoomIn.duration(800)} style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 40, gap: 15 }}>
             <View style={[styles.avatarCircle, { backgroundColor: theme.tint, position: 'relative', left: 0 }]}>
@@ -385,15 +387,19 @@ export default function SyncScreen() {
             </Pressable>
           </Animated.View>
         </View>
-      </ImageBackground>
+      </View>
     );
   }
 
   return (
-    <ImageBackground source={backgroundSource} style={styles.container} resizeMode="cover" imageStyle={styles.backgroundImage}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
+    <View style={styles.container}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        enabled={Platform.OS !== 'web'} 
+        style={styles.keyboardView}
+      >
         <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
+          contentContainerStyle={[styles.scrollContent, { paddingTop: topInset + 10 }]} 
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -505,16 +511,16 @@ export default function SyncScreen() {
         title={modalState.title}
         message={modalState.message}
       />
-    </ImageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', minHeight: '100vh' as any, overflow: 'hidden', backgroundColor: '#FFF5F2' },
+  container: { flex: 1, width: '100%', backgroundColor: '#FFF5F2' },
   backgroundImage: { width: '100%', height: '100%' },
   keyboardView: { flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' },
   scrollContent: { flexGrow: 1, padding: 30, paddingBottom: 60, justifyContent: 'center' },
-  header: { paddingTop: Platform.OS === 'web' ? 20 : 50, zIndex: 10 },
+  header: { zIndex: 10 },
   backBtn: { padding: 10, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 20, alignSelf: 'flex-start' },
   content: { flexGrow: 1, justifyContent: 'center', paddingBottom: 24 },
   title: { fontSize: 32, fontWeight: '800', marginBottom: 10, textAlign: 'center' },
