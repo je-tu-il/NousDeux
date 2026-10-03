@@ -2,6 +2,7 @@ import { getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/c
 import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { doc, getDoc } from 'firebase/firestore';
+import { ensureUserPairingCode } from '@/lib/pairing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -51,13 +52,14 @@ export default function RootLayout() {
 
   useEffect(() => {
     const clearDeletedSession = async () => {
+      if (Platform.OS !== 'web') {
+        try {
+          const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+          await GoogleSignin.signOut().catch(() => {});
+        } catch {}
+      }
       if (auth?.signOut) await auth.signOut().catch(() => {});
-      const store = useOnboardingStore.getState();
-      store.setUid(null);
-      store.setPseudo('');
-      store.setAge('');
-      store.setAvatar(null);
-      store.setSynced(false);
+      useOnboardingStore.getState().resetSession();
       router.replace('/onboarding/login');
     };
 
@@ -98,6 +100,10 @@ export default function RootLayout() {
                 if (store.avatar !== avatarToSet) store.setAvatar(avatarToSet);
                 if (uData.pairingCode && store.myCode !== uData.pairingCode) store.setMyCode(uData.pairingCode);
                 store.setSynced(Boolean(uData.linkedTo));
+              } else {
+                // Le compte Firestore n'existe pas encore ou a été supprimé
+                const code = await ensureUserPairingCode(user.uid, store.myCode);
+                store.setMyCode(code);
               }
               try {
                 const { getUserProfile } = await import('@/lib/economy');
@@ -196,8 +202,13 @@ export default function RootLayout() {
 
     // Empêcher de rester sur login une fois le compte connecté
     if (currentRoute === 'login') {
+      const isSynced = useOnboardingStore.getState().isSynced;
       if (pseudo && age) {
-        router.replace('/dashboard');
+        if (isSynced) {
+          router.replace('/dashboard');
+        } else {
+          router.replace('/onboarding/sync');
+        }
       } else if (!pseudo) {
         router.replace('/onboarding/pseudo');
       } else if (!age) {

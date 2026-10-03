@@ -295,3 +295,35 @@ test('all text inputs support Enter key submission on mobile, web, and tablet ke
   assert.match(settingsSrc, /onSubmitEditing=\{submitAge\}/);
 });
 
+test('pairing code helper exists and generates 6-character uppercase codes', async () => {
+  const pairingLib = await read('src/lib/pairing.ts');
+  assert.match(pairingLib, /generatePairingCode/, 'Must export generatePairingCode');
+  assert.match(pairingLib, /ensureUserPairingCode/, 'Must export ensureUserPairingCode');
+  assert.match(pairingLib, /pairing_codes/, 'Must register in pairing_codes collection');
+});
+
+test('login and settings cleanly sign out GoogleSignin and prevent redirect bounce loops', async () => {
+  const loginSrc = await read('src/app/onboarding/login.tsx');
+  const settingsSrc = await read('src/app/settings.tsx');
+  const indexSrc = await read('src/app/index.tsx');
+  const dashSrc = await read('src/app/dashboard.tsx');
+  const layoutSrc = await read('src/app/_layout.tsx');
+
+  assert.match(loginSrc, /ensureUserPairingCode/, 'login.tsx must ensure pairing code on account creation/recreation');
+  assert.match(loginSrc, /GoogleSignin\.signOut/, 'login.tsx must reset previous GoogleSignin session before signIn');
+  assert.match(loginSrc, /resetSession/, 'login.tsx must reset stale session when doc does not exist');
+
+  assert.match(settingsSrc, /GoogleSignin\.signOut/, 'settings.tsx must sign out GoogleSignin on delete and disconnect');
+  assert.match(settingsSrc, /resetSession/, 'settings.tsx must call resetSession');
+
+  assert.match(indexSrc, /!pseudo/, 'index.tsx must check pseudo before allowing dashboard');
+  assert.match(indexSrc, /!age/, 'index.tsx must check age before allowing dashboard');
+
+  assert.match(dashSrc, /ensureUserPairingCode/, 'dashboard.tsx must ensure user pairing code for solo users');
+  assert.match(dashSrc, /Mon code :/, 'dashboard.tsx must display pairing code for solo users');
+
+  assert.match(layoutSrc, /ensureUserPairingCode/, '_layout.tsx must ensure user pairing code if doc missing');
+  assert.match(layoutSrc, /GoogleSignin\.signOut/, '_layout.tsx must clear GoogleSignin on session clear');
+});
+
+

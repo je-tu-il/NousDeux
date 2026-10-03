@@ -10,10 +10,9 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, getDocs, setDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
 import UIModal, { UIModalType } from '@/components/UIModal';
+import { ensureUserPairingCode, generatePairingCode } from '@/lib/pairing';
 
-const generateCode = () => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-};
+const generateCode = generatePairingCode;
 
 async function resetCoupleData(coupleId: string) {
   const subcollections = ['daily', 'progress', 'quests', 'economy', 'inventory', 'messages'];
@@ -77,9 +76,20 @@ export default function SyncScreen() {
       return;
     }
 
+    // Assurer immédiatement un code sans attendre pour éviter de bloquer sur "Génération..."
+    if (!state.myCode) {
+      ensureUserPairingCode(state.uid, null).then((code) => {
+        setMyCode(code);
+      }).catch(() => {});
+    }
+
     // Écoute en temps réel du profil utilisateur (source unique de vérité Firestore)
     const unsub = onSnapshot(doc(db, "users", state.uid), async (docSnap) => {
-      if (!docSnap.exists()) return;
+      if (!docSnap.exists()) {
+        const code = await ensureUserPairingCode(state.uid!, useOnboardingStore.getState().myCode);
+        setMyCode(code);
+        return;
+      }
       const data = docSnap.data();
 
       // 1. Synchronisation temps réel du code de jumelage
@@ -88,15 +98,8 @@ export default function SyncScreen() {
           setMyCode(data.pairingCode);
         }
       } else {
-        // Si le profil en base n'a pas encore de pairingCode, on lui assigne
-        // son code existant (ou un nouveau) et on l'enregistre immédiatement
-        const fallbackCode = useOnboardingStore.getState().myCode || generateCode();
-        setMyCode(fallbackCode);
-        await setDoc(doc(db, "users", state.uid!), { pairingCode: fallbackCode }, { merge: true });
-        await setDoc(doc(db, "pairing_codes", fallbackCode), {
-          creatorUid: state.uid,
-          createdAt: new Date(),
-        }, { merge: true });
+        const code = await ensureUserPairingCode(state.uid!, useOnboardingStore.getState().myCode);
+        setMyCode(code);
       }
 
       // 2. Si on est lié, on déclenche le succès

@@ -7,6 +7,8 @@ export default function Index() {
   const [hydrated, setHydrated] = useState(false);
   const isSynced = useOnboardingStore((state) => state.isSynced);
   const uid = useOnboardingStore((state) => state.uid);
+  const pseudo = useOnboardingStore((state) => state.pseudo);
+  const age = useOnboardingStore((state) => state.age);
 
   useEffect(() => {
     if (useOnboardingStore.persist.hasHydrated()) {
@@ -31,10 +33,23 @@ export default function Index() {
     return <View style={{ flex: 1, backgroundColor: 'transparent' }} />;
   }
 
-  // Rediriger vers le dashboard si l'utilisateur est déjà connecté ou synchronisé
-  if (isSynced || uid) {
+  // Rediriger selon l'état réel du compte
+  if (!uid) {
+    return <Redirect href="/onboarding/login" />;
+  }
+
+  if (isSynced) {
     return <Redirect href="/dashboard" />;
   }
 
-  return <Redirect href="/onboarding/login" />;
+  if (!pseudo) {
+    return <Redirect href="/onboarding/pseudo" />;
+  }
+
+  if (!age) {
+    return <Redirect href="/onboarding/age" />;
+  }
+
+  // Profil configuré mais pas encore lié : autoriser l'accès au dashboard (mode solo)
+  return <Redirect href="/dashboard" />;
 }

@@ -13,7 +13,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router, useSegments } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot } from 'firebase/firestore';
-import { Brain, CalendarHeart, Camera, Coffee, Flame, Heart, HeartHandshake, Home, Infinity as InfinityIcon, Lock, MessageCircle, Rocket, Settings, Smile, Split, Star, Trophy, X } from 'lucide-react-native';
+import { Brain, CalendarHeart, Camera, Coffee, Copy, Flame, Heart, HeartHandshake, Home, Infinity as InfinityIcon, Lock, MessageCircle, Rocket, Settings, Smile, Split, Star, Trophy, X } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
+import { ensureUserPairingCode } from '@/lib/pairing';
+import { useToastStore } from '@/store/toastStore';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -114,6 +117,13 @@ export default function DashboardScreen() {
         if (data.pseudo && store.pseudo !== data.pseudo) {
           store.setPseudo(data.pseudo);
         }
+        if (data.pairingCode && store.myCode !== data.pairingCode) {
+          store.setMyCode(data.pairingCode);
+        } else if (!data.pairingCode) {
+          ensureUserPairingCode(store.uid!, store.myCode).then((code) => {
+            store.setMyCode(code);
+          }).catch(() => {});
+        }
 
         if (!data.linkedTo) {
           if (partnerUnsub) {
@@ -163,18 +173,24 @@ export default function DashboardScreen() {
           });
         }
       } else {
+        // Le document utilisateur n'existe pas encore en Firestore (nouveau compte ou après suppression)
+        ensureUserPairingCode(store.uid!, store.myCode).then((code) => {
+          store.setMyCode(code);
+        }).catch(() => {});
         setIsLoading(false);
       }
     }, (error) => {
-      if (error.code === 'permission-denied' || error.code === 'not-found') {
-        void auth.signOut().finally(() => {
-          store.setUid(null);
-          store.setPseudo('');
-          store.setAge('');
-          store.setAvatar(null);
-          store.setSynced(false);
-          router.replace('/onboarding/login');
-          if (Platform.OS === 'web') window.location.reload();
+      console.warn("Snapshot utilisateur dashboard :", error);
+      setIsLoading(false);
+      // Ne déconnecter que si Firebase Auth confirme que l'utilisateur a été supprimé
+      if ((error.code === 'permission-denied' || error.code === 'not-found') && auth.currentUser) {
+        auth.currentUser.reload().catch((reloadErr: any) => {
+          if (reloadErr?.code === 'auth/user-not-found' || reloadErr?.code === 'auth/user-token-expired') {
+            void auth.signOut().finally(() => {
+              store.resetSession();
+              router.replace('/onboarding/login');
+            });
+          }
         });
       }
     });
@@ -480,9 +496,27 @@ export default function DashboardScreen() {
               <Text style={{ color: partner && !partnerLeft ? theme.text : theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>{partner && !partnerLeft ? 'En couple avec' : 'Mode solo'}</Text>
               <Text style={{ color: partner && !partnerLeft ? '#FF6A88' : theme.tabIconDefault, fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner && !partnerLeft ? partner.pseudo : 'Partenaire indisponible'}</Text>
               {(!partner || partnerLeft) && (
-                <Pressable onPress={() => router.push('/onboarding/sync')} style={{ marginTop: 5, alignSelf: 'flex-start' }}>
-                  <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>Entrer un code partenaire</Text>
-                </Pressable>
+                <View style={{ marginTop: 5 }}>
+                  {store.myCode ? (
+                    <Pressable
+                      onPress={async () => {
+                        await Clipboard.setStringAsync(store.myCode);
+                        useToastStore.getState().showToast('Code copié !');
+                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
+                    >
+                      <Text style={{ color: theme.text, fontSize: 11, fontWeight: '600' }}>
+                        Mon code : <Text style={{ color: theme.tint, fontWeight: '800', letterSpacing: 1 }}>{store.myCode}</Text>
+                      </Text>
+                      <Copy size={12} color={theme.tint} style={{ marginLeft: 4 }} />
+                    </Pressable>
+                  ) : null}
+                  <Pressable onPress={() => router.push('/onboarding/sync')} style={{ alignSelf: 'flex-start' }}>
+                    <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>
+                      {store.myCode ? 'Lier un partenaire' : 'Obtenir / entrer un code'}
+                    </Text>
+                  </Pressable>
+                </View>
               )}
               {partner && !partnerLeft && partnerProfile?.selectedTag && partnerProfile.selectedTag !== 'tag_free_0' && getCosmeticById(partnerProfile.selectedTag) && (
                 <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 106, 136, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 106, 136, 0.3)' }}>

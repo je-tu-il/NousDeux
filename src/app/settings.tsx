@@ -301,19 +301,27 @@ export default function SettingsScreen() {
       }
       deleteBatch.delete(doc(db, 'users', store.uid));
       deleteBatch.delete(doc(db, 'userProfiles', store.uid));
+      if (store.myCode) {
+        deleteBatch.delete(doc(db, 'pairing_codes', store.myCode));
+      }
       await deleteBatch.commit();
-      if (firebaseUser) await deleteUser(firebaseUser);
+
+      if (Platform.OS !== 'web') {
+        try {
+          const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+          await GoogleSignin.signOut().catch(() => {});
+        } catch {}
+      }
+
+      if (firebaseUser) {
+        await deleteUser(firebaseUser).catch(async () => {
+          await signOut(auth).catch(() => {});
+        });
+      }
+      await signOut(auth).catch(() => {});
 
       // 4. Réinitialiser le store local
-      store.setUid(null);
-      store.setPseudo('');
-      store.setAge('');
-      store.setAvatar(null);
-      store.setSynced(false);
-      store.setMyCode('');
-      store.setPartnerCode('');
-      store.clearPartnerCache();
-      store.setSelectedCosmetics('bg_free_1', 'bd_free_1', 'tag_free_0');
+      store.resetSession();
       setShowDeleteModal(false);
       router.replace('/onboarding/login');
     } catch (error: any) {
@@ -371,6 +379,12 @@ export default function SettingsScreen() {
 
   const disconnect = async () => {
       try {
+        if (Platform.OS !== 'web') {
+          try {
+            const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+            await GoogleSignin.signOut().catch(() => {});
+          } catch {}
+        }
         await signOut(auth);
       } catch (error: any) {
         setModalState({
@@ -381,13 +395,7 @@ export default function SettingsScreen() {
         });
         return;
       }
-      store.setPseudo('');
-      store.setAge('');
-      store.setAvatar(null);
-      store.setSynced(false);
-      store.setMyCode('');
-      store.setPartnerCode('');
-      store.setUid(null);
+      store.resetSession();
       router.replace('/onboarding/login');
   };
 

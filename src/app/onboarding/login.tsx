@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import UIModal, { UIModalType } from '@/components/UIModal';
+import { ensureUserPairingCode } from '@/lib/pairing';
 
 export default function LoginScreen() {
   const theme = Colors.light;
@@ -73,7 +74,11 @@ export default function LoginScreen() {
 
         if (data.pairingCode) {
           setMyCode(data.pairingCode);
+        } else {
+          const code = await ensureUserPairingCode(user.uid);
+          setMyCode(code);
         }
+
         if (data.linkedTo && !data.needsDate) {
           setSynced(true);
           router.replace('/dashboard');
@@ -92,17 +97,27 @@ export default function LoginScreen() {
           router.replace('/onboarding/age');
           return;
         }
-      }
-      if (user.displayName && !useOnboardingStore.getState().pseudo) {
-        setPseudo(user.displayName.split(' ')[0]);
+      } else {
+        // Document inexistant (nouveau compte ou compte récréé après suppression)
+        // Réinitialiser complètement le store pour ne pas garder de résidus d'un ancien compte
+        useOnboardingStore.getState().resetSession();
+        setUid(user.uid);
+        setHasAcceptedTerms(true);
+        const code = await ensureUserPairingCode(user.uid);
+        setMyCode(code);
+        const initialPseudo = user.displayName ? user.displayName.split(' ')[0] : '';
+        if (initialPseudo) {
+          setPseudo(initialPseudo);
+        }
+        if (user.photoURL) {
+          setAvatar(user.photoURL);
+        }
       }
       router.replace('/onboarding/pseudo');
     } catch (error: any) {
       console.warn("Erreur chargement profil post-connexion :", error);
-      // Même en cas d'erreur transitoire Firestore, l'utilisateur a réussi sa connexion Google.
-      // On l'avance vers le paramétrage de son profil pour éviter de le piéger sur l'écran login.
       const currentStore = useOnboardingStore.getState();
-      if (currentStore.pseudo && currentStore.age) {
+      if (currentStore.pseudo && currentStore.age && currentStore.isSynced) {
         router.replace('/dashboard');
       } else {
         router.replace('/onboarding/pseudo');
@@ -154,6 +169,8 @@ export default function LoginScreen() {
         });
 
         await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        // S'assurer qu'aucune session expirée ou d'un compte supprimé ne bloque la reconnexion
+        await GoogleSignin.signOut().catch(() => {});
         const signInResult = await GoogleSignin.signIn();
 
         const idToken = signInResult.data?.idToken || (signInResult as any).idToken;

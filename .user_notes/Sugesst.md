@@ -10,20 +10,25 @@ CHIARA
 
 Affichage apk
 
-
-
-on peut aussi descendre trop bas sur pc
 Sur pc calendrier les bulle de chiffres trop ecarté
 
 
 
+Appuyer sur entré valide sur tout les appareilles
+
+Sur tablette quand je change de page les bords de l'ecran s'arrondissent a fond pendant 1/2 sec
 
 
 
 
 
+Alors la version ipad est immonde c'est vide
+
+Et sur le site web rien que sur la page d'acceuil initial il y a une bande blanche sur le bas
 
 
+
+Aussi je bloque sur l'ecran de connexion apres avoir bien selectionner le compte, cela me remet sur la connexion
 
 
 
