@@ -100,13 +100,17 @@ export default function DashboardScreen() {
       true
     );
 
-    if (!store.uid) {
+    const activeUid = store.uid || auth?.currentUser?.uid;
+    if (!activeUid) {
       router.replace('/onboarding/login');
       return;
     }
+    if (!store.uid && activeUid) {
+      store.setUid(activeUid);
+    }
     let partnerUnsub: any = null;
 
-    const unsub = onSnapshot(doc(db, 'users', store.uid), async (docSnap) => {
+    const unsub = onSnapshot(doc(db, 'users', activeUid), async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
 
@@ -120,7 +124,7 @@ export default function DashboardScreen() {
         if (data.pairingCode && store.myCode !== data.pairingCode) {
           store.setMyCode(data.pairingCode);
         } else if (!data.pairingCode) {
-          ensureUserPairingCode(store.uid!, store.myCode).then((code) => {
+          ensureUserPairingCode(activeUid, store.myCode).then((code) => {
             store.setMyCode(code);
           }).catch(() => {});
         }
@@ -147,14 +151,14 @@ export default function DashboardScreen() {
             if (pSnap.exists()) {
               const pData = pSnap.data();
               // Vérification réciproque : si le partenaire a délié son compte, repasser en mode solo
-              if (pData.linkedTo && pData.linkedTo === store.uid) {
+              if (pData.linkedTo && pData.linkedTo === activeUid) {
                 store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
                 setPartner({
                   pseudo: pData.pseudo,
                   avatarUrl: pData.avatarUrl,
                   coupleDate: data.coupleDate,
                   age: pData.age,
-                  coupleId: [store.uid!, data.linkedTo].sort().join('_'),
+                  coupleId: [activeUid, data.linkedTo].sort().join('_'),
                 });
                 setPartnerLeft(false);
               } else {
@@ -174,7 +178,7 @@ export default function DashboardScreen() {
         }
       } else {
         // Le document utilisateur n'existe pas encore en Firestore (nouveau compte ou après suppression)
-        ensureUserPairingCode(store.uid!, store.myCode).then((code) => {
+        ensureUserPairingCode(activeUid, store.myCode).then((code) => {
           store.setMyCode(code);
         }).catch(() => {});
         setIsLoading(false);

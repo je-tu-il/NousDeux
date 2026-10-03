@@ -90,7 +90,12 @@ export default function LoginScreen() {
           return;
         }
         if (data.pseudo && data.age) {
-          router.replace('/dashboard');
+          if (data.linkedTo) {
+            setSynced(true);
+            router.replace('/dashboard');
+          } else {
+            router.replace('/onboarding/sync');
+          }
           return;
         }
         if (data.pseudo) {
@@ -127,12 +132,22 @@ export default function LoginScreen() {
     if (Platform.OS !== 'web') return;
     getRedirectResult(auth)
       .then((result) => {
-        if (result?.user) void completeLogin(result.user);
+        if (result?.user) {
+          void completeLogin(result.user);
+        } else if (auth.currentUser) {
+          void completeLogin(auth.currentUser);
+        }
       })
       .catch((error: any) => {
-        setLoginError(`La connexion Google a échoué : ${error?.message ?? 'erreur inconnue'}`);
+        if (error?.code !== 'auth/popup-closed-by-user') {
+          setLoginError(`La connexion Google a échoué : ${error?.message ?? 'erreur inconnue'}`);
+        }
         setIsSigningIn(false);
       });
+
+    if (auth.currentUser) {
+      void completeLogin(auth.currentUser);
+    }
   }, []);
 
   const handleGoogleLogin = async () => {
@@ -152,8 +167,27 @@ export default function LoginScreen() {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         await setPersistence(auth, browserLocalPersistence);
-        const result = await withLoginTimeout(signInWithPopup(auth, provider));
-        await completeLogin(result.user);
+
+        const isMobileWeb = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (isMobileWeb) {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+
+        let result: any;
+        try {
+          result = await withLoginTimeout(signInWithPopup(auth, provider));
+        } catch (popupError: any) {
+          if (['auth/popup-blocked', 'auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/operation-not-supported-in-this-environment'].includes(popupError?.code)) {
+            await signInWithRedirect(auth, provider);
+            return;
+          }
+          throw popupError;
+        }
+
+        if (result?.user) {
+          await completeLogin(result.user);
+        }
       } else {
         // Native Mobile (iOS IPA / Android APK)
         const { GoogleSignin } = await import('@react-native-google-signin/google-signin');

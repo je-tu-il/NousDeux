@@ -7,7 +7,7 @@ import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { ArrowLeft, Copy, Share2, CheckCircle2, HeartHandshake, Compass } from 'lucide-react-native';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { collection, doc, getDoc, getDocs, setDoc, onSnapshot, deleteField, writeBatch, query, where, limit } from 'firebase/firestore';
 import UIModal, { UIModalType } from '@/components/UIModal';
 import { ensureUserPairingCode, generatePairingCode } from '@/lib/pairing';
@@ -70,8 +70,16 @@ export default function SyncScreen() {
 
   useEffect(() => {
     const state = useOnboardingStore.getState();
-    if (!state.uid || !state.pseudo) {
+    const activeUid = state.uid || auth?.currentUser?.uid;
+    if (!activeUid) {
       router.replace('/onboarding/login');
+      return;
+    }
+    if (!state.uid && activeUid) {
+      useOnboardingStore.getState().setUid(activeUid);
+    }
+    if (!state.pseudo) {
+      router.replace('/onboarding/pseudo');
       return;
     } else if (!state.age) {
       router.replace('/onboarding/age');
@@ -161,7 +169,10 @@ export default function SyncScreen() {
       setLoading(true);
       try {
         const state = useOnboardingStore.getState();
-        const myUid = state.uid;
+        const myUid = state.uid || auth?.currentUser?.uid;
+        if (!state.uid && myUid) {
+          useOnboardingStore.getState().setUid(myUid);
+        }
 
         if (!myUid) {
           const msg = "Vous n'êtes pas connecté. Reconnectez-vous puis réessayez.";

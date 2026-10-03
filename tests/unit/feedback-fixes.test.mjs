@@ -372,5 +372,29 @@ test('date, sync, and avatar picker fixes resolve layout squeeze, input focus, r
   assert.match(settingsSrc, /onSelectDataUri/, 'settings.tsx must pass onSelectDataUri');
 });
 
+test('login connection loop prevention and mobile web auth stability', async () => {
+  const syncSrc = await read('src/app/onboarding/sync.tsx');
+  const dateSrc = await read('src/app/onboarding/date.tsx');
+  const dashSrc = await read('src/app/dashboard.tsx');
+  const layoutSrc = await read('src/app/_layout.tsx');
+  const loginSrc = await read('src/app/onboarding/login.tsx');
+  const indexSrc = await read('src/app/index.tsx');
 
+  // 1. sync.tsx resolves activeUid from store or auth and routes to pseudo when pseudo is missing
+  assert.match(syncSrc, /state\.uid\s*\|\|\s*auth\?\.currentUser\?\.uid/, 'sync.tsx must resolve activeUid from store or auth');
+  assert.match(syncSrc, /router\.replace\('\/onboarding\/pseudo'\)/, 'sync.tsx must route to pseudo (not login) when pseudo is missing');
 
+  // 2. date.tsx and dashboard.tsx resolve activeUid from store or auth
+  assert.match(dateSrc, /myUid\s*\|\|\s*auth\?\.currentUser\?\.uid/, 'date.tsx must resolve activeUid');
+  assert.match(dashSrc, /store\.uid\s*\|\|\s*auth\?\.currentUser\?\.uid/, 'dashboard.tsx must resolve activeUid');
+
+  // 3. _layout.tsx sets store.uid synchronously in onAuthStateChanged
+  assert.match(layoutSrc, /setFirebaseUser\(user\)[\s\S]*store\.setUid\(user\.uid\)/, '_layout.tsx must set store.uid synchronously on user receipt');
+
+  // 4. login.tsx supports mobile web redirect and handles already connected user on mount
+  assert.match(loginSrc, /isMobileWeb[\s\S]*signInWithRedirect/, 'login.tsx must use signInWithRedirect on mobile web');
+  assert.match(loginSrc, /auth\.currentUser[\s\S]*completeLogin/, 'login.tsx must complete login if user is already authenticated');
+
+  // 5. index.tsx reconciles activeUser before redirecting to login
+  assert.match(indexSrc, /!activeUid\s*&&\s*!activeUser/, 'index.tsx must verify both store and auth before login redirect');
+});

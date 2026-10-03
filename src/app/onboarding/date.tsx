@@ -18,7 +18,7 @@ import { Colors } from '@/constants/Colors';
 import Animated, { FadeInDown, FadeInUp, withRepeat, withTiming, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { ArrowLeft, ArrowRight, CalendarDays, Loader2 } from 'lucide-react-native';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
 import { useTopInset } from '@/hooks/useTopInset';
 
@@ -113,15 +113,19 @@ export default function DateScreen() {
     }
   };
 
-  // ── Listener Firebase — créé UNE SEULE fois (dépend uniquement de myUid) ──
+  // ── Listener Firebase — créé UNE SEULE fois (dépend de myUid / auth) ──
   useEffect(() => {
-    if (!myUid) { router.replace('/onboarding/login'); return; }
+    const activeUid = myUid || auth?.currentUser?.uid;
+    if (!activeUid) { router.replace('/onboarding/login'); return; }
+    if (!myUid && activeUid) {
+      store.setUid(activeUid);
+    }
 
     let unsubPartner: (() => void) | undefined;
     let unsubMe: (() => void) | undefined;
 
     const setupListener = async () => {
-      const myDoc = await getDoc(doc(db, 'users', myUid));
+      const myDoc = await getDoc(doc(db, 'users', activeUid));
       if (!myDoc.exists()) return;
       const data = myDoc.data();
       const pUid = data.linkedTo as string | undefined;

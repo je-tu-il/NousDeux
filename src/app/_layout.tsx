@@ -74,6 +74,10 @@ export default function RootLayout() {
 
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setFirebaseUser(user);
+      if (user) {
+        const store = useOnboardingStore.getState();
+        if (store.uid !== user.uid) store.setUid(user.uid);
+      }
       const syncAuthState = async () => {
         try {
           if (user) {
@@ -208,6 +212,10 @@ export default function RootLayout() {
 
     // Empêcher de rester sur login une fois le compte connecté
     if (currentRoute === 'login') {
+      const activeUid = uid || activeUser.uid;
+      if (!uid && activeUid) {
+        useOnboardingStore.getState().setUid(activeUid);
+      }
       const isSynced = useOnboardingStore.getState().isSynced;
       if (pseudo && age) {
         if (isSynced) {

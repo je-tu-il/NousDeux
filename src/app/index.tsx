@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useOnboardingStore } from '@/store/onboardingStore';
+import { auth } from '@/lib/firebase';
 
 export default function Index() {
   const [hydrated, setHydrated] = useState(false);
@@ -33,8 +34,15 @@ export default function Index() {
     return <View style={{ flex: 1, backgroundColor: 'transparent' }} />;
   }
 
+  const activeUser = auth?.currentUser;
+  const activeUid = uid || activeUser?.uid;
+
+  if (activeUser && !uid) {
+    useOnboardingStore.getState().setUid(activeUser.uid);
+  }
+
   // Rediriger selon l'état réel du compte
-  if (!uid) {
+  if (!activeUid && !activeUser) {
     return <Redirect href="/onboarding/login" />;
   }
 
