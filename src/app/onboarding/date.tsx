@@ -3,7 +3,6 @@ import {
   StyleSheet,
   View,
   Text,
-  ImageBackground,
   Platform,
   Pressable,
   TextInput,
@@ -234,175 +233,180 @@ export default function DateScreen() {
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
-    <ImageBackground
-      source={require('../../../assets/images/romantic_calendar_bg.png')}
-      style={[styles.container, { backgroundColor: store.isDarkMode ? '#1A1514' : '#FFF5F2' }]}
-      resizeMode="cover"
-    >
-      <View style={{ flex: 1 }}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
-          style={{ flex: 1 }}
+    <View style={[styles.container, { backgroundColor: store.isDarkMode ? '#1A1514' : '#FFF5F2' }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+        enabled={Platform.OS !== 'web'}
+        style={{ flex: 1, width: '100%' }}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: topInset + 4 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-            <ScrollView
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
+          {/* Header avec bouton retour */}
+          <View style={styles.header}>
+            <Pressable
+              style={styles.backBtn}
+              onPress={() => {
+                Keyboard.dismiss();
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/onboarding/sync');
+                }
+              }}
             >
-              {/* Header avec bouton retour */}
-              <View style={[styles.header, { paddingTop: topInset + 4 }]}>
-                <Pressable
-                  style={styles.backBtn}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    if (router.canGoBack()) {
-                      router.back();
-                    } else {
-                      router.replace('/onboarding/sync');
-                    }
-                  }}
-                >
-                  <ArrowLeft color={theme.text} size={28} />
-                </Pressable>
-              </View>
+              <ArrowLeft color={theme.text} size={28} />
+            </Pressable>
+          </View>
 
-              <View style={styles.content}>
-                <Animated.View entering={FadeInDown.duration(800)}>
-                  <CalendarDays color={theme.tint} size={60} style={{ alignSelf: 'center', marginBottom: 20 }} />
-                  <Text style={[styles.title, { color: theme.text }]}>La Date Importante</Text>
-                  <Text style={[styles.subtitle, { color: theme.text }]}>
-                    {waitingForPartner
-                      ? 'En attente de la réponse de ton partenaire...'
-                      : "À quand remonte votre mise en couple ? Vos réponses doivent correspondre !"}
-                  </Text>
+          <View style={styles.content}>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+              <Animated.View entering={FadeInDown.duration(800)}>
+                <CalendarDays color={theme.tint} size={60} style={{ alignSelf: 'center', marginBottom: 20 }} />
+                <Text style={[styles.title, { color: theme.text }]}>La Date Importante</Text>
+                <Text style={[styles.subtitle, { color: theme.text }]}>
+                  {waitingForPartner
+                    ? 'En attente de la réponse de ton partenaire...'
+                    : "À quand remonte votre mise en couple ? Vos réponses doivent correspondre !"}
+                </Text>
+              </Animated.View>
+            </TouchableWithoutFeedback>
+
+            {!!errorMessage && (
+              <Animated.View entering={FadeInDown.duration(400)} style={styles.errorBox}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </Animated.View>
+            )}
+
+            {!waitingForPartner ? (
+              <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.pickerContainer}>
+                <Text style={styles.inputInstructions}>Saisissez la date au format JJ / MM / AAAA</Text>
+                <View style={styles.pickersWrapper}>
+                  <View style={styles.pickerCol}>
+                    <Text style={styles.pickerLabel}>Jour</Text>
+                    <TextInput
+                      ref={dayRef}
+                      style={styles.dateInput}
+                      value={day}
+                      onChangeText={handleDayChange}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      placeholder="JJ"
+                      placeholderTextColor="#C4A8A4"
+                      returnKeyType="next"
+                      onSubmitEditing={() => monthRef.current?.focus()}
+                      onKeyPress={(e: any) => {
+                        if (e.nativeEvent.key === 'Enter') monthRef.current?.focus();
+                      }}
+                      inputAccessoryViewID="dateAccessory"
+                    />
+                  </View>
+                  <View style={styles.pickerCol}>
+                    <Text style={styles.pickerLabel}>Mois</Text>
+                    <TextInput
+                      ref={monthRef}
+                      style={styles.dateInput}
+                      value={month}
+                      onChangeText={handleMonthChange}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      placeholder="MM"
+                      placeholderTextColor="#C4A8A4"
+                      returnKeyType="next"
+                      onSubmitEditing={() => yearRef.current?.focus()}
+                      onKeyPress={(e: any) => {
+                        if (e.nativeEvent.key === 'Enter') yearRef.current?.focus();
+                      }}
+                      inputAccessoryViewID="dateAccessory"
+                    />
+                  </View>
+                  <View style={styles.pickerCol}>
+                    <Text style={styles.pickerLabel}>Année</Text>
+                    <TextInput
+                      ref={yearRef}
+                      style={styles.dateInput}
+                      value={year}
+                      onChangeText={handleYearChange}
+                      keyboardType="number-pad"
+                      maxLength={4}
+                      placeholder="AAAA"
+                      placeholderTextColor="#C4A8A4"
+                      returnKeyType="done"
+                      onSubmitEditing={handleSubmit}
+                      onKeyPress={(e: any) => {
+                        if (e.nativeEvent.key === 'Enter') handleSubmit();
+                      }}
+                      inputAccessoryViewID="dateAccessory"
+                    />
+                  </View>
+                </View>
+              </Animated.View>
+            ) : success ? (
+              <Animated.View entering={FadeInUp.duration(800)} style={styles.waitingContainer}>
+                <Text style={{ fontSize: 60, marginBottom: 20 }}>✅</Text>
+                <Text style={styles.waitingText}>C'est la bonne date !</Text>
+              </Animated.View>
+            ) : (
+              <Animated.View entering={FadeInUp.duration(800)} style={styles.waitingContainer}>
+                <Animated.View style={spinStyle}>
+                  <Loader2 color={theme.tint} size={50} style={{ marginBottom: 20 }} />
                 </Animated.View>
+                <Text style={styles.waitingText}>Croisons les doigts ! 🤞</Text>
+                <Text style={{ color: theme.text, opacity: 0.5, fontSize: 13, marginTop: 10 }}>
+                  Date proposée : {day.padStart(2, '0')}/{month.padStart(2, '0')}/{year}
+                </Text>
+              </Animated.View>
+            )}
 
-                {!!errorMessage && (
-                  <Animated.View entering={FadeInDown.duration(400)} style={styles.errorBox}>
-                    <Text style={styles.errorText}>{errorMessage}</Text>
-                  </Animated.View>
-                )}
-
-                {!waitingForPartner ? (
-                  <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.pickerContainer}>
-                    <Text style={styles.inputInstructions}>Saisissez la date au format JJ / MM / AAAA</Text>
-                    <View style={styles.pickersWrapper}>
-                      <View style={styles.pickerCol}>
-                        <Text style={styles.pickerLabel}>Jour</Text>
-                        <TextInput
-                          ref={dayRef}
-                          style={styles.dateInput}
-                          value={day}
-                          onChangeText={handleDayChange}
-                          keyboardType="number-pad"
-                          maxLength={2}
-                          placeholder="JJ"
-                          placeholderTextColor="#C4A8A4"
-                          returnKeyType="next"
-                          onSubmitEditing={() => monthRef.current?.focus()}
-                          onKeyPress={(e: any) => {
-                            if (e.nativeEvent.key === 'Enter') monthRef.current?.focus();
-                          }}
-                          inputAccessoryViewID="dateAccessory"
-                        />
-                      </View>
-                      <View style={styles.pickerCol}>
-                        <Text style={styles.pickerLabel}>Mois</Text>
-                        <TextInput
-                          ref={monthRef}
-                          style={styles.dateInput}
-                          value={month}
-                          onChangeText={handleMonthChange}
-                          keyboardType="number-pad"
-                          maxLength={2}
-                          placeholder="MM"
-                          placeholderTextColor="#C4A8A4"
-                          returnKeyType="next"
-                          onSubmitEditing={() => yearRef.current?.focus()}
-                          onKeyPress={(e: any) => {
-                            if (e.nativeEvent.key === 'Enter') yearRef.current?.focus();
-                          }}
-                          inputAccessoryViewID="dateAccessory"
-                        />
-                      </View>
-                      <View style={styles.pickerCol}>
-                        <Text style={styles.pickerLabel}>Année</Text>
-                        <TextInput
-                          ref={yearRef}
-                          style={styles.dateInput}
-                          value={year}
-                          onChangeText={handleYearChange}
-                          keyboardType="number-pad"
-                          maxLength={4}
-                          placeholder="AAAA"
-                          placeholderTextColor="#C4A8A4"
-                          returnKeyType="done"
-                          onSubmitEditing={handleSubmit}
-                          onKeyPress={(e: any) => {
-                            if (e.nativeEvent.key === 'Enter') handleSubmit();
-                          }}
-                          inputAccessoryViewID="dateAccessory"
-                        />
-                      </View>
-                    </View>
-                  </Animated.View>
-                ) : success ? (
-                  <Animated.View entering={FadeInUp.duration(800)} style={styles.waitingContainer}>
-                    <Text style={{ fontSize: 60, marginBottom: 20 }}>✅</Text>
-                    <Text style={styles.waitingText}>C'est la bonne date !</Text>
-                  </Animated.View>
-                ) : (
-                  <Animated.View entering={FadeInUp.duration(800)} style={styles.waitingContainer}>
-                    <Animated.View style={spinStyle}>
-                      <Loader2 color={theme.tint} size={50} style={{ marginBottom: 20 }} />
-                    </Animated.View>
-                    <Text style={styles.waitingText}>Croisons les doigts ! 🤞</Text>
-                    <Text style={{ color: theme.text, opacity: 0.5, fontSize: 13, marginTop: 10 }}>
-                      Date proposée : {day.padStart(2, '0')}/{month.padStart(2, '0')}/{year}
-                    </Text>
-                  </Animated.View>
-                )}
-
-                {!waitingForPartner && (
-                  <Animated.View entering={FadeInUp.duration(800).delay(400)} style={styles.buttonContainer}>
-                    <Pressable
-                      style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: pressed || loading ? 0.8 : 1 }]}
-                      onPress={handleSubmit}
-                      disabled={loading}
-                    >
-                      <Text style={styles.buttonText}>Confirmer</Text>
-                      <ArrowRight color="white" size={24} />
-                    </Pressable>
-                  </Animated.View>
-                )}
-              </View>
-            </ScrollView>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </View>
+            {!waitingForPartner && (
+              <Animated.View entering={FadeInUp.duration(800).delay(400)} style={styles.buttonContainer}>
+                <Pressable
+                  style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: pressed || loading ? 0.8 : 1 }]}
+                  onPress={handleSubmit}
+                  disabled={loading}
+                >
+                  <Text style={styles.buttonText}>Confirmer</Text>
+                  <ArrowRight color="white" size={24} />
+                </Pressable>
+              </Animated.View>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {Platform.OS === 'ios' && (
         <InputAccessoryView nativeID="dateAccessory">
           <View style={styles.accessoryBar}>
             <Pressable
               style={styles.accessoryBtn}
-              onPress={() => Keyboard.dismiss()}
+              onPress={() => {
+                Keyboard.dismiss();
+                if (day && month && year) {
+                  handleSubmit();
+                }
+              }}
               hitSlop={10}
             >
-              <Text style={styles.accessoryBtnText}>Fermer le clavier</Text>
+              <Text style={styles.accessoryBtnText}>Valider</Text>
             </Pressable>
           </View>
         </InputAccessoryView>
       )}
-    </ImageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', minHeight: '100vh' as any },
+  container: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#FFF5F2',
+  },
   scrollView: { flex: 1, width: '100%' },
   scrollContent: {
     flexGrow: 1,
@@ -436,6 +440,7 @@ const styles = StyleSheet.create({
     color: '#4A3B39',
     borderColor: '#FF9A8B',
     borderWidth: 1,
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
   },
   buttonContainer: { alignItems: 'center', marginTop: 10 },
   button: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 40, borderRadius: 30, gap: 12, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },

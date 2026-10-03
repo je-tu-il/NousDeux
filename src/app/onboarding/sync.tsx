@@ -8,7 +8,7 @@ import Animated, { FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated'
 import { ArrowLeft, Copy, Share2, CheckCircle2, HeartHandshake, Compass } from 'lucide-react-native';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, getDocs, setDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, onSnapshot, deleteField, writeBatch, query, where, limit } from 'firebase/firestore';
 import UIModal, { UIModalType } from '@/components/UIModal';
 import { ensureUserPairingCode, generatePairingCode } from '@/lib/pairing';
 import { useTopInset } from '@/hooks/useTopInset';
@@ -99,6 +99,11 @@ export default function SyncScreen() {
         if (useOnboardingStore.getState().myCode !== data.pairingCode) {
           setMyCode(data.pairingCode);
         }
+        // Maintenir systématiquement l'existence du code dans pairing_codes
+        setDoc(doc(db, "pairing_codes", data.pairingCode), {
+          creatorUid: state.uid,
+          createdAt: new Date(),
+        }, { merge: true }).catch(() => {});
       } else {
         const code = await ensureUserPairingCode(state.uid!, useOnboardingStore.getState().myCode);
         setMyCode(code);
@@ -167,12 +172,40 @@ export default function SyncScreen() {
           return;
         }
 
-        // 1. Chercher le code avec timeout pour éviter les blocages réseau
-        const fetchCode = getDoc(doc(db, "pairing_codes", codeToSearch));
-        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout réseau Firebase")), 5000));
-        const codeDoc = await Promise.race([fetchCode, timeout]) as any;
+        // 1. Chercher le code dans pairing_codes avec timeout pour éviter les blocages réseau
+        let partnerUid: string | null = null;
+        try {
+          const fetchCode = getDoc(doc(db, "pairing_codes", codeToSearch));
+          const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout réseau Firebase")), 4000));
+          const codeDoc = await Promise.race([fetchCode, timeout]) as any;
 
-        if (!codeDoc.exists()) {
+          if (codeDoc && codeDoc.exists()) {
+            partnerUid = codeDoc.data()?.creatorUid || null;
+          }
+        } catch (e) {
+          console.warn('Erreur recherche pairing_codes:', e);
+        }
+
+        // 1b. Fallback ultra-résilient : si introuvable dans pairing_codes,
+        // chercher directement dans 'users' où pairingCode == codeToSearch
+        if (!partnerUid) {
+          try {
+            const q = query(collection(db, 'users'), where('pairingCode', '==', codeToSearch), limit(1));
+            const userDocs = await getDocs(q);
+            if (!userDocs.empty) {
+              partnerUid = userDocs.docs[0].id;
+              // Auto-réparation immédiate de pairing_codes
+              await setDoc(doc(db, 'pairing_codes', codeToSearch), {
+                creatorUid: partnerUid,
+                createdAt: new Date(),
+              }, { merge: true }).catch(() => {});
+            }
+          } catch (e) {
+            console.warn('Erreur fallback recherche users:', e);
+          }
+        }
+
+        if (!partnerUid) {
           const msg = "Ce code n'existe pas ou a expiré.";
           setErrorMessage(msg);
           setModalState({
@@ -186,7 +219,6 @@ export default function SyncScreen() {
           return;
         }
 
-        const partnerUid = codeDoc.data().creatorUid;
         if (partnerUid === myUid) {
           const msg = "Tu ne peux pas te synchroniser avec toi-même ! Ce code appartient à ton propre compte. Demande à ton partenaire de t'envoyer son propre code de synchronisation.";
           setErrorMessage(msg);

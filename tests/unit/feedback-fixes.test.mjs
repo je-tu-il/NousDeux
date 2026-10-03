@@ -349,4 +349,28 @@ test('onboarding screens prevent whitescreens, format distortion and ghost sessi
   assert.match(layoutSrc, /store\.setSynced\(false\)/, '_layout.tsx must clear synced status when user doc does not exist');
 });
 
+test('date, sync, and avatar picker fixes resolve layout squeeze, input focus, resilient pairing, and mobile web file picking', async () => {
+  const dateSrc = await read('src/app/onboarding/date.tsx');
+  const syncSrc = await read('src/app/onboarding/sync.tsx');
+  const modalSrc = await read('src/components/AvatarPickerModal.tsx');
+  const avatarSrc = await read('src/app/onboarding/avatar.tsx');
+  const settingsSrc = await read('src/app/settings.tsx');
+
+  // 1. date.tsx layout: no nested ImageBackground clashing with parent, inputs are accessible, 100% width
+  assert.doesNotMatch(dateSrc, /<ImageBackground/, 'date.tsx must not render nested ImageBackground');
+  assert.match(dateSrc, /styles\.container[\s\S]*flex:\s*1,\s*width:\s*'100%'/, 'date.tsx container must take 100% width');
+  assert.match(dateSrc, /styles\.scrollView[\s\S]*flex:\s*1,\s*width:\s*'100%'/, 'date.tsx scrollView must take 100% width');
+
+  // 2. sync.tsx resilience: fallback query to users collection when pairing_codes doc is missing
+  assert.match(syncSrc, /where\('pairingCode',\s*'==',\s*codeToSearch\)/, 'sync.tsx must query users collection as fallback');
+  assert.match(syncSrc, /setDoc\(doc\(db,\s*['"]pairing_codes['"]/, 'sync.tsx must heal pairing_codes document when found');
+
+  // 3. AvatarPickerModal: separate backdrop touch target, native file inputs for mobile web browsers
+  assert.match(modalSrc, /StyleSheet\.absoluteFill[\s\S]*onPress=\{onClose\}/, 'AvatarPickerModal must use absoluteFill backdrop sibling');
+  assert.match(modalSrc, /type="file"/, 'AvatarPickerModal must support native file input on web');
+  assert.match(avatarSrc, /onSelectDataUri/, 'avatar.tsx must pass onSelectDataUri');
+  assert.match(settingsSrc, /onSelectDataUri/, 'settings.tsx must pass onSelectDataUri');
+});
+
+
 

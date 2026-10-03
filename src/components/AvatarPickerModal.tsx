@@ -11,6 +11,7 @@ import { Camera, Image as ImageIcon, Trash2, X } from 'lucide-react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { Colors } from '../constants/Colors';
 import { useOnboardingStore } from '../store/onboardingStore';
+import { stripMetadataAndCompress } from '../lib/avatarPicker';
 
 interface AvatarPickerModalProps {
   visible: boolean;
@@ -18,8 +19,20 @@ interface AvatarPickerModalProps {
   onTakePhoto: () => void;
   onPickGallery: () => void;
   onRemovePhoto?: () => void;
+  onSelectDataUri?: (dataUri: string) => void;
   hasPhoto?: boolean;
 }
+
+const webFileInputStyle: any = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  width: '100%',
+  height: '100%',
+  opacity: 0,
+  cursor: 'pointer',
+  zIndex: 10,
+};
 
 export default function AvatarPickerModal({
   visible,
@@ -27,10 +40,32 @@ export default function AvatarPickerModal({
   onTakePhoto,
   onPickGallery,
   onRemovePhoto,
+  onSelectDataUri,
   hasPhoto = false,
 }: AvatarPickerModalProps) {
   const isDark = useOnboardingStore((state) => state.isDarkMode);
   const theme = isDark ? Colors.dark : Colors.light;
+
+  const handleWebFile = (e: any) => {
+    const file = e.target?.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          const rawUri = ev.target?.result as string;
+          const cleanDataUri = await stripMetadataAndCompress(rawUri, 256);
+          if (onSelectDataUri) {
+            onSelectDataUri(cleanDataUri);
+          } else {
+            onPickGallery();
+          }
+        } finally {
+          onClose();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   return (
     <Modal
@@ -39,7 +74,10 @@ export default function AvatarPickerModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <View style={styles.overlay}>
+        {/* Backdrop transparent pour fermer au tap à l'extérieur de la modale */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+
         <Animated.View
           entering={FadeInUp.duration(250)}
           style={[
@@ -59,50 +97,77 @@ export default function AvatarPickerModal({
           </View>
 
           {/* Option: Prendre une photo */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.optionRow,
-              { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' },
-              pressed && styles.pressedOption,
-            ]}
-            onPress={() => {
-              onClose();
-              onTakePhoto();
-            }}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: 'rgba(255,106,136,0.15)' }]}>
-              <Camera size={22} color="#FF6A88" />
-            </View>
-            <View style={styles.optionTextContainer}>
-              <Text style={[styles.optionTitle, { color: theme.text }]}>Prendre une photo</Text>
-              <Text style={[styles.optionSubtitle, { color: theme.tabIconDefault }]}>
-                Utiliser votre appareil photo
-              </Text>
-            </View>
-          </Pressable>
+          <View style={styles.optionWrapper}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.optionRow,
+                { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' },
+                pressed && styles.pressedOption,
+              ]}
+              onPress={() => {
+                if (Platform.OS !== 'web') {
+                  onClose();
+                  onTakePhoto();
+                }
+              }}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: 'rgba(255,106,136,0.15)' }]}>
+                <Camera size={22} color="#FF6A88" />
+              </View>
+              <View style={styles.optionTextContainer}>
+                <Text style={[styles.optionTitle, { color: theme.text }]}>Prendre une photo</Text>
+                <Text style={[styles.optionSubtitle, { color: theme.tabIconDefault }]}>
+                  Utiliser votre appareil photo
+                </Text>
+              </View>
+            </Pressable>
+
+            {Platform.OS === 'web' && (
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={webFileInputStyle}
+                onChange={handleWebFile}
+              />
+            )}
+          </View>
 
           {/* Option: Choisir dans la galerie */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.optionRow,
-              { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' },
-              pressed && styles.pressedOption,
-            ]}
-            onPress={() => {
-              onClose();
-              onPickGallery();
-            }}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
-              <ImageIcon size={22} color="#3B82F6" />
-            </View>
-            <View style={styles.optionTextContainer}>
-              <Text style={[styles.optionTitle, { color: theme.text }]}>Choisir dans la galerie</Text>
-              <Text style={[styles.optionSubtitle, { color: theme.tabIconDefault }]}>
-                Sélectionner une photo existante
-              </Text>
-            </View>
-          </Pressable>
+          <View style={styles.optionWrapper}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.optionRow,
+                { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' },
+                pressed && styles.pressedOption,
+              ]}
+              onPress={() => {
+                if (Platform.OS !== 'web') {
+                  onClose();
+                  onPickGallery();
+                }
+              }}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
+                <ImageIcon size={22} color="#3B82F6" />
+              </View>
+              <View style={styles.optionTextContainer}>
+                <Text style={[styles.optionTitle, { color: theme.text }]}>Choisir dans la galerie</Text>
+                <Text style={[styles.optionSubtitle, { color: theme.tabIconDefault }]}>
+                  Sélectionner une photo existante
+                </Text>
+              </View>
+            </Pressable>
+
+            {Platform.OS === 'web' && (
+              <input
+                type="file"
+                accept="image/*"
+                style={webFileInputStyle}
+                onChange={handleWebFile}
+              />
+            )}
+          </View>
 
           {/* Option: Supprimer (si une photo existe) */}
           {hasPhoto && onRemovePhoto && (
@@ -141,7 +206,7 @@ export default function AvatarPickerModal({
             <Text style={[styles.cancelText, { color: theme.text }]}>Annuler</Text>
           </Pressable>
         </Animated.View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
@@ -167,6 +232,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 24,
     elevation: 12,
+    zIndex: 2,
   },
   header: {
     flexDirection: 'row',
@@ -181,6 +247,11 @@ const styles = StyleSheet.create({
   closeBtn: {
     padding: 6,
     borderRadius: 16,
+  },
+  optionWrapper: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 18,
   },
   optionRow: {
     flexDirection: 'row',

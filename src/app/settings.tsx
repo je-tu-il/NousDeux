@@ -682,6 +682,7 @@ export default function SettingsScreen() {
         onTakePhoto={handleTakePhoto}
         onPickGallery={handlePickGallery}
         onRemovePhoto={avatar ? handleRemoveAvatar : undefined}
+        onSelectDataUri={handlePhotoPicked}
         hasPhoto={!!avatar}
       />
 

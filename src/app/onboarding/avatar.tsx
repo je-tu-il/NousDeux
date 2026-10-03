@@ -190,6 +190,7 @@ export default function AvatarScreen() {
         onTakePhoto={handleTakePhoto}
         onPickGallery={handlePickGallery}
         onRemovePhoto={image ? handleRemovePhoto : undefined}
+        onSelectDataUri={(dataUri) => setImage(dataUri)}
         hasPhoto={!!image}
       />
 
