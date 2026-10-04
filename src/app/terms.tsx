@@ -98,7 +98,7 @@ export default function TermsScreen() {
 
           <Section
             title="10. Contact"
-            action={<ContactEmailLink label="nousdeux.app.contact@gmail.com" subject="Question relative aux CGU NousDeux" />}
+            action={<ContactEmailLink label="nousdeux.contact.app@gmail.com" subject="Question relative aux CGU NousDeux" />}
           >
             Pour toute question relative aux présentes CGU, vous pouvez nous contacter directement via le bouton ci-dessus.
           </Section>

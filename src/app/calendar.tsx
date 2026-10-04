@@ -16,21 +16,33 @@ export default function CalendarScreen() {
   const isDarkMode = useOnboardingStore((s) => s.isDarkMode);
   const theme  = isDarkMode ? Colors.dark : Colors.light;
   const myUid  = useOnboardingStore((s) => s.uid);
-  const [coupleId, setCoupleId] = useState<string | null>(null);
-  const [loading, setLoading]   = useState(true);
+  const partnerUid = useOnboardingStore((s) => s.partnerUid);
+  const initialCoupleId = myUid && partnerUid ? [myUid, partnerUid].sort().join('_') : null;
+  const [coupleId, setCoupleId] = useState<string | null>(initialCoupleId);
+  const [loading, setLoading]   = useState(!initialCoupleId);
 
   useEffect(() => {
     if (!myUid) return;
-    const init = async () => {
-      const myDoc = await getDoc(doc(db, 'users', myUid));
-      if (!myDoc.exists()) return;
-      const pUid = myDoc.data().linkedTo as string | undefined;
-      if (!pUid) { setLoading(false); return; }
-      setCoupleId([myUid, pUid].sort().join('_'));
+    if (initialCoupleId) {
+      setCoupleId(initialCoupleId);
       setLoading(false);
+      return;
+    }
+    const init = async () => {
+      try {
+        const myDoc = await getDoc(doc(db, 'users', myUid));
+        if (!myDoc.exists()) { setLoading(false); return; }
+        const pUid = myDoc.data().linkedTo as string | undefined;
+        if (!pUid) { setLoading(false); return; }
+        setCoupleId([myUid, pUid].sort().join('_'));
+      } catch (err) {
+        console.error('Calendar init error:', err);
+      } finally {
+        setLoading(false);
+      }
     };
     init();
-  }, [myUid]);
+  }, [myUid, initialCoupleId]);
 
   const store = useOnboardingStore();
   const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));

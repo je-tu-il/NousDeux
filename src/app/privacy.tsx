@@ -100,7 +100,7 @@ export default function PrivacyScreen() {
 
           <Section
             title="10. Contact & réclamation"
-            action={<ContactEmailLink label="nousdeux.app.contact@gmail.com" subject="Contact & Réclamation NousDeux" />}
+            action={<ContactEmailLink label="nousdeux.contact.app@gmail.com" subject="Contact & Réclamation NousDeux" />}
           >
             Pour toute question relative à la protection de vos données ou l'exercice de vos droits, vous pouvez nous contacter directement ci-dessus.{'\n\n'}
             Vous avez également le droit d'introduire une réclamation auprès de la <B>CNIL</B> (Commission Nationale de l'Informatique et des Libertés) : www.cnil.fr

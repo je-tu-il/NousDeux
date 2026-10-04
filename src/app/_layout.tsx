@@ -253,31 +253,33 @@ export default function RootLayout() {
   const isGradient = bgCosmetic && !getCosmeticImage(bgCosmetic, isDark);
   const bgColors = isGradient ? parseGradientColors(bgCosmetic.preview) : null;
 
-  const webScaleStyle = StyleSheet.absoluteFill;
+  const webScaleStyle = { flex: 1, width: '100%', height: '100%' } as const;
 
   return (
-    <SafeAreaProvider style={{ flex: 1 }}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }] as any}>
+    <SafeAreaProvider style={{ flex: 1, width: '100%', height: '100%' }}>
+      <View style={[{ flex: 1, width: '100%', height: '100%', backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }] as any}>
         <StatusBar style={isDark ? 'light' : 'dark'} translucent backgroundColor="transparent" />
         <View style={webScaleStyle as any}>
         {isGradient && bgColors ? (
-          <LinearGradient colors={bgColors as [string, string]} style={StyleSheet.absoluteFill}>
-            <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
-              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
+          <LinearGradient colors={bgColors as [string, string]} style={{ flex: 1, width: '100%', height: '100%' }}>
+            <View style={{ flex: 1, width: '100%', height: '100%', backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
+              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent', flex: 1, width: '100%', height: '100%' } }} />
             </View>
           </LinearGradient>
         ) : (
           <ImageBackground
             source={bgImage}
-            style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }]}
+            style={[{ flex: 1, width: '100%', height: '100%', backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }]}
             resizeMode={backgroundResizeMode}
             imageStyle={{
+              width: '100%',
+              height: '100%',
               ...(Platform.OS === 'web' ? { objectPosition: bgCosmetic?.imagePosition || (windowWidth < 600 ? 'center bottom' : 'center') } : {}) 
             } as any}
             blurRadius={0}
           >
-            <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
-              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
+            <View style={{ flex: 1, width: '100%', height: '100%', backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
+              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent', flex: 1, width: '100%', height: '100%' } }} />
             </View>
           </ImageBackground>
         )}

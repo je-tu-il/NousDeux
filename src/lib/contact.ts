@@ -1,7 +1,7 @@
 import { Linking } from 'react-native';
 import { useToastStore } from '../store/toastStore';
 
-export const CONTACT_EMAIL = 'nousdeux.app.contact@gmail.com';
+export const CONTACT_EMAIL = 'nousdeux.contact.app@gmail.com';
 
 /**
  * Ouvre le client de messagerie par défaut avec l'adresse de contact NousDeux.

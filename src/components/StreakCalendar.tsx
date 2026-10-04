@@ -47,18 +47,35 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
       try {
         const dailySnapshot = await getDocs(collection(db, 'couples', coupleId, 'daily'));
         const active = new Set<string>();
-        dailySnapshot.docs.forEach((dailyDoc) => {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        const dateDocs = dailySnapshot.docs.filter((doc) => dateRegex.test(doc.id));
+
+        dateDocs.forEach((dailyDoc) => {
           const data = dailyDoc.data();
           if (data.bothAnswered === true || data.answered === true || data.complete === true) active.add(dailyDoc.id);
         });
-        const legacyResults = await Promise.all(
-          dailySnapshot.docs
-            .filter((dailyDoc) => !active.has(dailyDoc.id))
-            .map(async (dailyDoc) => ({ id: dailyDoc.id, count: (await getDocs(collection(dailyDoc.ref, 'answers'))).size }))
-        );
-        legacyResults.forEach(({ id, count }) => {
-          if (count >= 2) active.add(id);
-        });
+
+        // Seuls les documents de date récents sans flag direct sont vérifiés dans answers
+        // pour éviter d'inonder Firestore avec des dizaines de requêtes de sous-collections
+        const unconfirmedDateDocs = dateDocs
+          .filter((dailyDoc) => !active.has(dailyDoc.id))
+          .slice(-14);
+
+        if (unconfirmedDateDocs.length > 0) {
+          const legacyResults = await Promise.all(
+            unconfirmedDateDocs.map(async (dailyDoc) => {
+              try {
+                const subSnap = await getDocs(collection(dailyDoc.ref, 'answers'));
+                return { id: dailyDoc.id, count: subSnap.size };
+              } catch {
+                return { id: dailyDoc.id, count: 0 };
+              }
+            })
+          );
+          legacyResults.forEach(({ id, count }) => {
+            if (count >= 2) active.add(id);
+          });
+        }
         const sorted = [...active].sort();
         let best: { length: number; start: string; end: string } | null = null;
         let runStart = '';

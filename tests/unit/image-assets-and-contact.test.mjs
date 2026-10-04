@@ -39,7 +39,7 @@ test('all PNG assets in assets/ have valid PNG magic bytes (89 50 4E 47 0D 0A 1A
 test('contact helper defines CONTACT_EMAIL and openContactEmail', async () => {
   const contactSrc = await read('src/lib/contact.ts');
 
-  assert.match(contactSrc, /nousdeux\.app\.contact@gmail\.com/, 'Must declare official contact email');
+  assert.match(contactSrc, /nousdeux\.contact\.app@gmail\.com/, 'Must declare official contact email');
   assert.match(contactSrc, /export async function openContactEmail/, 'Must export openContactEmail');
   assert.match(contactSrc, /expo-clipboard/, 'Must provide fallback to clipboard when mail app cannot be opened');
 });
@@ -49,7 +49,7 @@ test('terms.tsx renders clickable contact email and ContactEmailLink', async () 
 
   assert.match(termsSrc, /ContactEmailLink/, 'terms.tsx must render ContactEmailLink component');
   assert.match(termsSrc, /openContactEmail/, 'terms.tsx must invoke openContactEmail on press');
-  assert.match(termsSrc, /nousdeux\.app\.contact@gmail\.com/, 'terms.tsx must display contact email');
+  assert.match(termsSrc, /nousdeux\.contact\.app@gmail\.com/, 'terms.tsx must display contact email');
 });
 
 test('privacy.tsx renders clickable contact email and ContactEmailLink across all contact sections', async () => {
@@ -57,7 +57,7 @@ test('privacy.tsx renders clickable contact email and ContactEmailLink across al
 
   assert.match(privacySrc, /ContactEmailLink/, 'privacy.tsx must render ContactEmailLink component');
   assert.match(privacySrc, /openContactEmail/, 'privacy.tsx must invoke openContactEmail on press');
-  assert.match(privacySrc, /nousdeux\.app\.contact@gmail\.com/, 'privacy.tsx must display contact email');
+  assert.match(privacySrc, /nousdeux\.contact\.app@gmail\.com/, 'privacy.tsx must display contact email');
 });
 
 test('contact.tsx provides direct email contact option', async () => {

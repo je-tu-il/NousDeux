@@ -11,11 +11,22 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="google" content="notranslate" />
         <meta name="googlebot" content="notranslate" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
-        <title>NousDeux</title>
+        <title>NousDeux — Jeu complice pour couple</title>
+        <meta name="description" content="NousDeux est l'application quotidienne pour renforcer votre complicité amoureuse : une question chaque jour, des anecdotes partagées, la roue des gages et une flamme à faire grandir ensemble." />
+        <meta name="keywords" content="jeu couple, questions couple, amour, complicité, relation, application couple, défis couple" />
+        <meta property="og:title" content="NousDeux — Le jeu complice pour les couples" />
+        <meta property="og:description" content="Chaque jour, une question en amoureux, des anecdotes complices et une flamme à faire grandir ensemble." />
+        <meta property="og:type" content="website" />
+        <meta property="og:locale" content="fr_FR" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="NousDeux — Le jeu complice pour les couples" />
+        <meta name="twitter:description" content="Chaque jour, une question en amoureux, des anecdotes complices et une flamme à faire grandir ensemble." />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: `
           html, body {
             height: 100%;
+            width: 100%;
+            max-width: 100%;
             min-height: 100vh;
             min-height: 100dvh;
             background-color: #FFF5F2;
@@ -27,10 +38,13 @@ export default function RootHtml({ children }: PropsWithChildren) {
           #root {
             display: flex;
             height: 100%;
+            width: 100%;
+            max-width: 100%;
             min-height: 100vh;
             min-height: 100dvh;
             flex: 1;
             background-color: #FFF5F2;
+            overflow: hidden;
           }
           @media (prefers-color-scheme: dark) {
             html, body, #root {
