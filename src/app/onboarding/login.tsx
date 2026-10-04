@@ -92,10 +92,8 @@ export default function LoginScreen() {
         if (data.pseudo && data.age) {
           if (data.linkedTo) {
             setSynced(true);
-            router.replace('/dashboard');
-          } else {
-            router.replace('/onboarding/sync');
           }
+          router.replace('/dashboard');
           return;
         }
         if (data.pseudo) {
@@ -113,12 +111,15 @@ export default function LoginScreen() {
         if (user.photoURL) {
           setAvatar(user.photoURL);
         }
+        if (user.displayName) {
+          setPseudo(user.displayName.split(' ')[0]);
+        }
       }
       router.replace('/onboarding/pseudo');
     } catch (error: any) {
       console.warn("Erreur chargement profil post-connexion :", error);
       const currentStore = useOnboardingStore.getState();
-      if (currentStore.pseudo && currentStore.age && currentStore.isSynced) {
+      if (currentStore.pseudo && currentStore.age) {
         router.replace('/dashboard');
       } else {
         router.replace('/onboarding/pseudo');
@@ -134,20 +135,14 @@ export default function LoginScreen() {
       .then((result) => {
         if (result?.user) {
           void completeLogin(result.user);
-        } else if (auth.currentUser) {
-          void completeLogin(auth.currentUser);
         }
       })
       .catch((error: any) => {
         if (error?.code !== 'auth/popup-closed-by-user') {
-          setLoginError(`La connexion Google a échoué : ${error?.message ?? 'erreur inconnue'}`);
+          console.warn("Erreur getRedirectResult :", error);
         }
         setIsSigningIn(false);
       });
-
-    if (auth.currentUser) {
-      void completeLogin(auth.currentUser);
-    }
   }, []);
 
   const handleGoogleLogin = async () => {
@@ -166,25 +161,8 @@ export default function LoginScreen() {
       if (Platform.OS === 'web') {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
-        await setPersistence(auth, browserLocalPersistence);
-
-        const isMobileWeb = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        if (isMobileWeb) {
-          await signInWithRedirect(auth, provider);
-          return;
-        }
-
-        let result: any;
-        try {
-          result = await withLoginTimeout(signInWithPopup(auth, provider));
-        } catch (popupError: any) {
-          if (['auth/popup-blocked', 'auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/operation-not-supported-in-this-environment'].includes(popupError?.code)) {
-            await signInWithRedirect(auth, provider);
-            return;
-          }
-          throw popupError;
-        }
-
+        // NOTE: Ne pas faire d'await avant signInWithPopup pour préserver le geste utilisateur sur Safari/iOS/Chrome
+        const result = await withLoginTimeout(signInWithPopup(auth, provider));
         if (result?.user) {
           await completeLogin(result.user);
         }
@@ -224,17 +202,10 @@ export default function LoginScreen() {
         setIsSigningIn(false);
         return;
       }
-      if (error?.name === 'auth-popup-timeout') {
+      if (error?.code === 'auth/popup-blocked') {
+        setLoginError("La fenêtre Google a été bloquée par le navigateur. Veuillez autoriser les fenêtres pop-up (ou désactiver le bloqueur de pop-up) puis réessayez.");
+      } else if (error?.name === 'auth-popup-timeout') {
         setLoginError(error.message);
-      } else if (Platform.OS === 'web' && ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment'].includes(error?.code)) {
-        try {
-          const redirectProvider = new GoogleAuthProvider();
-          redirectProvider.setCustomParameters({ prompt: 'select_account' });
-          await signInWithRedirect(auth, redirectProvider);
-          return;
-        } catch (redirectError: any) {
-          setLoginError(`La redirection Google a échoué : ${redirectError?.message ?? 'erreur inconnue'}`);
-        }
       } else if (error?.message?.includes('DEVELOPER_ERROR') || error?.code === '10') {
         setLoginError("Configuration Google manquante : l'empreinte SHA-1 de l'APK doit être ajoutée dans la console Firebase pour autoriser la connexion.");
       } else {

@@ -391,9 +391,9 @@ test('login connection loop prevention and mobile web auth stability', async () 
   // 3. _layout.tsx sets store.uid synchronously in onAuthStateChanged
   assert.match(layoutSrc, /setFirebaseUser\(user\)[\s\S]*store\.setUid\(user\.uid\)/, '_layout.tsx must set store.uid synchronously on user receipt');
 
-  // 4. login.tsx supports mobile web redirect and handles already connected user on mount
-  assert.match(loginSrc, /isMobileWeb[\s\S]*signInWithRedirect/, 'login.tsx must use signInWithRedirect on mobile web');
-  assert.match(loginSrc, /auth\.currentUser[\s\S]*completeLogin/, 'login.tsx must complete login if user is already authenticated');
+  // 4. login.tsx invokes signInWithPopup directly to preserve user gestures and avoids cross-domain redirect loops
+  assert.match(loginSrc, /signInWithPopup\(auth,\s*provider\)/, 'login.tsx must use signInWithPopup on web');
+  assert.doesNotMatch(loginSrc, /isMobileWeb[\s\S]*signInWithRedirect/, 'login.tsx must not force signInWithRedirect on mobile web');
 
   // 5. index.tsx reconciles activeUser before redirecting to login
   assert.match(indexSrc, /!activeUid\s*&&\s*!activeUser/, 'index.tsx must verify both store and auth before login redirect');

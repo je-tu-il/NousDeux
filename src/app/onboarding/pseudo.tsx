@@ -24,8 +24,11 @@ export default function PseudoScreen() {
     const trimmed = localPseudo.trim();
     if (trimmed.length > 1 && trimmed.length <= MAX_PSEUDO_LENGTH) {
       setPseudo(trimmed);
-      const uid = useOnboardingStore.getState().uid;
+      const uid = useOnboardingStore.getState().uid || auth?.currentUser?.uid;
       if (uid) {
+        if (!useOnboardingStore.getState().uid) {
+          useOnboardingStore.getState().setUid(uid);
+        }
         setDoc(doc(db, 'users', uid), { pseudo: trimmed }, { merge: true }).catch((error) => {
           console.error("Erreur d'enregistrement du pseudo :", error);
         });

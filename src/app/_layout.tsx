@@ -107,13 +107,15 @@ export default function RootLayout() {
               } else {
                 // Le compte Firestore n'existe pas encore ou a été supprimé
                 // Nettoyer les données locales de session pour éviter la persistance fantôme
-                store.setPseudo('');
-                store.setAge('');
-                store.setAvatar(null);
-                store.setSynced(false);
-                store.clearPartnerCache();
-                const code = await ensureUserPairingCode(user.uid, null);
-                store.setMyCode(code);
+                if (store.uid !== user.uid) {
+                  store.setPseudo('');
+                  store.setAge('');
+                  store.setAvatar(null);
+                  store.setSynced(false);
+                  store.clearPartnerCache();
+                }
+                const code = await ensureUserPairingCode(user.uid, store.myCode);
+                if (store.myCode !== code) store.setMyCode(code);
               }
               try {
                 const { getUserProfile } = await import('@/lib/economy');
@@ -208,25 +210,16 @@ export default function RootLayout() {
       return;
     }
 
+    if (activeUser && !uid) {
+      return;
+    }
+
     const isOnboarding = segments[0] === 'onboarding';
 
-    // Empêcher de rester sur login une fois le compte connecté
+    // Empêcher de rester sur login SEULEMENT si le profil est déjà totalement configuré
     if (currentRoute === 'login') {
-      const activeUid = uid || activeUser.uid;
-      if (!uid && activeUid) {
-        useOnboardingStore.getState().setUid(activeUid);
-      }
-      const isSynced = useOnboardingStore.getState().isSynced;
       if (pseudo && age) {
-        if (isSynced) {
-          router.replace('/dashboard');
-        } else {
-          router.replace('/onboarding/sync');
-        }
-      } else if (!pseudo) {
-        router.replace('/onboarding/pseudo');
-      } else if (!age) {
-        router.replace('/onboarding/age');
+        router.replace('/dashboard');
       }
       return;
     }

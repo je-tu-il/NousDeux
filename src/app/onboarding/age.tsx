@@ -27,8 +27,11 @@ export default function AgeScreen() {
     const finalAge = age || "18";
     if (!age) setAge(finalAge);
 
-    const { uid, pseudo } = useOnboardingStore.getState();
+    const state = useOnboardingStore.getState();
+    const uid = state.uid || auth?.currentUser?.uid;
+    const pseudo = state.pseudo;
     if (uid) {
+      if (!state.uid) useOnboardingStore.getState().setUid(uid);
       setDoc(doc(db, "users", uid), {
         pseudo,
         age: finalAge
