@@ -6,7 +6,6 @@
 
 import { Colors } from '@/constants/Colors';
 import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
-import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -128,13 +127,6 @@ export default function ShopScreen() {
   }, [myUid]);
 
   useEffect(() => { fetchShopData(); }, [fetchShopData]);
-
-  useEffect(() => {
-    const sources = BACKGROUNDS
-      .map(item => getCosmeticImage(item, store.isDarkMode))
-      .filter(Boolean);
-    void ExpoImage.prefetch(sources as any, 'memory-disk');
-  }, [store.isDarkMode]);
 
   // Écoute des données en temps réel
   useEffect(() => {
@@ -261,7 +253,7 @@ export default function ShopScreen() {
         <View style={styles.previewContainer}>
           {item.type === 'background' && (
             previewImage ? (
-              <ExpoImage source={previewImage} style={styles.bgPreview} contentFit="cover" cachePolicy="memory-disk" priority="high" />
+              <Image source={previewImage} style={styles.bgPreview} resizeMode="cover" />
             ) : (
               <LinearGradient colors={previewColors as [string, string]} style={styles.bgPreview} />
             )
@@ -437,7 +429,7 @@ export default function ShopScreen() {
               <View style={{ width: 160, height: 160, borderRadius: 30, overflow: 'hidden', alignSelf: 'center', marginVertical: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center' }}>
                 {selectedItem.type === 'background' && (
                   getCosmeticImage(selectedItem, store.isDarkMode) ? (
-                    <ExpoImage source={getCosmeticImage(selectedItem, store.isDarkMode)} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" />
+                    <Image source={getCosmeticImage(selectedItem, store.isDarkMode)} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                   ) : (
                     <LinearGradient colors={(store.isDarkMode ? ['#241B2A', '#111827'] : parseGradientColors(selectedItem.preview)) as [string, string]} style={{ width: '100%', height: '100%' }} />
                   )

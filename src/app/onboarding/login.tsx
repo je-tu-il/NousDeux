@@ -50,6 +50,15 @@ export default function LoginScreen() {
   };
 
   const completeLogin = async (user: { uid: string; displayName: string | null; photoURL?: string | null }) => {
+    const currentStore = useOnboardingStore.getState();
+    // Sécurité stricte d'isolation : si changement de compte ou nouvelle connexion,
+    // purger la session précédente pour empêcher tout résidu de partenaire ou de profil
+    if (currentStore.uid !== user.uid) {
+      currentStore.resetSession();
+    } else {
+      currentStore.clearPartnerCache();
+      currentStore.setSynced(false);
+    }
     setUid(user.uid);
     setHasAcceptedTerms(true);
     try {
@@ -79,20 +88,23 @@ export default function LoginScreen() {
           setMyCode(code);
         }
 
-        if (data.linkedTo && !data.needsDate) {
-          setSynced(true);
+        const isLinked = Boolean(data.linkedTo);
+        setSynced(isLinked);
+        if (!isLinked) {
+          useOnboardingStore.getState().clearPartnerCache();
+        } else if (currentStore.partnerUid && currentStore.partnerUid !== data.linkedTo) {
+          useOnboardingStore.getState().clearPartnerCache();
+        }
+
+        if (isLinked && !data.needsDate) {
           router.replace('/dashboard');
           return;
         }
-        if (data.linkedTo && data.needsDate) {
-          setSynced(true);
+        if (isLinked && data.needsDate) {
           router.replace('/onboarding/date');
           return;
         }
         if (data.pseudo && data.age) {
-          if (data.linkedTo) {
-            setSynced(true);
-          }
           router.replace('/dashboard');
           return;
         }

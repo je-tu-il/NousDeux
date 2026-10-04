@@ -235,9 +235,8 @@ export default function DateScreen() {
     setLoading(false);
   };
 
-  // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.container, { backgroundColor: store.isDarkMode ? '#1A1514' : '#FFF5F2' }]}>
+    <View style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
@@ -409,8 +408,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: '100%',
-    backgroundColor: '#FFF5F2',
+    backgroundColor: 'transparent', // Warm fallback: #FFF5F2
   },
+  safeBackgroundFallback: { backgroundColor: '#FFF5F2' },
   scrollView: { flex: 1, width: '100%' },
   scrollContent: {
     flexGrow: 1,

@@ -459,6 +459,22 @@ export default function SyncScreen() {
             }}>
               <ArrowLeft color={theme.text} size={28} />
             </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.skipHeaderBtn,
+                {
+                  borderColor: theme.tint,
+                  backgroundColor: store.isDarkMode ? 'rgba(42, 26, 26, 0.85)' : 'rgba(255, 255, 255, 0.92)',
+                  opacity: pressed ? 0.8 : 1,
+                }
+              ]}
+              onPress={() => router.replace('/dashboard')}
+            >
+              <Compass color={theme.tint} size={18} />
+              <Text style={[styles.skipHeaderBtnText, { color: theme.tint }]}>
+                Passer (Mode Solo) ➔
+              </Text>
+            </Pressable>
           </View>
 
           <View style={styles.content}>
@@ -559,39 +575,53 @@ export default function SyncScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', backgroundColor: '#FFF5F2' },
+  container: { flex: 1, width: '100%', backgroundColor: 'transparent' }, // Warm fallback: #FFF5F2
+  safeBackgroundFallback: { backgroundColor: '#FFF5F2' },
   backgroundImage: { width: '100%', height: '100%' },
   keyboardView: { flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' },
-  scrollContent: { flexGrow: 1, padding: 30, paddingBottom: 60, justifyContent: 'center' },
-  header: { zIndex: 10 },
-  backBtn: { padding: 10, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 20, alignSelf: 'flex-start' },
-  content: { flexGrow: 1, justifyContent: 'center', paddingBottom: 24 },
-  title: { fontSize: 32, fontWeight: '800', marginBottom: 10, textAlign: 'center' },
-  subtitle: { fontSize: 16, opacity: 0.7, textAlign: 'center', marginBottom: 20, lineHeight: 24 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 14, justifyContent: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, marginBottom: 8 },
+  backBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 20 },
+  skipHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  skipHeaderBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  content: { flexGrow: 1, justifyContent: 'center', paddingBottom: 14 },
+  title: { fontSize: 28, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
+  subtitle: { fontSize: 14, opacity: 0.7, textAlign: 'center', marginBottom: 14, lineHeight: 20 },
 
-  hintText: { fontSize: 12, textAlign: 'center', marginBottom: 12, opacity: 0.8 },
-  codeContainer: { alignItems: 'center', marginBottom: 20 },
-  codeBox: { flexDirection: 'row', alignItems: 'center', gap: 16, borderWidth: 1.5, borderStyle: 'solid', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 20, marginBottom: 20 },
-  codeText: { fontSize: 36, fontWeight: '900', letterSpacing: 8 },
-  shareButton: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 20, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
-  shareText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 30 },
+  hintText: { fontSize: 12, textAlign: 'center', marginBottom: 10, opacity: 0.8 },
+  codeContainer: { alignItems: 'center', marginBottom: 12 },
+  codeBox: { flexDirection: 'row', alignItems: 'center', gap: 14, borderWidth: 1.5, borderStyle: 'solid', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 18, marginBottom: 12 },
+  codeText: { fontSize: 32, fontWeight: '900', letterSpacing: 6 },
+  shareButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 16, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 8 },
+  shareText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 14 },
   line: { flex: 1, height: 1 },
-  orText: { paddingHorizontal: 15, fontSize: 14, fontWeight: 'bold', opacity: 0.5 },
-  label: { fontSize: 16, fontWeight: '600', marginBottom: 12, textAlign: 'center' },
-  input: { borderWidth: 1, padding: 16, borderRadius: 16, fontSize: 24, textAlign: 'center', letterSpacing: 6, fontWeight: 'bold', marginBottom: 20, outlineStyle: 'none' as any },
-  linkButton: { padding: 18, borderRadius: 16, alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
-  linkButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  orText: { paddingHorizontal: 12, fontSize: 13, fontWeight: 'bold', opacity: 0.5 },
+  label: { fontSize: 15, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
+  input: { borderWidth: 1, padding: 12, borderRadius: 14, fontSize: 22, textAlign: 'center', letterSpacing: 6, fontWeight: 'bold', marginBottom: 12, outlineStyle: 'none' as any },
+  linkButton: { padding: 14, borderRadius: 14, alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 8 },
+  linkButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   skipCardButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    marginTop: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    borderWidth: 2,
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -599,7 +629,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   skipCardButtonText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
   },

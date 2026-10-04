@@ -108,7 +108,11 @@ export function getCosmeticById(id: string): Cosmetic | undefined {
 }
 
 export function getCosmeticImage(cosmetic: Cosmetic | null | undefined, isDarkMode: boolean): any {
-  return isDarkMode ? cosmetic?.darkImage : cosmetic?.image;
+  if (!cosmetic) return null;
+  if (isDarkMode) {
+    return cosmetic.darkImage || cosmetic.image || null;
+  }
+  return cosmetic.image || cosmetic.darkImage || null;
 }
 
 export function isOwned(inventory: InventoryData, cosmetic: Cosmetic, streak: number = 0, questProgress: QuestProgressMap = {}): boolean {

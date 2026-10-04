@@ -24,7 +24,7 @@ export default function FloatingChat() {
   const [hasUnread, setHasUnread] = useState(false);
   const store = useOnboardingStore(s => s);
   const myUid = store.uid;
-  const initialPartner = store.partnerUid;
+  const initialPartner = store.isSynced ? store.partnerUid : null;
   const initialCId = (myUid && initialPartner) ? [myUid, initialPartner].sort().join('_') : '';
   const [cId, setCId] = useState(initialCId);
   const [messages, setMessages] = useState<Message[]>([]);

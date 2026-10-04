@@ -84,6 +84,9 @@ export default function RootLayout() {
             // Firebase Auth is the source of truth after a refresh/reconnection.
             // The persisted Zustand UID can be empty or stale while Auth is restoring.
             const store = useOnboardingStore.getState();
+            if (store.uid && store.uid !== user.uid) {
+              store.resetSession();
+            }
             if (store.uid !== user.uid) store.setUid(user.uid);
             try {
               await user.reload();
@@ -103,17 +106,21 @@ export default function RootLayout() {
                 const avatarToSet = uData.avatarUrl || uData.avatar || null;
                 if (store.avatar !== avatarToSet) store.setAvatar(avatarToSet);
                 if (uData.pairingCode && store.myCode !== uData.pairingCode) store.setMyCode(uData.pairingCode);
-                store.setSynced(Boolean(uData.linkedTo));
+                const isLinked = Boolean(uData.linkedTo);
+                store.setSynced(isLinked);
+                if (!isLinked) {
+                  store.clearPartnerCache();
+                } else if (store.partnerUid && store.partnerUid !== uData.linkedTo) {
+                  store.clearPartnerCache();
+                }
               } else {
                 // Le compte Firestore n'existe pas encore ou a été supprimé
                 // Nettoyer les données locales de session pour éviter la persistance fantôme
-                if (store.uid !== user.uid) {
-                  store.setPseudo('');
-                  store.setAge('');
-                  store.setAvatar(null);
-                  store.setSynced(false);
-                  store.clearPartnerCache();
-                }
+                store.setPseudo('');
+                store.setAge('');
+                store.setAvatar(null);
+                store.setSynced(false);
+                store.clearPartnerCache();
                 const code = await ensureUserPairingCode(user.uid, store.myCode);
                 if (store.myCode !== code) store.setMyCode(code);
               }

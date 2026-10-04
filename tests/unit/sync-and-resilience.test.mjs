@@ -90,3 +90,32 @@ test('chat is read-only when unlinked and purged before new couple connection', 
   assert.match(syncSrc, /skipCardButton/, 'sync.tsx must provide prominent skipCardButton');
   assert.doesNotMatch(syncSrc, /errorMessage && <Text style=\{\[styles\.errorText/, 'sync.tsx must not render redundant duplicate error text');
 });
+
+test('session isolation prevents partner data bleeding across account switches', async () => {
+  const loginSrc = await read('src/app/onboarding/login.tsx');
+  const layoutSrc = await read('src/app/_layout.tsx');
+  const dashboardSrc = await read('src/app/dashboard.tsx');
+  const cosmeticsSrc = await read('src/data/cosmetics.ts');
+  const syncSrc = await read('src/app/onboarding/sync.tsx');
+
+  // 1. login.tsx must reset session or clear partner cache when switching accounts or unlinked
+  assert.match(loginSrc, /currentStore\.uid !== user\.uid/, 'login.tsx must detect switching user accounts');
+  assert.match(loginSrc, /currentStore\.resetSession\(\)/, 'login.tsx must reset session when switching accounts');
+  assert.match(loginSrc, /currentStore\.clearPartnerCache\(\)/, 'login.tsx must clear partner cache');
+
+  // 2. _layout.tsx must reset session when cached UID does not match auth user
+  assert.match(layoutSrc, /store\.uid && store\.uid !== user\.uid/, '_layout.tsx must reset session if UID changed');
+  assert.match(layoutSrc, /store\.clearPartnerCache\(\)/, '_layout.tsx must clear partner cache when user is unlinked');
+
+  // 3. dashboard.tsx partner state initialization must require isSynced
+  assert.match(dashboardSrc, /store\.isSynced && store\.partnerUid/, 'dashboard.tsx must only initialize partner if isSynced is true');
+  assert.match(dashboardSrc, /store\.setSynced\(false\)/, 'dashboard.tsx must set isSynced to false when unlinked');
+
+  // 4. sync.tsx must provide header skip button visible without scrolling
+  assert.match(syncSrc, /skipHeaderBtn/, 'sync.tsx must render skip button in header visible without scrolling on PC');
+  assert.match(syncSrc, /Passer \(Mode Solo\)/, 'sync.tsx header must display skip solo text');
+
+  // 5. cosmetics.ts getCosmeticImage must provide fallback
+  assert.match(cosmeticsSrc, /cosmetic\.darkImage \|\| cosmetic\.image/, 'cosmetics.ts must provide image fallback in dark mode');
+  assert.match(cosmeticsSrc, /cosmetic\.image \|\| cosmetic\.darkImage/, 'cosmetics.ts must provide image fallback in light mode');
+});

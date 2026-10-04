@@ -50,7 +50,7 @@ export default function DashboardScreen() {
 
   const [unlockedCosmetic, setUnlockedCosmetic] = useState<Cosmetic | null>(null);
   const [partner, setPartner] = useState<PartnerData | null>(() => (
-    store.partnerUid && store.partnerPseudo
+    store.isSynced && store.partnerUid && store.partnerPseudo
       ? {
           pseudo: store.partnerPseudo,
           avatarUrl: store.partnerAvatar ?? undefined,
@@ -65,7 +65,7 @@ export default function DashboardScreen() {
   const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
   const [unlockedItems, setUnlockedItems] = useState<Cosmetic[]>([]);
   const [wallet, setWallet] = useState<any>(() => {
-    const initialCoupleId = store.partnerUid && store.uid ? [store.uid, store.partnerUid].sort().join('_') : null;
+    const initialCoupleId = store.isSynced && store.partnerUid && store.uid ? [store.uid, store.partnerUid].sort().join('_') : null;
     return initialCoupleId ? getCachedWallet(initialCoupleId) : null;
   });
   const [hasQuestRewards, setHasQuestRewards] = useState(false);
@@ -136,6 +136,7 @@ export default function DashboardScreen() {
           }
           setPartner(null);
           setPartnerLeft(true);
+          store.setSynced(false);
           store.clearPartnerCache();
           setIsLoading(false);
           return;
@@ -152,6 +153,7 @@ export default function DashboardScreen() {
               const pData = pSnap.data();
               // Vérification réciproque : si le partenaire a délié son compte, repasser en mode solo
               if (pData.linkedTo && pData.linkedTo === activeUid) {
+                store.setSynced(true);
                 store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
                 setPartner({
                   pseudo: pData.pseudo,
@@ -162,17 +164,23 @@ export default function DashboardScreen() {
                 });
                 setPartnerLeft(false);
               } else {
+                store.setSynced(false);
                 store.clearPartnerCache();
                 setPartner(null);
                 setPartnerLeft(true);
               }
             } else {
+              store.setSynced(false);
               store.clearPartnerCache();
               setPartner(null);
               setPartnerLeft(true);
             }
             setIsLoading(false);
           }, () => {
+            store.setSynced(false);
+            store.clearPartnerCache();
+            setPartner(null);
+            setPartnerLeft(true);
             setIsLoading(false);
           });
         }
