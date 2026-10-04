@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, Image, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform, Image, ScrollView, ImageBackground } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/constants/Colors';
@@ -12,6 +12,7 @@ import UIModal, { UIModalType } from '@/components/UIModal';
 import AvatarPickerModal from '@/components/AvatarPickerModal';
 import { takePhotoWithCamera, pickImageFromGallery, stripMetadataAndCompress } from '@/lib/avatarPicker';
 import { useTopInset } from '@/hooks/useTopInset';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 
 export default function AvatarScreen() {
   const store = useOnboardingStore((state) => state);
@@ -25,7 +26,13 @@ export default function AvatarScreen() {
     title?: string;
     message?: string;
   }>({ visible: false });
-  const theme = Colors.light;
+  const theme = store.isDarkMode ? Colors.dark : Colors.light;
+
+  const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
+  const defaultBg = store.isDarkMode
+    ? require('../../../assets/images/nousdeux_dark_background.png')
+    : require('../../../assets/images/nousdeux_warm_background.png');
+  const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
 
   const handleTakePhoto = async () => {
     const res = await takePhotoWithCamera();
@@ -108,7 +115,10 @@ export default function AvatarScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ImageBackground source={bgImage} style={styles.container} resizeMode="cover">
+      {store.isDarkMode && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
+      )}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingTop: topInset + 10 }]}
@@ -201,7 +211,7 @@ export default function AvatarScreen() {
         title={modalState.title}
         message={modalState.message}
       />
-    </View>
+    </ImageBackground>
   );
 }
 

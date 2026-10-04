@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, ImageBackground } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -8,6 +8,7 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useTopInset } from '@/hooks/useTopInset';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 
 const MAX_PSEUDO_LENGTH = 18;
 
@@ -19,6 +20,12 @@ export default function PseudoScreen() {
   const initialDefault = storePseudo || auth?.currentUser?.displayName?.split(' ')[0] || '';
   const [localPseudo, setLocalPseudo] = useState(initialDefault);
   const topInset = useTopInset();
+
+  const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
+  const defaultBg = store.isDarkMode
+    ? require('../../../assets/images/nousdeux_dark_background.png')
+    : require('../../../assets/images/nousdeux_warm_background.png');
+  const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
 
   const handleNext = () => {
     const trimmed = localPseudo.trim();
@@ -46,7 +53,10 @@ export default function PseudoScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ImageBackground source={bgImage} style={styles.container} resizeMode="cover">
+      {store.isDarkMode && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
+      )}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         enabled={Platform.OS !== 'web'}
@@ -117,7 +127,7 @@ export default function PseudoScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </ImageBackground>
   );
 }
 

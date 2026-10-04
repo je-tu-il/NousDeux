@@ -435,7 +435,10 @@ export default function SyncScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ImageBackground source={backgroundSource} style={styles.container} resizeMode="cover">
+      {store.isDarkMode && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
+      )}
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
         enabled={Platform.OS !== 'web'} 
@@ -570,7 +573,7 @@ export default function SyncScreen() {
         title={modalState.title}
         message={modalState.message}
       />
-    </View>
+    </ImageBackground>
   );
 }
 

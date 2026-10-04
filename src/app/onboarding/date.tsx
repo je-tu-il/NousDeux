@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   ScrollView,
   InputAccessoryView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useSegments } from 'expo-router';
@@ -21,9 +22,18 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
 import { useTopInset } from '@/hooks/useTopInset';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 
 export default function DateScreen() {
   const topInset = useTopInset();
+  const store = useOnboardingStore();
+  const theme = store.isDarkMode ? Colors.dark : Colors.light;
+
+  const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
+  const defaultBg = store.isDarkMode
+    ? require('../../../assets/images/nousdeux_dark_background.png')
+    : require('../../../assets/images/nousdeux_warm_background.png');
+  const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
   const [day, setDay]     = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear]   = useState('');
@@ -63,8 +73,6 @@ export default function DateScreen() {
   // partnerUid stocké en state pour être accessible dans handleSubmit
   const [partnerUid, setPartnerUid] = useState<string | null>(null);
 
-  const store    = useOnboardingStore((s) => s);
-  const theme    = store.isDarkMode ? Colors.dark : Colors.light;
   const myUid    = store.uid;
   const segments = useSegments();
   const redirectGuardRef = useRef<string | null>(null);
@@ -237,6 +245,10 @@ export default function DateScreen() {
 
   return (
     <View style={styles.container}>
+      <Image source={bgImage} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+      {store.isDarkMode && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
+      )}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}

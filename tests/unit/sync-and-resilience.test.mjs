@@ -119,3 +119,18 @@ test('session isolation prevents partner data bleeding across account switches',
   assert.match(cosmeticsSrc, /cosmetic\.darkImage \|\| cosmetic\.image/, 'cosmetics.ts must provide image fallback in dark mode');
   assert.match(cosmeticsSrc, /cosmetic\.image \|\| cosmetic\.darkImage/, 'cosmetics.ts must provide image fallback in light mode');
 });
+
+test('all onboarding screens render cosmetic background directly to prevent blank/grey screen', async () => {
+  const pseudoSrc = await read('src/app/onboarding/pseudo.tsx');
+  const ageSrc = await read('src/app/onboarding/age.tsx');
+  const avatarSrc = await read('src/app/onboarding/avatar.tsx');
+  const syncSrc = await read('src/app/onboarding/sync.tsx');
+  const dateSrc = await read('src/app/onboarding/date.tsx');
+
+  assert.match(pseudoSrc, /<ImageBackground\s+source=\{bgImage\}/, 'pseudo.tsx must render ImageBackground with bgImage');
+  assert.match(ageSrc, /<ImageBackground\s+source=\{bgImage\}/, 'age.tsx must render ImageBackground with bgImage');
+  assert.match(avatarSrc, /<ImageBackground\s+source=\{bgImage\}/, 'avatar.tsx must render ImageBackground with bgImage');
+  assert.match(syncSrc, /<ImageBackground\s+source=\{backgroundSource\}/, 'sync.tsx must render ImageBackground with backgroundSource');
+  assert.match(dateSrc, /<Image\s+source=\{bgImage\}/, 'date.tsx must render Image with bgImage');
+});
+

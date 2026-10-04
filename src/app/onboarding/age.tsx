@@ -1,14 +1,15 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, ImageBackground } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { ArrowRight, ArrowLeft } from 'lucide-react-native';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useTopInset } from '@/hooks/useTopInset';
+import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 
 export default function AgeScreen() {
   const store = useOnboardingStore();
@@ -16,6 +17,12 @@ export default function AgeScreen() {
   const setAge = store.setAge;
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
   const topInset = useTopInset();
+
+  const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
+  const defaultBg = store.isDarkMode
+    ? require('../../../assets/images/nousdeux_dark_background.png')
+    : require('../../../assets/images/nousdeux_warm_background.png');
+  const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
 
   useEffect(() => {
     if (!useOnboardingStore.getState().pseudo) {
@@ -46,7 +53,10 @@ export default function AgeScreen() {
   const ageOptions = Array.from({ length: 88 }, (_, i) => String(i + 13));
 
   return (
-    <View style={styles.container}>
+    <ImageBackground source={bgImage} style={styles.container} resizeMode="cover">
+      {store.isDarkMode && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
+      )}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         enabled={Platform.OS !== 'web'}
@@ -121,7 +131,7 @@ export default function AgeScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </ImageBackground>
   );
 }
 
