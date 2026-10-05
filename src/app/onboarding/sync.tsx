@@ -117,18 +117,15 @@ export default function SyncScreen() {
         setMyCode(code);
       }
 
-      // 2. Si on est lié, on déclenche le succès
-      if (data.linkedTo && !success && !isLinking.current) {
+      // 2. Si on est lié, on enregistre le partenaire et on va directement sur l'écran date
+      if (data.linkedTo && !isLinking.current) {
         const partnerDoc = await getDoc(doc(db, "users", data.linkedTo));
-        let pName = "ton partenaire";
-        let pAvatar = null;
-        if (partnerDoc.exists()) {
-          pName = partnerDoc.data().pseudo;
-          pAvatar = partnerDoc.data().avatarUrl || null;
-        }
-        setPartnerName(pName);
-        setPartnerAvatar(pAvatar);
-        setSuccess(true);
+        const pName = partnerDoc.exists() ? partnerDoc.data().pseudo : 'ton partenaire';
+        const pAvatar = partnerDoc.exists() ? (partnerDoc.data().avatarUrl || null) : null;
+        useOnboardingStore.getState().setSynced(true);
+        useOnboardingStore.getState().setPartnerCache(data.linkedTo, pName, pAvatar);
+        router.replace('/onboarding/date');
+        return;
       }
     });
 
@@ -355,11 +352,13 @@ export default function SyncScreen() {
 
         // Succès garanti APRÈS la confirmation du serveur !
         const partnerDocFetched = await getDoc(doc(db, "users", partnerUid));
-        if (partnerDocFetched.exists()) {
-          setPartnerName(partnerDocFetched.data().pseudo);
-          setPartnerAvatar(partnerDocFetched.data().avatarUrl || null);
-          setSuccess(true);
-        }
+        const pPseudo = partnerDocFetched.exists() ? partnerDocFetched.data().pseudo : '';
+        const pAvatar = partnerDocFetched.exists() ? (partnerDocFetched.data().avatarUrl || null) : null;
+        state.setSynced(true);
+        state.setPartnerCache(partnerUid, pPseudo, pAvatar);
+        // Redirection directe vers l'écran de sélection de la date de couple
+        router.replace('/onboarding/date');
+        return;
 
       } catch (error: any) {
         const isNet = error?.message?.includes('Timeout') || error?.message?.includes('réseau') || error?.code === 'unavailable';
@@ -388,9 +387,12 @@ export default function SyncScreen() {
 
   if (success) {
     return (
-      <View style={styles.container}>
+      <ImageBackground source={backgroundSource} style={styles.container} resizeMode="cover">
+        {store.isDarkMode && (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
+        )}
         <View style={[styles.successContent, { flex: 1, justifyContent: 'center', padding: 20 }]}>
-          <Animated.View entering={ZoomIn.duration(800)} style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 40, gap: 15 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 40, gap: 15 }}>
             <View style={[styles.avatarCircle, { backgroundColor: theme.tint, position: 'relative', left: 0 }]}>
               {myAvatar ? (
                 <Image source={{ uri: myAvatar }} style={{ width: '100%', height: '100%' }} />
@@ -408,29 +410,25 @@ export default function SyncScreen() {
                 <Text style={styles.avatarText}>{partnerName?.charAt(0) || "P"}</Text>
               )}
             </View>
-          </Animated.View>
+          </View>
 
-          <Animated.Text entering={FadeInUp.delay(600).duration(800)} style={[styles.successTitle, { color: theme.text }]}>
+          <Text style={[styles.successTitle, { color: theme.text }]}>
             Synchronisé !
-          </Animated.Text>
-          <Animated.Text entering={FadeInUp.delay(800).duration(800)} style={[styles.successSubtitle, { color: theme.text }]}>
+          </Text>
+          <Text style={[styles.successSubtitle, { color: theme.text }]}>
             Ton compte est maintenant lié à {partnerName} ❤️
-          </Animated.Text>
+          </Text>
 
-          <Animated.View entering={FadeInUp.delay(1500).duration(800)} style={{ marginTop: 40, width: '100%' }}>
+          <View style={{ marginTop: 40, width: '100%' }}>
             <Pressable 
               style={({ pressed }) => [styles.linkButton, { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 }]}
-              onPress={() => {
-                // Les 2 utilisateurs repassent par la sélection de date
-                // La page date.tsx se chargera du reset complet
-                router.replace('/onboarding/date');
-              }}
+              onPress={() => router.replace('/onboarding/date')}
             >
               <Text style={styles.linkButtonText}>Continuer</Text>
             </Pressable>
-          </Animated.View>
+          </View>
         </View>
-      </View>
+      </ImageBackground>
     );
   }
 
@@ -472,6 +470,7 @@ export default function SyncScreen() {
                 }
               ]}
               onPress={() => router.replace('/dashboard')}
+              accessibilityLabel="Se synchroniser plus tard en mode solo"
             >
               <Compass color={theme.tint} size={18} />
               <Text style={[styles.skipHeaderBtnText, { color: theme.tint }]}>
@@ -542,24 +541,6 @@ export default function SyncScreen() {
                 disabled={loading}
               >
                 <Text style={styles.linkButtonText}>{loading ? 'Liaison en cours...' : 'Lier les comptes'}</Text>
-              </Pressable>
-
-              {/* Passer et continuer en mode solo */}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.skipCardButton,
-                  {
-                    borderColor: theme.tint,
-                    backgroundColor: store.isDarkMode ? 'rgba(42, 26, 26, 0.85)' : 'rgba(255, 255, 255, 0.92)',
-                    opacity: pressed ? 0.8 : 1
-                  }
-                ]}
-                onPress={() => router.replace('/dashboard')}
-              >
-                <Compass color={theme.tint} size={22} />
-                <Text style={[styles.skipCardButtonText, { color: theme.tint }]}>
-                  Se synchroniser plus tard (Mode Solo)
-                </Text>
               </Pressable>
             </Animated.View>
           </View>

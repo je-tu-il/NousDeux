@@ -492,14 +492,18 @@ export default function DashboardScreen() {
           </View>
         </LinearGradient>
 
-        {/* --- LIGNE EN COUPLE + REGLAGES --- */}
-        <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 20, gap: 12 }}>
-          {/* BLOC 1: EN COUPLE AVEC (Plus large, flex: 2) */}
+        {/* --- LIGNE EN COUPLE + ROULETTE + REGLAGES --- */}
+        <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 14, gap: 10, alignItems: 'stretch' }}>
+          {/* BLOC 1: EN COUPLE AVEC / MODE SOLO */}
           <Pressable 
-            style={{ flex: 2, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
-            onPress={() => { if (partner && !partnerLeft) setShowPartnerProfile(true); }}
-            disabled={!partner || partnerLeft}
-            accessibilityState={{ disabled: !partner || partnerLeft }}
+            style={{ flex: partner?.coupleId ? 2 : 2.5, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+            onPress={() => {
+              if (partner && !partnerLeft) {
+                setShowPartnerProfile(true);
+              } else {
+                router.push('/onboarding/sync');
+              }
+            }}
           >
             {partner && !partnerLeft
               ? renderAvatar(partner.avatarUrl, partner.pseudo, true, partnerProfile)
@@ -523,9 +527,20 @@ export default function DashboardScreen() {
                       <Copy size={12} color={theme.tint} style={{ marginLeft: 4 }} />
                     </Pressable>
                   ) : null}
-                  <Pressable onPress={() => router.push('/onboarding/sync')} style={{ alignSelf: 'flex-start' }}>
+                  <Pressable 
+                    onPress={() => router.push('/onboarding/sync')} 
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={{
+                      marginTop: 4,
+                      paddingVertical: 5,
+                      paddingHorizontal: 10,
+                      borderRadius: 10,
+                      backgroundColor: 'rgba(255, 106, 136, 0.15)',
+                      alignSelf: 'flex-start',
+                    }}
+                  >
                     <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>
-                      {store.myCode ? 'Lier un partenaire' : 'Obtenir / entrer un code'}
+                      {store.myCode ? 'Lier un partenaire ➔' : 'Obtenir / entrer un code ➔'}
                     </Text>
                   </Pressable>
                 </View>
@@ -540,21 +555,9 @@ export default function DashboardScreen() {
             </View>
           </Pressable>
 
-          {/* BLOC 2: REGLAGES (Moins large, flex: 1) */}
-          <Pressable 
-            style={{ flex: 1, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
-            onPress={() => router.push('/settings')}
-          >
-            <Settings color="#FF6A88" size={32} />
-            <Text style={{ color: theme.text, fontSize: 12, marginTop: 6, fontWeight: '700' }}>Réglages</Text>
-          </Pressable>
-        </View>
-
-        {/* --- WIDGETS LIGNE --- */}
-        <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 20, gap: 12, alignItems: 'stretch' }}>
-          {/* ROULETTE */}
+          {/* BLOC 2: LA ROULETTE (à la suite de la case en couple, à gauche de réglages) */}
           {partner?.coupleId && store.uid && (
-            <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1 }}>
+            <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1.2 }}>
               <DailyClaim 
                 compact={true}
                 coupleId={partner.coupleId} 
@@ -568,17 +571,32 @@ export default function DashboardScreen() {
             </Animated.View>
           )}
 
-          {/* STREAK */}
-          {partner?.coupleId && (
-            <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ flex: 1.2 }}>
-              <Link href="/calendar" asChild>
-                <Pressable style={{ flex: 1, height: '100%' }}>
-                  <StreakCalendar coupleId={partner.coupleId} compact={true} currentStreak={wallet?.streak} darkMode={store.isDarkMode} />
-                </Pressable>
-              </Link>
-            </Animated.View>
-          )}
+          {/* BLOC 3: REGLAGES */}
+          <Pressable 
+            style={{ flex: partner?.coupleId ? 0.9 : 1, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+            onPress={() => router.push('/settings')}
+          >
+            <Settings color="#FF6A88" size={30} />
+            <Text style={{ color: theme.text, fontSize: 12, marginTop: 6, fontWeight: '700' }}>Réglages</Text>
+          </Pressable>
         </View>
+
+        {/* --- LIGNE CALENDRIER PLEINE LONGUEUR --- */}
+        {partner?.coupleId && (
+          <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ marginHorizontal: 16, marginBottom: 16 }}>
+            <Link href="/calendar" asChild>
+              <Pressable style={{ width: '100%' }}>
+                <StreakCalendar 
+                  coupleId={partner.coupleId} 
+                  compact={true} 
+                  fullWidth={true} 
+                  currentStreak={wallet?.streak} 
+                  darkMode={store.isDarkMode} 
+                />
+              </Pressable>
+            </Link>
+          </Animated.View>
+        )}
 
         {/* Main Grid */}
         <View style={styles.grid}>

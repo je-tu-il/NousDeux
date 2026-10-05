@@ -24,12 +24,13 @@ interface Props {
   coupleId: string;
   showFullCalendar?: boolean;
   compact?: boolean;
+  fullWidth?: boolean;
   darkMode?: boolean;
 }
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 
-export default function StreakCalendar({ coupleId, showFullCalendar = false, currentStreak, compact = false, darkMode = false }: Props) {
+export default function StreakCalendar({ coupleId, showFullCalendar = false, currentStreak, compact = false, fullWidth = false, darkMode = false }: Props) {
   const [streak, setStreak] = useState<number>(currentStreak ?? 0);
   const [activeDays, setActive]   = useState<Set<string>>(new Set());
   const [loading, setLoading]     = useState(true);
@@ -127,7 +128,9 @@ export default function StreakCalendar({ coupleId, showFullCalendar = false, cur
 
   // ── Streak mini-bar (fenêtre glissante) ─────────────────────────────────────
   const displayedStreak = currentStreak ?? streak;
-  const daysToShow = compact ? 5 : Math.min(Math.max(displayedStreak, 7), 30);
+  const daysToShow = compact
+    ? (fullWidth ? Math.min(Math.max(displayedStreak + 1, 14), 30) : 7)
+    : Math.min(Math.max(displayedStreak, 7), 30);
   const scrollViewRef = useRef<ScrollView>(null);
   const miniDays: string[] = [];
   for (let i = -(daysToShow - 1); i <= 0; i++) {
