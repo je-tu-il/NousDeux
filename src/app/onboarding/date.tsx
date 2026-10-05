@@ -23,6 +23,7 @@ import { auth, db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, onSnapshot, deleteField, writeBatch } from 'firebase/firestore';
 import { useTopInset } from '@/hooks/useTopInset';
 import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
+import { triggerHaptic } from '@/lib/haptics';
 
 export default function DateScreen() {
   const topInset = useTopInset();
@@ -50,6 +51,7 @@ export default function DateScreen() {
     const cleaned = text.replace(/[^0-9]/g, '');
     setDay(cleaned);
     if (cleaned.length === 2) {
+      triggerHaptic('selection');
       monthRef.current?.focus();
     }
   };
@@ -58,6 +60,7 @@ export default function DateScreen() {
     const cleaned = text.replace(/[^0-9]/g, '');
     setMonth(cleaned);
     if (cleaned.length === 2) {
+      triggerHaptic('selection');
       yearRef.current?.focus();
     }
   };
@@ -66,6 +69,7 @@ export default function DateScreen() {
     const cleaned = text.replace(/[^0-9]/g, '');
     setYear(cleaned);
     if (cleaned.length === 4) {
+      triggerHaptic('selection');
       Keyboard.dismiss();
     }
   };
@@ -102,16 +106,19 @@ export default function DateScreen() {
   // ── Comparaison des deux dates proposées ─────────────────────────────────
   // Fonction partagée appelée depuis le listener ET depuis handleSubmit
   const compareProposals = async (myProposed: string, partnerProposed: string, pUid: string) => {
+    const currentUid = store.uid || auth?.currentUser?.uid;
     if (myProposed === partnerProposed) {
       setSuccess(true);
+      triggerHaptic('success');
       const batch = writeBatch(db);
-      if (myUid) batch.update(doc(db, 'users', myUid), { coupleDate: myProposed, proposedDate: deleteField(), needsDate: deleteField(), dateMismatch: deleteField() });
+      if (currentUid) batch.update(doc(db, 'users', currentUid), { coupleDate: myProposed, proposedDate: deleteField(), needsDate: deleteField(), dateMismatch: deleteField() });
       batch.update(doc(db, 'users', pUid), { coupleDate: myProposed, proposedDate: deleteField(), needsDate: deleteField(), dateMismatch: deleteField() });
       await batch.commit();
       setTimeout(() => redirectOnce('/dashboard'), 2000);
     } else {
+      triggerHaptic('warning');
       const batch = writeBatch(db);
-      if (myUid) batch.update(doc(db, 'users', myUid), { proposedDate: deleteField(), dateMismatch: true });
+      if (currentUid) batch.update(doc(db, 'users', currentUid), { proposedDate: deleteField(), dateMismatch: true });
       batch.update(doc(db, 'users', pUid), { proposedDate: deleteField(), dateMismatch: true });
       await batch.commit();
       setWaiting(false);
@@ -133,64 +140,71 @@ export default function DateScreen() {
     let unsubMe: (() => void) | undefined;
 
     const setupListener = async () => {
-      const myDoc = await getDoc(doc(db, 'users', activeUid));
-      if (!myDoc.exists()) return;
-      const data = myDoc.data();
-      const pUid = data.linkedTo as string | undefined;
+      try {
+        const myDoc = await getDoc(doc(db, 'users', activeUid));
+        if (!myDoc.exists()) return;
+        const data = myDoc.data();
+        const pUid = data.linkedTo as string | undefined;
 
-      if (!pUid) { redirectOnce('/onboarding/sync'); return; }
+        if (!pUid) { redirectOnce('/onboarding/sync'); return; }
 
-      // Stocker partnerUid dans le state pour handleSubmit
-      setPartnerUid(pUid);
+        // Stocker partnerUid dans le state pour handleSubmit
+        setPartnerUid(pUid);
 
-      // Si coupleDate déjà présente → dashboard directement (pas de suppression!)
-      if (data.coupleDate && !data.needsDate) { redirectOnce('/dashboard'); return; }
+        // Si coupleDate déjà présente → dashboard directement (pas de suppression!)
+        if (data.coupleDate && !data.needsDate) { redirectOnce('/dashboard'); return; }
 
-      if (data.dateMismatch) {
-        setError("Ton partenaire n'a pas mis la même date !\nÊtes-vous sûrs de la date où vous vous êtes mis ensemble ?");
-      }
-
-      // Restauration de l'état "en attente" après un refresh
-      if (data.proposedDate) {
-        setWaiting(true);
-        waitingRef.current = true;
-        // Extraire JJ/MM/AAAA de la date ISO stockée
-        const parts = (data.proposedDate as string).split('-');
-        if (parts.length === 3) {
-          setYear(parts[0]);
-          setMonth(String(parseInt(parts[1], 10)));
-          setDay(String(parseInt(parts[2], 10)));
-        }
-      }
-
-      // Listener sur mon propre doc pour recevoir dateMismatch ou validation du partenaire
-      unsubMe = onSnapshot(doc(db, 'users', myUid), (mySnap) => {
-        if (!mySnap.exists()) return;
-        const myData = mySnap.data();
-        if (myData.coupleDate && !myData.needsDate) {
-          setSuccess(true);
-          setTimeout(() => redirectOnce('/dashboard'), 2000);
-        } else if (myData.dateMismatch) {
-          setWaiting(false);
-          waitingRef.current = false;
-          setDay(''); setMonth(''); setYear('');
+        if (data.dateMismatch) {
           setError("Ton partenaire n'a pas mis la même date !\nÊtes-vous sûrs de la date où vous vous êtes mis ensemble ?");
         }
-      });
 
-      // Listener sur le doc du partenaire
-      unsubPartner = onSnapshot(doc(db, 'users', pUid), async (partnerSnap) => {
-        if (!partnerSnap.exists()) return;
-        const pData = partnerSnap.data();
-
-        // Cas 1 : partenaire a déjà une coupleDate → on la copie, on part
-        // Cas 2 : partenaire a proposé une date et JE suis en attente
-        if (waitingRef.current && pData.proposedDate) {
-          const myLatest = await getDoc(doc(db, 'users', myUid));
-          if (!myLatest.exists() || !myLatest.data().proposedDate) return;
-          await compareProposals(myLatest.data().proposedDate, pData.proposedDate, pUid);
+        // Restauration de l'état "en attente" après un refresh
+        if (data.proposedDate) {
+          setWaiting(true);
+          waitingRef.current = true;
+          // Extraire JJ/MM/AAAA de la date ISO stockée
+          const parts = (data.proposedDate as string).split('-');
+          if (parts.length === 3) {
+            setYear(parts[0]);
+            setMonth(String(parseInt(parts[1], 10)));
+            setDay(String(parseInt(parts[2], 10)));
+          }
         }
-      });
+
+        // Listener sur mon propre doc pour recevoir dateMismatch ou validation du partenaire
+        unsubMe = onSnapshot(doc(db, 'users', activeUid), (mySnap) => {
+          if (!mySnap.exists()) return;
+          const myData = mySnap.data();
+          if (myData.coupleDate && !myData.needsDate) {
+            setSuccess(true);
+            triggerHaptic('success');
+            setTimeout(() => redirectOnce('/dashboard'), 2000);
+          } else if (myData.dateMismatch) {
+            triggerHaptic('warning');
+            setWaiting(false);
+            waitingRef.current = false;
+            setDay(''); setMonth(''); setYear('');
+            setError("Ton partenaire n'a pas mis la même date !\nÊtes-vous sûrs de la date où vous vous êtes mis ensemble ?");
+          }
+        });
+
+        // Listener sur le doc du partenaire
+        unsubPartner = onSnapshot(doc(db, 'users', pUid), async (partnerSnap) => {
+          if (!partnerSnap.exists()) return;
+          const pData = partnerSnap.data();
+
+          // Cas 1 : partenaire a déjà une coupleDate → on la copie, on part
+          // Cas 2 : partenaire a proposé une date et JE suis en attente
+          if (waitingRef.current && pData.proposedDate) {
+            const myLatest = await getDoc(doc(db, 'users', activeUid));
+            if (!myLatest.exists() || !myLatest.data().proposedDate) return;
+            await compareProposals(myLatest.data().proposedDate, pData.proposedDate, pUid);
+          }
+        });
+      } catch (err: any) {
+        console.warn('Erreur date setupListener :', err);
+        setError("Erreur de synchronisation avec le serveur. Veuillez réessayer.");
+      }
     };
 
     setupListener();
@@ -208,14 +222,17 @@ export default function DateScreen() {
     const yearNum  = parseInt(year, 10);
 
     if (!day || !month || !year || isNaN(dayNum) || isNaN(monthNum) || isNaN(yearNum)) {
+      triggerHaptic('warning');
       setError('Veuillez remplir tous les champs (JJ / MM / AAAA).'); return;
     }
-    if (dayNum < 1 || dayNum > 31)    { setError('Le jour doit être entre 1 et 31.'); return; }
-    if (monthNum < 1 || monthNum > 12) { setError('Le mois doit être entre 1 et 12.'); return; }
+    if (dayNum < 1 || dayNum > 31)    { triggerHaptic('warning'); setError('Le jour doit être entre 1 et 31.'); return; }
+    if (monthNum < 1 || monthNum > 12) { triggerHaptic('warning'); setError('Le mois doit être entre 1 et 12.'); return; }
     if (yearNum < 1900 || yearNum > new Date().getFullYear()) {
+      triggerHaptic('warning');
       setError(`L'année doit être entre 1900 et ${new Date().getFullYear()}.`); return;
     }
-    if (!myUid || !partnerUid) return;
+    const currentUid = store.uid || auth?.currentUser?.uid;
+    if (!currentUid || !partnerUid) return;
 
     setLoading(true);
     setError('');
@@ -223,9 +240,10 @@ export default function DateScreen() {
       const proposed = `${yearNum}-${monthNum.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
 
       // 1. Écrire ma proposition et réinitialiser dateMismatch
-      await updateDoc(doc(db, 'users', myUid), { proposedDate: proposed, dateMismatch: deleteField() });
+      await updateDoc(doc(db, 'users', currentUid), { proposedDate: proposed, dateMismatch: deleteField() });
       setWaiting(true);
       waitingRef.current = true;
+      triggerHaptic('light');
 
       // 2. Vérifier IMMÉDIATEMENT si le partenaire a déjà proposé
       const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
@@ -239,6 +257,7 @@ export default function DateScreen() {
       setError(error.message);
       setWaiting(false);
       waitingRef.current = false;
+      triggerHaptic('warning');
     }
     setLoading(false);
   };
@@ -267,12 +286,9 @@ export default function DateScreen() {
             <Pressable
               style={styles.backBtn}
               onPress={() => {
+                triggerHaptic('light');
                 Keyboard.dismiss();
-                if (router.canGoBack()) {
-                  router.back();
-                } else {
-                  router.replace('/onboarding/sync');
-                }
+                router.replace('/onboarding/sync');
               }}
             >
               <ArrowLeft color={theme.text} size={28} />
@@ -281,7 +297,7 @@ export default function DateScreen() {
 
           <View style={styles.content}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-              <Animated.View entering={FadeInDown.duration(800)}>
+              <View>
                 <CalendarDays color={theme.tint} size={60} style={{ alignSelf: 'center', marginBottom: 20 }} />
                 <Text style={[styles.title, { color: theme.text }]}>La Date Importante</Text>
                 <Text style={[styles.subtitle, { color: theme.text }]}>
@@ -289,17 +305,17 @@ export default function DateScreen() {
                     ? 'En attente de la réponse de ton partenaire...'
                     : "À quand remonte votre mise en couple ? Vos réponses doivent correspondre !"}
                 </Text>
-              </Animated.View>
+              </View>
             </TouchableWithoutFeedback>
 
             {!!errorMessage && (
-              <Animated.View entering={FadeInDown.duration(400)} style={styles.errorBox}>
+              <View style={styles.errorBox}>
                 <Text style={styles.errorText}>{errorMessage}</Text>
-              </Animated.View>
+              </View>
             )}
 
             {!waitingForPartner ? (
-              <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.pickerContainer}>
+              <View style={styles.pickerContainer}>
                 <Text style={styles.inputInstructions}>Saisissez la date au format JJ / MM / AAAA</Text>
                 <View style={styles.pickersWrapper}>
                   <View style={styles.pickerCol}>
@@ -360,14 +376,14 @@ export default function DateScreen() {
                     />
                   </View>
                 </View>
-              </Animated.View>
+              </View>
             ) : success ? (
-              <Animated.View entering={FadeInUp.duration(800)} style={styles.waitingContainer}>
+              <View style={styles.waitingContainer}>
                 <Text style={{ fontSize: 60, marginBottom: 20 }}>✅</Text>
                 <Text style={styles.waitingText}>C'est la bonne date !</Text>
-              </Animated.View>
+              </View>
             ) : (
-              <Animated.View entering={FadeInUp.duration(800)} style={styles.waitingContainer}>
+              <View style={styles.waitingContainer}>
                 <Animated.View style={spinStyle}>
                   <Loader2 color={theme.tint} size={50} style={{ marginBottom: 20 }} />
                 </Animated.View>
@@ -375,20 +391,23 @@ export default function DateScreen() {
                 <Text style={{ color: theme.text, opacity: 0.5, fontSize: 13, marginTop: 10 }}>
                   Date proposée : {day.padStart(2, '0')}/{month.padStart(2, '0')}/{year}
                 </Text>
-              </Animated.View>
+              </View>
             )}
 
             {!waitingForPartner && (
-              <Animated.View entering={FadeInUp.duration(800).delay(400)} style={styles.buttonContainer}>
+              <View style={styles.buttonContainer}>
                 <Pressable
                   style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: pressed || loading ? 0.8 : 1 }]}
-                  onPress={handleSubmit}
+                  onPress={() => {
+                    triggerHaptic('medium');
+                    handleSubmit();
+                  }}
                   disabled={loading}
                 >
                   <Text style={styles.buttonText}>Confirmer</Text>
                   <ArrowRight color="white" size={24} />
                 </Pressable>
-              </Animated.View>
+              </View>
             )}
           </View>
         </ScrollView>
@@ -456,7 +475,7 @@ const styles = StyleSheet.create({
     color: '#4A3B39',
     borderColor: '#FF9A8B',
     borderWidth: 1,
-    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
   },
   buttonContainer: { alignItems: 'center', marginTop: 10 },
   button: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 40, borderRadius: 30, gap: 12, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },

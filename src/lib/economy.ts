@@ -35,6 +35,11 @@ export function invalidateStreakCache(cId: string): void {
   streakCache.delete(cId);
 }
 
+export function clearEconomyCache(): void {
+  walletCache.clear();
+  streakCache.clear();
+}
+
 export function getCachedStreak(cId: string): number | null {
   return streakCache.has(cId) ? streakCache.get(cId)! : null;
 }

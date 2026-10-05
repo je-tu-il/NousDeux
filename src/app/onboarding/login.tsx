@@ -2,14 +2,15 @@ import { Colors } from '@/constants/Colors';
 import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Link, router } from 'expo-router';
-import { browserLocalPersistence, getRedirectResult, GoogleAuthProvider, setPersistence, signInWithCredential, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { browserLocalPersistence, getRedirectResult, GoogleAuthProvider, OAuthProvider, setPersistence, signInWithCredential, signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { CheckSquare, Square } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, ImageBackground, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import UIModal, { UIModalType } from '@/components/UIModal';
 import { ensureUserPairingCode } from '@/lib/pairing';
+import { triggerHaptic } from '@/lib/haptics';
 
 export default function LoginScreen() {
   const theme = Colors.light;
@@ -31,6 +32,17 @@ export default function LoginScreen() {
     title?: string;
     message?: string;
   }>({ visible: false });
+
+  // Empêcher le retour arrière Android d'afficher une session précédente
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        BackHandler.exitApp();
+        return true;
+      });
+      return () => sub.remove();
+    }
+  }, []);
 
   const withLoginTimeout = async <T,>(promise: Promise<T>): Promise<T> => {
     if (Platform.OS !== 'web') return promise;
@@ -96,20 +108,27 @@ export default function LoginScreen() {
           useOnboardingStore.getState().clearPartnerCache();
         }
 
+        const navigateCleanly = (path: any) => {
+          if (router.canDismiss()) {
+            router.dismissAll();
+          }
+          router.replace(path);
+        };
+
         if (isLinked && !data.needsDate) {
-          router.replace('/dashboard');
+          navigateCleanly('/dashboard');
           return;
         }
         if (isLinked && data.needsDate) {
-          router.replace('/onboarding/date');
+          navigateCleanly('/onboarding/date');
           return;
         }
         if (data.pseudo && data.age) {
-          router.replace('/dashboard');
+          navigateCleanly('/dashboard');
           return;
         }
         if (data.pseudo) {
-          router.replace('/onboarding/age');
+          navigateCleanly('/onboarding/age');
           return;
         }
       } else {
@@ -127,10 +146,16 @@ export default function LoginScreen() {
           setPseudo(user.displayName.split(' ')[0]);
         }
       }
+      if (router.canDismiss()) {
+        router.dismissAll();
+      }
       router.replace('/onboarding/pseudo');
     } catch (error: any) {
       console.warn("Erreur chargement profil post-connexion :", error);
       const currentStore = useOnboardingStore.getState();
+      if (router.canDismiss()) {
+        router.dismissAll();
+      }
       if (currentStore.pseudo && currentStore.age) {
         router.replace('/dashboard');
       } else {
@@ -159,6 +184,7 @@ export default function LoginScreen() {
 
   const handleGoogleLogin = async () => {
     if (!accepted) {
+      triggerHaptic('warning');
       setModalState({
         visible: true,
         type: 'warning',
@@ -169,6 +195,7 @@ export default function LoginScreen() {
     }
     setLoginError(null);
     setIsSigningIn(true);
+    triggerHaptic('light');
     try {
       if (Platform.OS === 'web') {
         const provider = new GoogleAuthProvider();
@@ -188,10 +215,19 @@ export default function LoginScreen() {
           offlineAccess: false,
         });
 
-        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        try {
+          await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        } catch (playErr: any) {
+          console.warn('PlayServices status check:', playErr);
+        }
         // S'assurer qu'aucune session expirée ou d'un compte supprimé ne bloque la reconnexion
         await GoogleSignin.signOut().catch(() => {});
         const signInResult = await GoogleSignin.signIn();
+
+        if ((signInResult as any).type === 'cancelled') {
+          setIsSigningIn(false);
+          return;
+        }
 
         const idToken = signInResult.data?.idToken || (signInResult as any).idToken;
         if (!idToken) {
@@ -214,6 +250,7 @@ export default function LoginScreen() {
         setIsSigningIn(false);
         return;
       }
+      triggerHaptic('warning');
       if (error?.code === 'auth/popup-blocked') {
         setLoginError("La fenêtre Google a été bloquée par le navigateur. Veuillez autoriser les fenêtres pop-up (ou désactiver le bloqueur de pop-up) puis réessayez.");
       } else if (error?.name === 'auth-popup-timeout') {
@@ -227,7 +264,91 @@ export default function LoginScreen() {
     }
   };
 
+  const handleAppleLogin = async () => {
+    if (!accepted) {
+      triggerHaptic('warning');
+      setModalState({
+        visible: true,
+        type: 'warning',
+        title: 'Conditions requises',
+        message: 'Veuillez accepter les CGU et la Politique de confidentialité pour continuer.',
+      });
+      return;
+    }
+    setLoginError(null);
+    setIsSigningIn(true);
+    triggerHaptic('light');
+
+    try {
+      if (Platform.OS === 'ios') {
+        const AppleAuthentication = await import('expo-apple-authentication');
+        const isAvailable = await AppleAuthentication.isAvailableAsync();
+        if (!isAvailable) {
+          throw new Error("La connexion avec Apple n'est pas disponible sur cet appareil.");
+        }
+        const csrf = Math.random().toString(36).substring(2, 15);
+        const appleCredential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+          state: csrf,
+        });
+
+        const { identityToken } = appleCredential;
+        if (!identityToken) {
+          throw new Error("Impossible de récupérer le jeton de connexion Apple.");
+        }
+
+        const provider = new OAuthProvider('apple.com');
+        const credential = provider.credential({
+          idToken: identityToken,
+          rawNonce: csrf,
+        });
+        const userCredential = await signInWithCredential(auth, credential);
+        const fullName = appleCredential.fullName
+          ? [appleCredential.fullName.givenName, appleCredential.fullName.familyName].filter(Boolean).join(' ')
+          : null;
+        await completeLogin({
+          uid: userCredential.user.uid,
+          displayName: fullName || userCredential.user.displayName,
+          photoURL: userCredential.user.photoURL,
+        });
+      } else {
+        // Web / Android: Firebase OAuthProvider
+        const provider = new OAuthProvider('apple.com');
+        provider.addScope('email');
+        provider.addScope('name');
+        const result = await withLoginTimeout(signInWithPopup(auth, provider));
+        if (result?.user) {
+          await completeLogin(result.user);
+        }
+      }
+    } catch (error: any) {
+      if (
+        error?.code === 'auth/popup-closed-by-user' ||
+        error?.code === 'auth/cancelled-popup-request' ||
+        error?.code === 'ERR_REQUEST_CANCELED' ||
+        error?.message?.includes('cancelled') ||
+        error?.message?.includes('canceled')
+      ) {
+        setIsSigningIn(false);
+        return;
+      }
+      triggerHaptic('warning');
+      if (error?.code === 'auth/popup-blocked') {
+        setLoginError("La fenêtre Apple a été bloquée par le navigateur. Veuillez autoriser les fenêtres pop-up.");
+      } else if (error?.name === 'auth-popup-timeout') {
+        setLoginError(error.message);
+      } else {
+        setLoginError(`Erreur de connexion Apple : ${error?.message ?? 'erreur inconnue'}`);
+      }
+      setIsSigningIn(false);
+    }
+  };
+
   const toggleAccepted = () => {
+    triggerHaptic('selection');
     const next = !accepted;
     setAccepted(next);
     setHasAcceptedTerms(next); // ← persister dans le store pour survivre à la navigation CGU
@@ -270,12 +391,23 @@ export default function LoginScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.googleButton,
-              { opacity: pressed || isSigningIn ? 0.6 : accepted ? 1 : 0.5 }
+              { opacity: pressed || isSigningIn ? 0.6 : accepted ? 1 : 0.85 }
             ]}
             onPress={handleGoogleLogin}
-            disabled={!accepted || isSigningIn}
+            disabled={isSigningIn}
           >
             <Text style={styles.googleButtonText}>{isSigningIn ? 'Connexion en cours...' : 'Continuer avec Google'}</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.appleButton,
+              { opacity: pressed || isSigningIn ? 0.6 : accepted ? 1 : 0.85 }
+            ]}
+            onPress={handleAppleLogin}
+            disabled={isSigningIn}
+          >
+            <Text style={styles.appleButtonText}>{isSigningIn ? 'Connexion en cours...' : 'Continuer avec Apple'}</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -309,8 +441,10 @@ const styles = StyleSheet.create({
   consentNote: { fontSize: 12, color: '#A99693', fontStyle: 'italic', textAlign: 'center' },
   linksRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' },
   linkSep: { color: '#A99693', fontSize: 13 },
-  buttonContainer: { alignItems: 'center' },
-  googleButton: { backgroundColor: 'white', paddingVertical: 18, paddingHorizontal: 32, borderRadius: 30, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
+  buttonContainer: { alignItems: 'center', width: '100%', gap: 12 },
+  googleButton: { backgroundColor: 'white', paddingVertical: 18, paddingHorizontal: 32, borderRadius: 30, width: '100%', maxWidth: 320, alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
   googleButtonText: { color: '#444', fontSize: 18, fontWeight: 'bold' },
+  appleButton: { backgroundColor: '#000000', paddingVertical: 18, paddingHorizontal: 32, borderRadius: 30, width: '100%', maxWidth: 320, alignItems: 'center', shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
+  appleButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
   errorText: { color: '#B91C1C', backgroundColor: 'rgba(254,226,226,0.92)', padding: 12, borderRadius: 12, marginBottom: 16, textAlign: 'center', lineHeight: 19 },
 });

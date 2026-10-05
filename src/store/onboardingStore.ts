@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { AvatarConfig } from '../data/avatarParts';
+import { clearEconomyCache } from '../lib/economy';
 
 interface OnboardingState {
   uid: string | null;
@@ -72,22 +73,27 @@ export const useOnboardingStore = create<OnboardingState>()(
       clearPartnerCache: () => set({ partnerUid: null, partnerPseudo: '', partnerAvatar: null }),
       setAvatarConfig: (config) => set({ avatarConfig: config }),
       setSelectedCosmetics: (bg, border, tag) => set({ selectedBackground: bg, selectedBorder: border, selectedTag: tag }),
-      resetSession: () => set({
-        uid: null,
-        pseudo: '',
-        age: '',
-        avatar: null,
-        partnerCode: '',
-        myCode: '',
-        isSynced: false,
-        partnerUid: null,
-        partnerPseudo: '',
-        partnerAvatar: null,
-        avatarConfig: null,
-        selectedBackground: 'bg_free_1',
-        selectedBorder: 'border_none',
-        selectedTag: '',
-      }),
+      resetSession: () => {
+        try {
+          clearEconomyCache();
+        } catch {}
+        set({
+          uid: null,
+          pseudo: '',
+          age: '',
+          avatar: null,
+          partnerCode: '',
+          myCode: '',
+          isSynced: false,
+          partnerUid: null,
+          partnerPseudo: '',
+          partnerAvatar: null,
+          avatarConfig: null,
+          selectedBackground: 'bg_free_1',
+          selectedBorder: 'border_none',
+          selectedTag: '',
+        });
+      },
     }),
     {
       name: 'onboarding-storage',

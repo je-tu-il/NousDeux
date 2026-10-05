@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AvatarPickerModal from '@/components/AvatarPickerModal';
 import { takePhotoWithCamera, pickImageFromGallery } from '@/lib/avatarPicker';
 import { useTopInset } from '@/hooks/useTopInset';
+import { clearEconomyCache } from '@/lib/economy';
+import { triggerHaptic } from '@/lib/haptics';
 
 // Durée du debounce pour pseudo/age (ms)
 const DEBOUNCE_DELAY = 1000;
@@ -259,7 +261,7 @@ export default function SettingsScreen() {
         ? Date.parse(firebaseUser.metadata.lastSignInTime)
         : 0;
       const recentLogin = lastSignIn > Date.now() - 5 * 60 * 1000;
-      if (firebaseUser?.providerData.some(provider => provider.providerId === 'google.com') && !recentLogin) {
+      if (firebaseUser?.providerData.some((provider: any) => provider.providerId === 'google.com') && !recentLogin) {
         await reauthenticateWithPopup(firebaseUser, new GoogleAuthProvider());
       }
 
@@ -321,8 +323,12 @@ export default function SettingsScreen() {
       await signOut(auth).catch(() => {});
 
       // 4. Réinitialiser le store local
+      clearEconomyCache();
       store.resetSession();
       setShowDeleteModal(false);
+      if (router.canDismiss()) {
+        router.dismissAll();
+      }
       router.replace('/onboarding/login');
     } catch (error: any) {
       if (error?.code === 'auth/requires-recent-login') {
@@ -395,7 +401,11 @@ export default function SettingsScreen() {
         });
         return;
       }
+      clearEconomyCache();
       store.resetSession();
+      if (router.canDismiss()) {
+        router.dismissAll();
+      }
       router.replace('/onboarding/login');
   };
 

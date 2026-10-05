@@ -4,53 +4,7 @@ CHIARA
 
 |A faire|BUGS|Verif|A Reflechir|
 |-|-|-|-|
-|Screen Ipad<br />Referencer le site|nousdeux.contact.app@gmail.com (validé \& configuré partout)<br />Pub web Debut bas petale <br />Icone + version glass ?<br />Pb vercel<br />Remet en privé|Envoie mail noreply@bloum-5456.firebaseapp.com verif si marche + modif<br />Notif<br />|Score de corda<br />Debloquage au fur et a mesure<br />Verif Secu<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Plan de test<br />Mascotte ?<br />Swip vers le haut pour au suivant<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Son<br />Restaure la streak ?<br />Page de vente<br />Vide un peu firebase ? Code 6 chiffres<br />Process de test<br />Secur encore plus message clé privé ?<br />Panel Modif<br />Forcer les maj<br />Retention ?<br />Backup Firebase<br />Animation<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Revoir certaines questions nul, pas mettre les défis dans les trucs quotidien<br />Pose de questions sur lui-même pas si fou ?<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Voir la reponse de la veille ?|
-
-
-
-Affichage apk
-
-Sur pc calendrier les bulle de chiffres trop ecarté
-
-
-
-Appuyer sur entré valide sur tout les appareilles
-
-Sur tablette quand je change de page les bords de l'ecran s'arrondissent a fond pendant 1/2 sec
-
-
-
-
-
-
-
-Petit tuto pour comment bien referencer mon site
-
-Met dans les usernotes une note de toutes les etapes a faire a cocher pour referencer le site et s'approcher de pouvoir le publier sur iPhone ou android
-
-nousdeux.app.contact@gmail.com je ne possede pas ce mail
-
-nousdeux.contact.app@gmail.com voila ce que je possede modifie partout
-
-A quoi correspond l'envoie de mail depuis firestore noreply@bloum-5456.firebaseapp.com
-
-Tourner l'ecran pendant un changement donne unecran totalement dezomer en tout petit en haut a gauche
-
-Le calendrier remet beaucoup de temps a charger
-
-
-
-
-
-Connexion avec apple
-
-Domaine
-
-
-
-Si je clic sur retour quand je suis sur synchro ca me remet sur l'age au lieu d'image
-
-Voir sur l'ecran le bouton se synchro plus tard
+|Screen Ipad<br />Referencer le site|Pub web Debut bas petale <br />Icone + version glass ?<br />Pb vercel<br />Remet en privé|Envoie mail noreply@bloum-5456.firebaseapp.com verif si marche + modif<br />Notif<br />|Score de corda<br />Debloquage au fur et a mesure<br />Verif Secu<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Plan de test<br />Mascotte ?<br />Swip vers le haut pour au suivant<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Son<br />Restaure la streak ?<br />Page de vente<br />Vide un peu firebase ? Code 6 chiffres<br />Process de test<br />Secur encore plus message clé privé ?<br />Panel Modif<br />Forcer les maj<br />Retention ?<br />Backup Firebase<br />Animation<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Revoir certaines questions nul, pas mettre les défis dans les trucs quotidien<br />Pose de questions sur lui-même pas si fou ?<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Voir la reponse de la veille ?<br />Domaine|
 
 
 
@@ -58,25 +12,13 @@ Parler de la version web
 
 
 
-Bug Affichage
-
-
-
 Widget + en debloquer
 
 Son
 
-Micro vibration
 
 
 
-Alors la version ipad est immonde c'est vide
-
-Et sur le site web rien que sur la page d'acceuil initial il y a une bande blanche sur le bas
-
-
-
-Aussi je bloque sur l'ecran de connexion apres avoir bien selectionner le compte, cela me remet sur la connexion
 
 
 

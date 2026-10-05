@@ -17,6 +17,7 @@ import { Brain, CalendarHeart, Camera, Coffee, Copy, Flame, Heart, HeartHandshak
 import * as Clipboard from 'expo-clipboard';
 import { ensureUserPairingCode } from '@/lib/pairing';
 import { useToastStore } from '@/store/toastStore';
+import { triggerHaptic } from '@/lib/haptics';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,11 +51,11 @@ export default function DashboardScreen() {
 
   const [unlockedCosmetic, setUnlockedCosmetic] = useState<Cosmetic | null>(null);
   const [partner, setPartner] = useState<PartnerData | null>(() => (
-    store.isSynced && store.partnerUid && store.partnerPseudo
+    store.isSynced && store.partnerUid && store.partnerPseudo && store.uid
       ? {
           pseudo: store.partnerPseudo,
           avatarUrl: store.partnerAvatar ?? undefined,
-          coupleId: [store.uid!, store.partnerUid].sort().join('_'),
+          coupleId: [store.uid, store.partnerUid].sort().join('_'),
         }
       : null
   ));
@@ -70,6 +71,21 @@ export default function DashboardScreen() {
   });
   const [hasQuestRewards, setHasQuestRewards] = useState(false);
   const [partnerAnsweredCategories, setPartnerAnsweredCategories] = useState<Set<string>>(new Set());
+
+  const activeUid = store.uid || auth?.currentUser?.uid;
+  const previousUidRef = useRef(activeUid);
+  useEffect(() => {
+    if (previousUidRef.current !== activeUid) {
+      previousUidRef.current = activeUid;
+      setPartner(null);
+      setPartnerLeft(false);
+      setMyProfile(null);
+      setPartnerProfile(null);
+      setWallet(null);
+      setUnlockedItems([]);
+      setPartnerAnsweredCategories(new Set());
+    }
+  }, [activeUid]);
 
   useEffect(() => {
     const checkStreakUnlock = async () => {
@@ -135,6 +151,8 @@ export default function DashboardScreen() {
             partnerUnsub = null;
           }
           setPartner(null);
+          setPartnerProfile(null);
+          setWallet(null);
           setPartnerLeft(true);
           store.setSynced(false);
           store.clearPartnerCache();
@@ -167,12 +185,16 @@ export default function DashboardScreen() {
                 store.setSynced(false);
                 store.clearPartnerCache();
                 setPartner(null);
+                setPartnerProfile(null);
+                setWallet(null);
                 setPartnerLeft(true);
               }
             } else {
               store.setSynced(false);
               store.clearPartnerCache();
               setPartner(null);
+              setPartnerProfile(null);
+              setWallet(null);
               setPartnerLeft(true);
             }
             setIsLoading(false);
@@ -180,6 +202,8 @@ export default function DashboardScreen() {
             store.setSynced(false);
             store.clearPartnerCache();
             setPartner(null);
+            setPartnerProfile(null);
+            setWallet(null);
             setPartnerLeft(true);
             setIsLoading(false);
           });
@@ -492,110 +516,253 @@ export default function DashboardScreen() {
           </View>
         </LinearGradient>
 
-        {/* --- LIGNE EN COUPLE + ROULETTE + REGLAGES --- */}
-        <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 14, gap: 10, alignItems: 'stretch' }}>
-          {/* BLOC 1: EN COUPLE AVEC / MODE SOLO */}
-          <Pressable 
-            style={{ flex: partner?.coupleId ? 2 : 2.5, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
-            onPress={() => {
-              if (partner && !partnerLeft) {
-                setShowPartnerProfile(true);
-              } else {
-                router.push('/onboarding/sync');
-              }
-            }}
-          >
-            {partner && !partnerLeft
-              ? renderAvatar(partner.avatarUrl, partner.pseudo, true, partnerProfile)
-              : <View style={[styles.partnerAvatar, { backgroundColor: 'rgba(120,110,110,0.35)', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.tabIconDefault, fontSize: 18 }}>–</Text></View>}
-            <View style={{ marginLeft: 10, flex: 1 }}>
-              <Text style={{ color: partner && !partnerLeft ? theme.text : theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>{partner && !partnerLeft ? 'En couple avec' : 'Mode solo'}</Text>
-              <Text style={{ color: partner && !partnerLeft ? '#FF6A88' : theme.tabIconDefault, fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner && !partnerLeft ? partner.pseudo : 'Partenaire indisponible'}</Text>
-              {(!partner || partnerLeft) && (
-                <View style={{ marginTop: 5 }}>
-                  {store.myCode ? (
-                    <Pressable
-                      onPress={async () => {
-                        await Clipboard.setStringAsync(store.myCode);
-                        useToastStore.getState().showToast('Code copié !');
-                      }}
-                      style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
-                    >
-                      <Text style={{ color: theme.text, fontSize: 11, fontWeight: '600' }}>
-                        Mon code : <Text style={{ color: theme.tint, fontWeight: '800', letterSpacing: 1 }}>{store.myCode}</Text>
+        {/* --- WIDGETS RESPONSIVE --- */}
+        {windowWidth < 600 ? (
+          /* =========================================================================
+             MOBILE LAYOUT (< 600px):
+             Ligne 1: En couple / Mon compte (flex: 1) + Réglages (width: 76)
+             Ligne 2: Roulette (flex: 1) + Mini-calendrier (flex: 1.2) côte à côte
+             ========================================================================= */
+          <>
+            <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, gap: 10, alignItems: 'stretch' }}>
+              {/* BLOC 1: EN COUPLE AVEC / MODE SOLO */}
+              <Pressable 
+                style={{ flex: 1, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+                onPress={() => {
+                  triggerHaptic('light');
+                  if (partner && !partnerLeft) {
+                    setShowPartnerProfile(true);
+                  } else {
+                    router.push('/onboarding/sync');
+                  }
+                }}
+              >
+                {partner && !partnerLeft
+                  ? renderAvatar(partner.avatarUrl, partner.pseudo, true, partnerProfile)
+                  : <View style={[styles.partnerAvatar, { backgroundColor: 'rgba(120,110,110,0.35)', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.tabIconDefault, fontSize: 18 }}>–</Text></View>}
+                <View style={{ marginLeft: 10, flex: 1 }}>
+                  <Text style={{ color: partner && !partnerLeft ? theme.text : theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>{partner && !partnerLeft ? 'En couple avec' : 'Mode solo'}</Text>
+                  <Text style={{ color: partner && !partnerLeft ? '#FF6A88' : theme.tabIconDefault, fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner && !partnerLeft ? partner.pseudo : 'Partenaire indisponible'}</Text>
+                  {(!partner || partnerLeft) && (
+                    <View style={{ marginTop: 5 }}>
+                      {store.myCode ? (
+                        <Pressable
+                          onPress={async () => {
+                            triggerHaptic('selection');
+                            await Clipboard.setStringAsync(store.myCode);
+                            useToastStore.getState().showToast('Code copié !');
+                          }}
+                          style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
+                        >
+                          <Text style={{ color: theme.text, fontSize: 11, fontWeight: '600' }}>
+                            Mon code : <Text style={{ color: theme.tint, fontWeight: '800', letterSpacing: 1 }}>{store.myCode}</Text>
+                          </Text>
+                          <Copy size={12} color={theme.tint} style={{ marginLeft: 4 }} />
+                        </Pressable>
+                      ) : null}
+                      <Pressable 
+                        onPress={() => {
+                          triggerHaptic('light');
+                          router.push('/onboarding/sync');
+                        }} 
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        style={{
+                          marginTop: 4,
+                          paddingVertical: 5,
+                          paddingHorizontal: 10,
+                          borderRadius: 10,
+                          backgroundColor: 'rgba(255, 106, 136, 0.15)',
+                          alignSelf: 'flex-start',
+                        }}
+                      >
+                        <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>
+                          {store.myCode ? 'Lier un partenaire ➔' : 'Obtenir / entrer un code ➔'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )}
+                  {partner && !partnerLeft && partnerProfile?.selectedTag && partnerProfile.selectedTag !== 'tag_free_0' && getCosmeticById(partnerProfile.selectedTag) && (
+                    <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 106, 136, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 106, 136, 0.3)' }}>
+                      <Text style={{ fontSize: 13, color: '#FF6A88', fontWeight: '800' }} numberOfLines={1}>
+                        {getCosmeticById(partnerProfile.selectedTag)?.emoji} {getCosmeticById(partnerProfile.selectedTag)?.name}
                       </Text>
-                      <Copy size={12} color={theme.tint} style={{ marginLeft: 4 }} />
-                    </Pressable>
-                  ) : null}
-                  <Pressable 
-                    onPress={() => router.push('/onboarding/sync')} 
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    style={{
-                      marginTop: 4,
-                      paddingVertical: 5,
-                      paddingHorizontal: 10,
-                      borderRadius: 10,
-                      backgroundColor: 'rgba(255, 106, 136, 0.15)',
-                      alignSelf: 'flex-start',
-                    }}
-                  >
-                    <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>
-                      {store.myCode ? 'Lier un partenaire ➔' : 'Obtenir / entrer un code ➔'}
-                    </Text>
-                  </Pressable>
+                    </View>
+                  )}
                 </View>
-              )}
-              {partner && !partnerLeft && partnerProfile?.selectedTag && partnerProfile.selectedTag !== 'tag_free_0' && getCosmeticById(partnerProfile.selectedTag) && (
-                <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 106, 136, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 106, 136, 0.3)' }}>
-                  <Text style={{ fontSize: 13, color: '#FF6A88', fontWeight: '800' }} numberOfLines={1}>
-                    {getCosmeticById(partnerProfile.selectedTag)?.emoji} {getCosmeticById(partnerProfile.selectedTag)?.name}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </Pressable>
-
-          {/* BLOC 2: LA ROULETTE (à la suite de la case en couple, à gauche de réglages) */}
-          {partner?.coupleId && store.uid && (
-            <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1.2 }}>
-              <DailyClaim 
-                compact={true}
-                coupleId={partner.coupleId} 
-                myUid={store.uid} 
-                wallet={wallet}
-                onClaimed={(newW) => {
-                  cacheWallet(partner.coupleId!, newW);
-                  setWallet(newW);
-                }} 
-              />
-            </Animated.View>
-          )}
-
-          {/* BLOC 3: REGLAGES */}
-          <Pressable 
-            style={{ flex: partner?.coupleId ? 0.9 : 1, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
-            onPress={() => router.push('/settings')}
-          >
-            <Settings color="#FF6A88" size={30} />
-            <Text style={{ color: theme.text, fontSize: 12, marginTop: 6, fontWeight: '700' }}>Réglages</Text>
-          </Pressable>
-        </View>
-
-        {/* --- LIGNE CALENDRIER PLEINE LONGUEUR --- */}
-        {partner?.coupleId && (
-          <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ marginHorizontal: 16, marginBottom: 16 }}>
-            <Link href="/calendar" asChild>
-              <Pressable style={{ width: '100%' }}>
-                <StreakCalendar 
-                  coupleId={partner.coupleId} 
-                  compact={true} 
-                  fullWidth={true} 
-                  currentStreak={wallet?.streak} 
-                  darkMode={store.isDarkMode} 
-                />
               </Pressable>
-            </Link>
-          </Animated.View>
+
+              {/* REGLAGES */}
+              <Pressable 
+                style={{ width: 76, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+                onPress={() => {
+                  triggerHaptic('light');
+                  router.push('/settings');
+                }}
+              >
+                <Settings color="#FF6A88" size={30} />
+                <Text style={{ color: theme.text, fontSize: 12, marginTop: 6, fontWeight: '700' }}>Réglages</Text>
+              </Pressable>
+            </View>
+
+            {/* LIGNE 2 MOBILE: ROULETTE + MINI-CALENDRIER CÔTE À CÔTE */}
+            {partner?.coupleId && store.uid && (
+              <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, gap: 10, alignItems: 'stretch' }}>
+                <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1 }}>
+                  <DailyClaim 
+                    compact={true}
+                    coupleId={partner.coupleId} 
+                    myUid={store.uid} 
+                    wallet={wallet}
+                    onClaimed={(newW) => {
+                      triggerHaptic('success');
+                      cacheWallet(partner.coupleId!, newW);
+                      setWallet(newW);
+                    }} 
+                  />
+                </Animated.View>
+                <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ flex: 1.2 }}>
+                  <Link href="/calendar" asChild>
+                    <Pressable 
+                      style={{ width: '100%', height: '100%' }}
+                      onPress={() => triggerHaptic('light')}
+                    >
+                      <StreakCalendar 
+                        coupleId={partner.coupleId} 
+                        compact={true} 
+                        fullWidth={false} 
+                        currentStreak={wallet?.streak} 
+                        darkMode={store.isDarkMode} 
+                      />
+                    </Pressable>
+                  </Link>
+                </Animated.View>
+              </View>
+            )}
+          </>
+        ) : (
+          /* =========================================================================
+             TABLET / DESKTOP LAYOUT (>= 600px):
+             Ligne 1: En couple (flex: 2) + Roulette (flex: 1.2) + Réglages (flex: 0.9)
+             Ligne 2: StreakCalendar pleine largeur (fullWidth: true)
+             ========================================================================= */
+          <>
+            <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 14, gap: 10, alignItems: 'stretch' }}>
+              {/* BLOC 1: EN COUPLE AVEC / MODE SOLO */}
+              <Pressable 
+                style={{ flex: partner?.coupleId ? 2 : 2.5, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+                onPress={() => {
+                  triggerHaptic('light');
+                  if (partner && !partnerLeft) {
+                    setShowPartnerProfile(true);
+                  } else {
+                    router.push('/onboarding/sync');
+                  }
+                }}
+              >
+                {partner && !partnerLeft
+                  ? renderAvatar(partner.avatarUrl, partner.pseudo, true, partnerProfile)
+                  : <View style={[styles.partnerAvatar, { backgroundColor: 'rgba(120,110,110,0.35)', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.tabIconDefault, fontSize: 18 }}>–</Text></View>}
+                <View style={{ marginLeft: 10, flex: 1 }}>
+                  <Text style={{ color: partner && !partnerLeft ? theme.text : theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>{partner && !partnerLeft ? 'En couple avec' : 'Mode solo'}</Text>
+                  <Text style={{ color: partner && !partnerLeft ? '#FF6A88' : theme.tabIconDefault, fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner && !partnerLeft ? partner.pseudo : 'Partenaire indisponible'}</Text>
+                  {(!partner || partnerLeft) && (
+                    <View style={{ marginTop: 5 }}>
+                      {store.myCode ? (
+                        <Pressable
+                          onPress={async () => {
+                            triggerHaptic('selection');
+                            await Clipboard.setStringAsync(store.myCode);
+                            useToastStore.getState().showToast('Code copié !');
+                          }}
+                          style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
+                        >
+                          <Text style={{ color: theme.text, fontSize: 11, fontWeight: '600' }}>
+                            Mon code : <Text style={{ color: theme.tint, fontWeight: '800', letterSpacing: 1 }}>{store.myCode}</Text>
+                          </Text>
+                          <Copy size={12} color={theme.tint} style={{ marginLeft: 4 }} />
+                        </Pressable>
+                      ) : null}
+                      <Pressable 
+                        onPress={() => {
+                          triggerHaptic('light');
+                          router.push('/onboarding/sync');
+                        }} 
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        style={{
+                          marginTop: 4,
+                          paddingVertical: 5,
+                          paddingHorizontal: 10,
+                          borderRadius: 10,
+                          backgroundColor: 'rgba(255, 106, 136, 0.15)',
+                          alignSelf: 'flex-start',
+                        }}
+                      >
+                        <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>
+                          {store.myCode ? 'Lier un partenaire ➔' : 'Obtenir / entrer un code ➔'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )}
+                  {partner && !partnerLeft && partnerProfile?.selectedTag && partnerProfile.selectedTag !== 'tag_free_0' && getCosmeticById(partnerProfile.selectedTag) && (
+                    <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 106, 136, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 106, 136, 0.3)' }}>
+                      <Text style={{ fontSize: 13, color: '#FF6A88', fontWeight: '800' }} numberOfLines={1}>
+                        {getCosmeticById(partnerProfile.selectedTag)?.emoji} {getCosmeticById(partnerProfile.selectedTag)?.name}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+
+              {/* BLOC 2: LA ROULETTE (à la suite de la case en couple, à gauche de réglages) */}
+              {partner?.coupleId && store.uid && (
+                <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1.2 }}>
+                  <DailyClaim 
+                    compact={true}
+                    coupleId={partner.coupleId} 
+                    myUid={store.uid} 
+                    wallet={wallet}
+                    onClaimed={(newW) => {
+                      triggerHaptic('success');
+                      cacheWallet(partner.coupleId!, newW);
+                      setWallet(newW);
+                    }} 
+                  />
+                </Animated.View>
+              )}
+
+              {/* BLOC 3: REGLAGES */}
+              <Pressable 
+                style={{ flex: partner?.coupleId ? 0.9 : 1, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+                onPress={() => {
+                  triggerHaptic('light');
+                  router.push('/settings');
+                }}
+              >
+                <Settings color="#FF6A88" size={30} />
+                <Text style={{ color: theme.text, fontSize: 12, marginTop: 6, fontWeight: '700' }}>Réglages</Text>
+              </Pressable>
+            </View>
+
+            {/* --- LIGNE CALENDRIER PLEINE LONGUEUR --- */}
+            {partner?.coupleId && (
+              <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ marginHorizontal: 16, marginBottom: 16 }}>
+                <Link href="/calendar" asChild>
+                  <Pressable 
+                    style={{ width: '100%' }}
+                    onPress={() => triggerHaptic('light')}
+                  >
+                    <StreakCalendar 
+                      coupleId={partner.coupleId} 
+                      compact={true} 
+                      fullWidth={true} 
+                      currentStreak={wallet?.streak} 
+                      darkMode={store.isDarkMode} 
+                    />
+                  </Pressable>
+                </Link>
+              </Animated.View>
+            )}
+          </>
         )}
 
         {/* Main Grid */}
