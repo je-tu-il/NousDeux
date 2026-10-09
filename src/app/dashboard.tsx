@@ -6,7 +6,7 @@ import PixelAvatar from '@/components/PixelAvatar';
 import StreakCalendar from '@/components/StreakCalendar';
 import { Colors } from '@/constants/Colors';
 import { Cosmetic, COSMETICS, getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
-import { cacheWallet, computeStreakCached, getCachedWallet, getUserProfile, getWallet, invalidateStreakCache, syncUnlimitedStats, updateWalletStreak, UserProfile } from '@/lib/economy';
+import { cacheWallet, checkStreakRestorable, computeStreakCached, getCachedWallet, getUserProfile, getWallet, invalidateStreakCache, restoreLostStreak, STREAK_RESTORE_COST, syncUnlimitedStats, updateWalletStreak, UserProfile } from '@/lib/economy';
 import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -105,6 +105,9 @@ export default function DashboardScreen() {
     };
     checkStreakUnlock();
   }, [wallet?.streak]);
+
+  const [streakRestoreOffer, setStreakRestoreOffer] = useState<{ canRestore: boolean; lostStreak: number; cost: number } | null>(null);
+  const [restoringStreak, setRestoringStreak] = useState(false);
 
   const [isLoading, setIsLoading] = useState(Boolean(store.uid));
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
@@ -310,6 +313,40 @@ export default function DashboardScreen() {
   }, [wallet?.streak]);
 
   useEffect(() => {
+    if (partner?.coupleId) {
+      checkStreakRestorable(partner.coupleId).then((res) => {
+        if (res.canRestore) setStreakRestoreOffer(res);
+        else setStreakRestoreOffer(null);
+      }).catch(() => {});
+    }
+  }, [partner?.coupleId, wallet?.streak]);
+
+  const handleRestoreStreak = async () => {
+    if (!partner?.coupleId || !store.uid || restoringStreak) return;
+    setRestoringStreak(true);
+    try {
+      const res = await restoreLostStreak(partner.coupleId, store.uid);
+      if (res.success) {
+        sound.success();
+        triggerHaptic('success');
+        useToastStore.getState().showToast(`Série restaurée avec succès ! 🔥 (${res.newStreak} jours)`);
+        setStreakRestoreOffer(null);
+        const updatedWallet = await getWallet(partner.coupleId);
+        setWallet(updatedWallet);
+        cacheWallet(partner.coupleId, updatedWallet);
+      } else {
+        sound.warning();
+        triggerHaptic('warning');
+        useToastStore.getState().showToast(res.error || 'Impossible de restaurer la série.');
+      }
+    } catch {
+      useToastStore.getState().showToast('Erreur lors de la restauration.');
+    } finally {
+      setRestoringStreak(false);
+    }
+  };
+
+  useEffect(() => {
     if (!partner?.coupleId) return;
     AsyncStorage.getItem(`wallet_${partner.coupleId}`).then((saved) => {
       if (saved) {
@@ -510,9 +547,31 @@ export default function DashboardScreen() {
               </View>
             </Pressable>
 
-            {/* Wallet */}
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 20 }}>
-              <CoinWallet petals={wallet?.petals ?? 0} size="small" theme="white" />
+            {/* Widgets + Wallet */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Pressable
+                onPress={() => {
+                  sound.tap();
+                  triggerHaptic('light');
+                  router.push('/widgets');
+                }}
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.22)',
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
+                  borderRadius: 18,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                }}
+              >
+                <Text style={{ fontSize: 13 }}>📱</Text>
+                <Text style={{ color: 'white', fontSize: 12, fontWeight: '800' }}>Widgets</Text>
+              </Pressable>
+
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 20 }}>
+                <CoinWallet petals={wallet?.petals ?? 0} size="small" theme="white" />
+              </View>
             </View>
           </View>
         </LinearGradient>
@@ -769,6 +828,45 @@ export default function DashboardScreen() {
               </Animated.View>
             )}
           </>
+        )}
+
+        {/* BANNIÈRE DE RESTAURATION DE SÉRIE */}
+        {streakRestoreOffer?.canRestore && (
+          <Animated.View entering={FadeInUp.duration(400)} style={{ marginHorizontal: 16, marginBottom: 16, borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: '#FF9A8B' }}>
+            <LinearGradient
+              colors={store.isDarkMode ? ['#362222', '#261919'] : ['#FFF2EE', '#FFE5DC']}
+              style={{ padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#FF6B35' }}>
+                  🔥 Série brisée hier ({streakRestoreOffer.lostStreak} jour{streakRestoreOffer.lostStreak > 1 ? 's' : ''})
+                </Text>
+                <Text style={{ fontSize: 12, color: store.isDarkMode ? '#E0D0CE' : '#6B5B59', marginTop: 2 }}>
+                  Restaure ta flamme pour 2 000 🌸 et garde votre série intacte !
+                </Text>
+              </View>
+              <Pressable
+                onPress={handleRestoreStreak}
+                disabled={restoringStreak}
+                style={{
+                  backgroundColor: '#FF6A88',
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 14,
+                  opacity: restoringStreak ? 0.7 : 1,
+                  shadowColor: '#FF6A88',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}
+              >
+                <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>
+                  {restoringStreak ? 'Restauration...' : 'Restaurer (2 000 🌸)'}
+                </Text>
+              </Pressable>
+            </LinearGradient>
+          </Animated.View>
         )}
 
         {/* Main Grid */}

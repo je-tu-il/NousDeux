@@ -8,6 +8,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import FloatingToast from '@/components/FloatingToast';
+import ForceUpdateModal from '@/components/ForceUpdateModal';
 import { useEffect, useState } from 'react';
 import { ImageBackground, LogBox, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -286,6 +287,7 @@ export default function RootLayout() {
         </View>
         {FloatingChat ? <FloatingChat /> : null}
         <FloatingToast />
+        <ForceUpdateModal />
       </View>
     </SafeAreaProvider>
   );

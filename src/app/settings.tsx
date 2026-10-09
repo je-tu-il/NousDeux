@@ -421,10 +421,8 @@ export default function SettingsScreen() {
   return (
     <ImageBackground source={bgImage} style={styles.container} resizeMode="cover" imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
 
-      {/* Overlay pour lisibilité en dark mode */}
-      {store.isDarkMode && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
-      )}
+      {/* Overlay pour lisibilité maximale sur tous les fonds d'écran */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: store.isDarkMode ? 'rgba(0,0,0,0.38)' : 'rgba(255,255,255,0.25)', zIndex: 0 }} pointerEvents="none" />
       <View style={{ flex: 1 }}>
         {/* Header fixé au-dessus du scroll avec topInset */}
         <View style={[styles.headerFixedContainer, { paddingTop: topInset + 8 }]}>
@@ -573,23 +571,6 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* Déconnexion */}
-          <View style={styles.section}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.disconnectButton,
-                { opacity: pressed ? 0.8 : 1 },
-              ]}
-              onPress={() => {
-                sound.tap();
-                handleDisconnect();
-              }}
-            >
-              <LogOut color="white" size={20} />
-              <Text style={styles.disconnectText}>Se déconnecter</Text>
-            </Pressable>
-          </View>
-
           {/* Préférences */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Préférences</Text>
@@ -619,31 +600,6 @@ export default function SettingsScreen() {
                 styles={styles}
               />
 
-              <View style={styles.dividerLight} />
-
-              {/* Raccourci Widgets */}
-              <Link href="/widgets" asChild>
-                <Pressable
-                  onPress={() => sound.tap()}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                    <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,154,139,0.18)' }]}>
-                      <Text style={{ fontSize: 20 }}>📱</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>
-                        Widgets Écran d’accueil
-                      </Text>
-                      <Text style={{ fontSize: 12, color: store.isDarkMode ? '#B8A4A0' : '#8A7A78' }}>
-                        Question du jour & Flamme (iPhone & Samsung)
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={{ color: '#C4B4B2', fontSize: 20 }}>›</Text>
-                </Pressable>
-              </Link>
-
               {/* Admin Panel Link - Only visible to admins */}
               {(isUserAdmin(authUid) || isUserAdmin(store.uid)) && (
                 <>
@@ -668,6 +624,39 @@ export default function SettingsScreen() {
             </View>
           </View>
 
+          {/* Widgets Écran d’accueil */}
+          <View style={styles.section}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Widgets Écran d’accueil</Text>
+              <View style={{ backgroundColor: theme.tint, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                <Text style={{ color: 'white', fontSize: 11, fontWeight: '800' }}>NOUVEAU</Text>
+              </View>
+            </View>
+            <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
+              <Link href="/widgets" asChild>
+                <Pressable
+                  onPress={() => sound.tap()}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,154,139,0.22)', width: 44, height: 44, borderRadius: 22 }]}>
+                      <Text style={{ fontSize: 22 }}>📱</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>
+                        Configurer mes Widgets
+                      </Text>
+                      <Text style={{ fontSize: 12, color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', marginTop: 2 }}>
+                        Question du jour & Flamme d’amour en direct sur iPhone (iOS) et Samsung (Android)
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: theme.tint, fontSize: 24, fontWeight: 'bold' }}>›</Text>
+                </Pressable>
+              </Link>
+            </View>
+          </View>
+
           {/* Contact & Support */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Support</Text>
@@ -688,6 +677,23 @@ export default function SettingsScreen() {
                 </Pressable>
               </Link>
             </View>
+          </View>
+
+          {/* Déconnexion */}
+          <View style={styles.section}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.disconnectButton,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              onPress={() => {
+                sound.tap();
+                handleDisconnect();
+              }}
+            >
+              <LogOut color="white" size={20} />
+              <Text style={styles.disconnectText}>Se déconnecter</Text>
+            </Pressable>
           </View>
 
           {/* Zone Danger */}
@@ -979,9 +985,37 @@ const getStyles = (theme: any, windowWidth: number = 400) => StyleSheet.create({
   saveChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,154,139,0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   saveChipText: { fontSize: 12, fontWeight: '600' },
   section: { marginBottom: 30 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 10 },
-  card: { padding: 20, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginLeft: 5 },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 12,
+    marginLeft: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+    alignSelf: 'flex-start',
+    backgroundColor: theme.glassBackground,
+    borderWidth: 1,
+    borderColor: theme.cardBorder,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  card: {
+    padding: 20,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    backgroundColor: theme.cardGlass || theme.glassBackground,
+    borderColor: theme.cardBorder,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  label: { fontSize: 14, fontWeight: '700', marginBottom: 8, marginLeft: 5 },
   input: {
     height: 50,
     borderRadius: 15,
@@ -991,17 +1025,17 @@ const getStyles = (theme: any, windowWidth: number = 400) => StyleSheet.create({
     includeFontPadding: false,
     fontSize: 16,
     marginBottom: 20,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.cardBorder,
     backgroundColor: theme.glassBackground,
     color: theme.text,
   },
-  inputHint: { alignSelf: 'flex-end', fontSize: 12, marginTop: -14, marginBottom: 14 },
+  inputHint: { alignSelf: 'flex-end', fontSize: 12, marginTop: -14, marginBottom: 14, fontWeight: '600' },
   avatarWrapper: { width: 110, height: 110, borderRadius: 55, borderWidth: 3, overflow: 'visible', marginBottom: 6, position: 'relative' },
   avatarImage: { width: 110, height: 110, borderRadius: 55 },
   avatarPlaceholder: { width: 110, height: 110, borderRadius: 55, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.glassBackground },
   cameraOverlay: { position: 'absolute', bottom: 4, right: 4, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white' },
-  changePhotoText: { color: theme.tabIconDefault, fontSize: 13, marginBottom: 6 },
+  changePhotoText: { color: theme.tint, fontSize: 13, marginBottom: 6, fontWeight: '700' },
   actionButton: { flexDirection: 'row', height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 10, paddingHorizontal: 20, width: '100%' },
   actionButtonText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
   dangerItem: { paddingVertical: 10 },

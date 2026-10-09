@@ -70,5 +70,11 @@ service cloud.firestore {
         allow read, write: if isAdmin() || isCoupleMember(coupleId);
       }
     }
+
+    // 6. Configuration globale (version minimale requise pour forcer les MAJ)
+    match /app_config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }

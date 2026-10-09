@@ -51,6 +51,7 @@ import { QUESTIONS } from '../data/questions';
 import { decryptText, encryptText } from '../lib/crypto';
 import { checkQuests, updateWalletStreak } from '../lib/economy';
 import { sound } from '../lib/sound';
+import { triggerHaptic } from '../lib/haptics';
 
 type AnyQuestion = Question | PileOuFaceQuestion;
 
@@ -352,6 +353,27 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
 
   const isSubmittedRef = useRef(false);
   useEffect(() => { isSubmittedRef.current = isSubmitted; }, [isSubmitted]);
+
+  // Geste de swipe vers le haut pour valider sa réponse ou passer à la question suivante
+  const touchStartY = useRef<number | null>(null);
+  const handleTouchStart = (e: any) => {
+    touchStartY.current = e.nativeEvent.pageY;
+  };
+  const handleTouchEnd = (e: any) => {
+    if (touchStartY.current !== null) {
+      const deltaY = touchStartY.current - e.nativeEvent.pageY;
+      if (deltaY > 50) {
+        if (!isSubmitted && myAnswer.trim().length > 0 && !savingAnswer) {
+          triggerHaptic('selection');
+          handleSubmit();
+        } else if (isSubmitted && !loadingNext) {
+          triggerHaptic('selection');
+          handleNext();
+        }
+      }
+    }
+    touchStartY.current = null;
+  };
 
   const loadSlot = useCallback(async (uid: string, pUid: string, coupleKey: string, idx: number) => {
     setLoading(true);
@@ -717,7 +739,13 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} showsVerticalScrollIndicator={false}>
-        <Animated.View entering={FadeInUp.duration(600).springify()} layout={Layout.springify()} style={styles.card}>
+        <Animated.View
+          entering={FadeInUp.duration(600).springify()}
+          layout={Layout.springify()}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          style={styles.card}
+        >
           <LinearGradient colors={headerColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
             {headerIcon}
             <Text style={styles.headerTitle}>{headerTitle}</Text>

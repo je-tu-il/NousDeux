@@ -1700,6 +1700,72 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
     );
   };
 
+  const cleanupFirestoreData = async () => {
+    Alert.alert(
+      '🧹 Nettoyage Firebase',
+      'Cette action analyse et nettoie :\n- Les codes de synchronisation (6 chiffres) obsolètes ou orphelins (créateur supprimé ou déjà jumelé)\n- Les profils cosmétiques orphelins\n\nConfirmer le nettoyage ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Nettoyer',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              let deletedCodes = 0;
+              let deletedProfiles = 0;
+
+              // 1. Lire tous les users
+              const usersSnap = await getDocs(collection(db, 'users'));
+              const existingUsers = new Map<string, any>();
+              usersSnap.forEach((d) => existingUsers.set(d.id, d.data()));
+
+              // 2. Nettoyer pairing_codes
+              const codesSnap = await getDocs(collection(db, 'pairing_codes'));
+              for (const cDoc of codesSnap.docs) {
+                const data = cDoc.data();
+                const creator = data.creatorUid || data.uid;
+
+                // Si créateur absent des users
+                if (!creator || !existingUsers.has(creator)) {
+                  await deleteDoc(cDoc.ref);
+                  deletedCodes++;
+                  continue;
+                }
+
+                // Si le créateur est déjà appairé à un partenaire actif ou si son code actuel diffère
+                const u = existingUsers.get(creator);
+                if (u?.linkedTo || (u?.pairingCode && u.pairingCode !== cDoc.id)) {
+                  await deleteDoc(cDoc.ref);
+                  deletedCodes++;
+                }
+              }
+
+              // 3. Nettoyer userProfiles orphelins
+              const profilesSnap = await getDocs(collection(db, 'userProfiles'));
+              for (const pDoc of profilesSnap.docs) {
+                if (!existingUsers.has(pDoc.id)) {
+                  await deleteDoc(pDoc.ref);
+                  deletedProfiles++;
+                }
+              }
+
+              Alert.alert(
+                '✅ Nettoyage terminé',
+                `Résultats du nettoyage :\n• ${deletedCodes} codes de jumelage obsolètes supprimés\n• ${deletedProfiles} profils orphelins supprimés`
+              );
+              onRefresh();
+            } catch (e) {
+              Alert.alert('Erreur', String(e));
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const addPetals = async () => {
     if (!targetCoupleId.trim()) return Alert.alert('⚠️', 'Saisir un coupleId');
     const amount = parseInt(petalAmount);
@@ -1889,6 +1955,9 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
         <Text style={s.debugHint}>Actions appliquées à toute la base de données :</Text>
         <Pressable onPress={syncLegacyStreaks} style={[s.actionBtn, { backgroundColor: '#F59E0B' }]} disabled={loading}>
           {loading ? <ActivityIndicator color="white" /> : <Text style={[s.actionBtnText, { color: 'white' }]}>Synchroniser les anciennes Séries (Streaks)</Text>}
+        </Pressable>
+        <Pressable onPress={cleanupFirestoreData} style={[s.actionBtn, { backgroundColor: '#EF4444', marginTop: 10 }]} disabled={loading}>
+          {loading ? <ActivityIndicator color="white" /> : <Text style={[s.actionBtnText, { color: 'white' }]}>🧹 Nettoyer Firebase (Codes 6 chiffres & orphelins)</Text>}
         </Pressable>
       </View>
 

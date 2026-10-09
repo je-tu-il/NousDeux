@@ -604,3 +604,100 @@ export async function getUserProfile(uid: string, createIfMissing: boolean = fal
   }
   return defaultProfile;
 }
+
+// ── Restauration de série perdue (Streak Restore) ───────────────────────────
+export const STREAK_RESTORE_COST = 2000;
+
+export async function checkStreakRestorable(cId: string): Promise<{
+  canRestore: boolean;
+  lostStreak: number;
+  cost: number;
+  yesterdayKey: string;
+}> {
+  if (!cId) return { canRestore: false, lostStreak: 0, cost: STREAK_RESTORE_COST, yesterdayKey: '' };
+  try {
+    const yKey = getLocalYesterdayKey();
+    const yDoc = await getDoc(doc(db, 'couples', cId, 'daily', yKey));
+    // Si hier était déjà complété ou restauré, aucune perte de série à restaurer
+    if (yDoc.exists()) {
+      const data = yDoc.data();
+      if (data.bothAnswered === true || data.restored === true || data.complete === true) {
+        return { canRestore: false, lostStreak: 0, cost: STREAK_RESTORE_COST, yesterdayKey: yKey };
+      }
+    }
+
+    // Récupérer tous les jours complétés pour calculer la série passée avant hier
+    const dailySnapshot = await getDocs(collection(db, 'couples', cId, 'daily'));
+    const completedDays = new Set<string>();
+    dailySnapshot.docs.forEach((d) => {
+      const data = d.data();
+      if (data.bothAnswered === true || data.answered === true || data.complete === true || data.restored === true) {
+        completedDays.add(d.id);
+      }
+    });
+
+    const toKey = (year: number, month: number, day: number) =>
+      `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+    let pastStreak = 0;
+    for (let offset = 0; offset >= -90; offset--) {
+      const d = new Date(twoDaysAgo);
+      d.setDate(d.getDate() + offset);
+      if (completedDays.has(toKey(d.getFullYear(), d.getMonth(), d.getDate()))) {
+        pastStreak++;
+      } else {
+        break;
+      }
+    }
+
+    if (pastStreak >= 1) {
+      return { canRestore: true, lostStreak: pastStreak, cost: STREAK_RESTORE_COST, yesterdayKey: yKey };
+    }
+  } catch (err) {
+    console.warn('checkStreakRestorable error:', err);
+  }
+  return { canRestore: false, lostStreak: 0, cost: STREAK_RESTORE_COST, yesterdayKey: '' };
+}
+
+export async function restoreLostStreak(cId: string, myUid: string): Promise<{ success: boolean; newStreak?: number; error?: string }> {
+  if (!cId) throw new Error('Missing coupleId');
+  const walletRef = doc(db, `couples/${cId}/economy/wallet`);
+  const yKey = getLocalYesterdayKey();
+  const yDocRef = doc(db, 'couples', cId, 'daily', yKey);
+
+  const res = await runTransaction(db, async (tx) => {
+    const walletSnap = await tx.get(walletRef);
+    if (!walletSnap.exists()) {
+      return { success: false, error: 'Portefeuille introuvable.' };
+    }
+    const wallet = walletSnap.data() as WalletData;
+    if ((wallet.petals ?? 0) < STREAK_RESTORE_COST) {
+      return { success: false, error: `Pétales insuffisants (il te faut ${STREAK_RESTORE_COST} pétales).` };
+    }
+
+    tx.update(walletRef, {
+      petals: increment(-STREAK_RESTORE_COST),
+    });
+
+    tx.set(yDocRef, {
+      bothAnswered: true,
+      restored: true,
+      restoredBy: myUid,
+      restoredAt: new Date().toISOString(),
+      updatedAt: new Date(),
+    }, { merge: true });
+
+    return { success: true };
+  });
+
+  if (res.success) {
+    invalidateStreakCache(cId);
+    const newStreak = await updateWalletStreak(cId);
+    return { success: true, newStreak };
+  }
+  return res;
+}
+

@@ -4,7 +4,7 @@ import { CheckCircle2, Clock, Heart, Unlock } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    KeyboardAvoidingView, Platform,
+    KeyboardAvoidingView, Modal, Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -13,6 +13,8 @@ import {
     View,
 } from 'react-native';
 import Animated, { FadeIn, FadeInUp, Layout } from 'react-native-reanimated';
+import { triggerHaptic } from '../lib/haptics';
+import { sound } from '../lib/sound';
 
 import {
     doc, getDoc,
@@ -36,6 +38,12 @@ import { useOnboardingStore } from '../store/onboardingStore';
 
 function todayKey(): string {
   const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function yesterdayKey(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
@@ -133,6 +141,67 @@ export default function Daylink() {
 
   const isSubmittedRef = useRef(false);
   useEffect(() => { isSubmittedRef.current = isSubmitted; }, [isSubmitted]);
+
+  // Modal & données de la veille (question et réponses de hier)
+  const [showYesterdayModal, setShowYesterdayModal] = useState(false);
+  const [yesterdayLoading, setYesterdayLoading] = useState(false);
+  const [yesterdayData, setYesterdayData] = useState<{
+    questionText: string | null;
+    myAnswer: string | null;
+    partnerAnswer: string | null;
+    exists: boolean;
+  } | null>(null);
+
+  const loadYesterday = async () => {
+    setShowYesterdayModal(true);
+    if (!cId || !myUid) return;
+    setYesterdayLoading(true);
+    try {
+      const yKey = yesterdayKey();
+      const ySlotSnap = await getDoc(doc(db, 'couples', cId, 'daily', yKey));
+      if (!ySlotSnap.exists()) {
+        setYesterdayData({ questionText: null, myAnswer: null, partnerAnswer: null, exists: false });
+        return;
+      }
+      const qId = ySlotSnap.data().questionId;
+      const q = qId ? getById(qId) : null;
+      const [myAnsDoc, pAnsDoc] = await Promise.all([
+        getDoc(doc(db, 'couples', cId, 'daily', yKey, 'answers', myUid)),
+        partnerUid ? getDoc(doc(db, 'couples', cId, 'daily', yKey, 'answers', partnerUid)) : Promise.resolve(null),
+      ]);
+      const myDecrypted = myAnsDoc.exists() ? await safeDecrypt(myAnsDoc.data(), cId) : null;
+      const pDecrypted = pAnsDoc && pAnsDoc.exists() ? await safeDecrypt(pAnsDoc.data(), cId) : null;
+      setYesterdayData({
+        questionText: q?.text || 'Question du jour passée',
+        myAnswer: myDecrypted,
+        partnerAnswer: pDecrypted,
+        exists: true,
+      });
+    } catch (e) {
+      console.warn('Failed to load yesterday:', e);
+    } finally {
+      setYesterdayLoading(false);
+    }
+  };
+
+  // Geste de swipe vers le haut pour valider sa réponse
+  const touchStartY = useRef<number | null>(null);
+  const handleTouchStart = (e: any) => {
+    touchStartY.current = e.nativeEvent.pageY;
+  };
+  const handleTouchEnd = (e: any) => {
+    if (touchStartY.current !== null) {
+      const deltaY = touchStartY.current - e.nativeEvent.pageY;
+      if (deltaY > 50) {
+        if (!isSubmitted && myAnswer.trim().length > 0 && !savingAnswer) {
+          sound.pop();
+          triggerHaptic('selection');
+          handleSubmit();
+        }
+      }
+    }
+    touchStartY.current = null;
+  };
 
   // ── Chargement de la question ─────────────────────────────────────────────
   useEffect(() => {
@@ -347,6 +416,8 @@ export default function Daylink() {
       <Animated.View
         entering={FadeInUp.duration(800).springify()}
         layout={Layout.springify()}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
       >
         <LinearGradient
@@ -432,6 +503,9 @@ export default function Daylink() {
                   ? <ActivityIndicator color="white" />
                   : <Text style={styles.buttonText}>Envoyer avec amour 💌</Text>}
               </Pressable>
+              <Text style={{ textAlign: 'center', fontSize: 11, color: store.isDarkMode ? '#A89997' : '#8A7A78', marginTop: 8 }}>
+                Glisse vers le haut 👆 ou appuie pour valider
+              </Text>
             </Animated.View>
           ) : (
             <Animated.View entering={FadeIn} layout={Layout.springify()}>
@@ -468,8 +542,72 @@ export default function Daylink() {
               )}
             </Animated.View>
           )}
+
+          {/* Bouton pour voir la question & réponses de la veille */}
+          <Pressable
+            onPress={() => {
+              sound.tap();
+              triggerHaptic('light');
+              loadYesterday();
+            }}
+            style={[styles.yesterdayBtn, { borderColor: theme.tint, backgroundColor: store.isDarkMode ? 'rgba(255,154,139,0.1)' : 'rgba(255,154,139,0.08)' }]}
+          >
+            <Clock size={16} color={theme.tint} />
+            <Text style={[styles.yesterdayBtnText, { color: theme.tint }]}>
+              Voir la question et réponses d'hier
+            </Text>
+          </Pressable>
         </ScrollView>
       </Animated.View>
+
+      {/* Modal Question et réponses de la veille */}
+      <Modal visible={showYesterdayModal} transparent animationType="fade" onRequestClose={() => setShowYesterdayModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowYesterdayModal(false)}>
+          <Pressable style={[styles.yesterdayModalCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Clock color={theme.tint} size={20} />
+                <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text }}>Hier ({yesterdayKey()})</Text>
+              </View>
+              <Pressable onPress={() => setShowYesterdayModal(false)} hitSlop={10}>
+                <Text style={{ fontSize: 18, color: '#A99693', fontWeight: 'bold' }}>✕</Text>
+              </Pressable>
+            </View>
+
+            {yesterdayLoading ? (
+              <ActivityIndicator color={theme.tint} size="small" style={{ marginVertical: 30 }} />
+            ) : !yesterdayData?.exists ? (
+              <Text style={{ textAlign: 'center', color: '#A99693', marginVertical: 20 }}>
+                Aucune question enregistrée pour la journée d'hier.
+              </Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 380 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text, marginBottom: 14 }}>
+                  {yesterdayData.questionText}
+                </Text>
+
+                <View style={[styles.yesterdayAnswerBox, { borderColor: theme.tint, backgroundColor: 'rgba(255,154,139,0.08)' }]}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: theme.tint, marginBottom: 4 }}>
+                    Ta réponse :
+                  </Text>
+                  <Text style={{ fontSize: 14, color: theme.text, fontStyle: 'italic' }}>
+                    {yesterdayData.myAnswer || 'Tu n’avais pas répondu.'}
+                  </Text>
+                </View>
+
+                <View style={[styles.yesterdayAnswerBox, { borderColor: '#FF6A88', backgroundColor: 'rgba(255,106,136,0.08)' }]}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#FF6A88', marginBottom: 4 }}>
+                    Réponse de {partnerPseudo} :
+                  </Text>
+                  <Text style={{ fontSize: 14, color: theme.text, fontStyle: 'italic' }}>
+                    {yesterdayData.partnerAnswer || `${partnerPseudo} n’avait pas répondu.`}
+                  </Text>
+                </View>
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -514,4 +652,44 @@ const styles = StyleSheet.create({
   revealHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   revealTitle: { fontSize: 16, fontWeight: 'bold' },
   partnerText: { fontSize: 18, fontStyle: 'italic', lineHeight: 26 },
+  yesterdayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  yesterdayBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  yesterdayModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  yesterdayAnswerBox: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
 });
