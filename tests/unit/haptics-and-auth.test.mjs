@@ -30,6 +30,12 @@ test('login screen provides Apple and Google sign-in with Android BackHandler is
   assert.match(loginSrc, /handleAppleLogin/, 'login.tsx must define handleAppleLogin');
   assert.match(loginSrc, /OAuthProvider\('apple\.com'\)/, 'login.tsx must support Firebase Apple OAuthProvider');
   assert.match(loginSrc, /Continuer avec Apple/, 'login.tsx must render Apple Sign-In button');
+  assert.match(loginSrc, /provider\.credential\(\{\s*idToken:\s*identityToken,?\s*\}\)/, 'login.tsx must pass identityToken to Apple credential without mismatched rawNonce');
+  assert.match(loginSrc, /Platform\.OS\s*===\s*'web'/, 'login.tsx must distinguish web from android native for Apple login popup');
+
+  const appJson = JSON.parse(await read('app.json'));
+  assert.equal(appJson.expo.ios.usesAppleSignIn, true, 'app.json must enable usesAppleSignIn for iOS entitlement');
+  assert.ok(appJson.expo.plugins.includes('expo-apple-authentication'), 'app.json plugins must include expo-apple-authentication');
 
   // 4. Clickable buttons trigger feedback even if unaccepted
   assert.match(loginSrc, /styles\.appleButton/, 'login.tsx must define appleButton styling');
@@ -50,11 +56,15 @@ test('date screen renders form immediately without blocking animation delays', a
 
 test('dashboard provides responsive widget layout and UID switch state isolation', async () => {
   const dashSrc = await read('src/app/dashboard.tsx');
+  const dailyClaimSrc = await read('src/components/DailyClaim.tsx');
 
-  // 1. Responsive switch at 600px width
+  // 1. Responsive switch at 600px width and bounded roulette height
   assert.match(dashSrc, /windowWidth\s*<\s*600/, 'dashboard.tsx must check windowWidth < 600 for responsive layout');
   assert.match(dashSrc, /StreakCalendar[\s\S]*fullWidth=\{false\}/, 'dashboard.tsx must use compact calendar next to roulette on mobile');
   assert.match(dashSrc, /StreakCalendar[\s\S]*fullWidth=\{true\}/, 'dashboard.tsx must use full width calendar on tablet/desktop');
+  assert.match(dashSrc, /gap:\s*10,\s*height:\s*116,\s*alignItems:\s*'stretch'/, 'dashboard.tsx mobile row must fix height to 116dp to prevent roulette elongation');
+  assert.match(dailyClaimSrc, /height:\s*compact\s*\?\s*116\s*:\s*76/, 'DailyClaim must bound compact height to 116dp');
+  assert.match(dailyClaimSrc, /maxHeight:\s*compact\s*\?\s*116\s*:\s*80/, 'DailyClaim must cap compact maxHeight to 116dp');
 
   // 2. State isolation on UID change
   assert.match(dashSrc, /previousUidRef[\s\S]*activeUid/, 'dashboard.tsx must track previousUidRef');

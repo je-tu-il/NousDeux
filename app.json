@@ -12,7 +12,8 @@
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.pixelthings.nousdeuxapp",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -31,6 +32,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-apple-authentication",
       [
         "expo-splash-screen",
         {

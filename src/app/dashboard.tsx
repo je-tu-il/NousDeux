@@ -608,8 +608,8 @@ export default function DashboardScreen() {
 
             {/* LIGNE 2 MOBILE: ROULETTE + MINI-CALENDRIER CÔTE À CÔTE */}
             {partner?.coupleId && store.uid && (
-              <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, gap: 10, alignItems: 'stretch' }}>
-                <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, gap: 10, height: 116, alignItems: 'stretch' }}>
+                <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1, height: 116 }}>
                   <DailyClaim 
                     compact={true}
                     coupleId={partner.coupleId} 
@@ -623,10 +623,10 @@ export default function DashboardScreen() {
                     }} 
                   />
                 </Animated.View>
-                <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ flex: 1.2 }}>
+                <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ flex: 1.2, height: 116 }}>
                   <Link href="/calendar" asChild>
                     <Pressable 
-                      style={{ width: '100%', height: '100%' }}
+                      style={{ width: '100%', height: 116 }}
                       onPress={() => {
                         sound.tap();
                         triggerHaptic('light');

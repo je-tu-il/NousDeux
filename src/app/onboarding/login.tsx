@@ -286,13 +286,11 @@ export default function LoginScreen() {
         if (!isAvailable) {
           throw new Error("La connexion avec Apple n'est pas disponible sur cet appareil.");
         }
-        const csrf = Math.random().toString(36).substring(2, 15);
         const appleCredential = await AppleAuthentication.signInAsync({
           requestedScopes: [
             AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
             AppleAuthentication.AppleAuthenticationScope.EMAIL,
           ],
-          state: csrf,
         });
 
         const { identityToken } = appleCredential;
@@ -303,7 +301,6 @@ export default function LoginScreen() {
         const provider = new OAuthProvider('apple.com');
         const credential = provider.credential({
           idToken: identityToken,
-          rawNonce: csrf,
         });
         const userCredential = await signInWithCredential(auth, credential);
         const fullName = appleCredential.fullName
@@ -314,8 +311,8 @@ export default function LoginScreen() {
           displayName: fullName || userCredential.user.displayName,
           photoURL: userCredential.user.photoURL,
         });
-      } else {
-        // Web / Android: Firebase OAuthProvider
+      } else if (Platform.OS === 'web') {
+        // Web: Firebase OAuthProvider
         const provider = new OAuthProvider('apple.com');
         provider.addScope('email');
         provider.addScope('name');
@@ -323,6 +320,16 @@ export default function LoginScreen() {
         if (result?.user) {
           await completeLogin(result.user);
         }
+      } else {
+        // Native Android APK
+        setIsSigningIn(false);
+        setModalState({
+          visible: true,
+          type: 'info',
+          title: 'Connexion Apple',
+          message: 'La connexion avec Apple est conçue pour iOS (iPhone/iPad) et le Web. Sur votre appareil Android, utilisez la connexion avec Google en 1 clic !',
+        });
+        return;
       }
     } catch (error: any) {
       if (

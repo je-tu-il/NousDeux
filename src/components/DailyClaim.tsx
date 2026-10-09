@@ -315,11 +315,15 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
         <LinearGradient colors={phase === 'done' ? (isDarkMode ? ['#302727', '#211B1B'] : ['#C9C9C9', '#E2E2E2']) : [theme.gradientStart, theme.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.triggerGradient}>
           <View style={styles.triggerContent}>
             <Animated.View style={[styles.iconCircle, phase === 'button' ? triggerIconStyle : undefined]}>
-              {phase === 'locked' ? <Lock color="#FF6A88" size={20} /> : phase === 'done' ? <Gift color="#9E9E9E" size={20} /> : <Zap color="#FF6A88" size={20} />}
+              {phase === 'locked' ? <Lock color="#FF6A88" size={compact ? 16 : 20} /> : phase === 'done' ? <Gift color="#9E9E9E" size={compact ? 16 : 20} /> : <Zap color="#FF6A88" size={compact ? 16 : 20} />}
             </Animated.View>
-            <View style={{ flex: 1, marginLeft: compact ? 0 : 12, alignItems: compact ? 'center' : 'flex-start' }}>
-              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.triggerTitle, phase === 'done' && { color: '#757575' }]}>{phase === 'locked' ? 'Roulette bloquée' : phase === 'done' ? 'Déjà jouée' : 'Roulette du Jour'}</Text>
-              <Text numberOfLines={2} adjustsFontSizeToFit style={[styles.triggerSub, phase === 'done' && { color: '#9E9E9E' }]}>{subText}</Text>
+            <View style={{ alignItems: compact ? 'center' : 'flex-start', justifyContent: 'center' }}>
+              <Text numberOfLines={1} style={[styles.triggerTitle, phase === 'done' && { color: '#757575' }]}>
+                {phase === 'locked' ? 'Roulette bloquée' : phase === 'done' ? 'Déjà jouée' : 'Roulette du Jour'}
+              </Text>
+              <Text numberOfLines={1} style={[styles.triggerSub, phase === 'done' && { color: '#9E9E9E' }]}>
+                {subText}
+              </Text>
             </View>
           </View>
         </LinearGradient>
@@ -399,14 +403,47 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
 export default DailyClaim;
 
 const getStyles = (compact: boolean) => StyleSheet.create({
-  triggerBox: { marginHorizontal: compact ? 0 : 16, marginBottom: compact ? 0 : 16, flex: 1, height: '100%', borderRadius: 16, overflow: 'hidden', shadowColor: '#FF6A88', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  loadingBox: { backgroundColor: 'rgba(255,255,255,0.82)', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  triggerBox: { 
+    marginHorizontal: compact ? 0 : 16, 
+    marginBottom: compact ? 0 : 16, 
+    height: compact ? 116 : 76, 
+    minHeight: compact ? 116 : 76,
+    maxHeight: compact ? 116 : 80,
+    width: '100%',
+    borderRadius: 16, 
+    overflow: 'hidden', 
+    shadowColor: '#FF6A88', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.2, 
+    shadowRadius: 8, 
+    elevation: 4 
+  },
+  loadingBox: { 
+    backgroundColor: 'rgba(255,255,255,0.82)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    gap: 8,
+    height: compact ? 116 : 76,
+  },
   loadingText: { color: '#6B5B59', fontSize: compact ? 10 : 13, fontWeight: '600' },
-  triggerGradient: { padding: compact ? 12 : 16, flexDirection: compact ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', flex: 1 },
-  triggerContent: { flexDirection: compact ? 'column' : 'row', alignItems: 'center', flex: 1, gap: compact ? 6 : 0 },
-  iconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-  triggerTitle: { color: 'white', fontSize: compact ? 14 : 16, fontWeight: '800', textAlign: 'center' },
-  triggerSub: { color: 'rgba(255,255,255,0.9)', fontSize: compact ? 10 : 13, textAlign: 'center', fontWeight: '500' },
+  triggerGradient: { 
+    padding: compact ? 8 : 14, 
+    flexDirection: compact ? 'column' : 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    height: '100%',
+    width: '100%',
+  },
+  triggerContent: { 
+    flexDirection: compact ? 'column' : 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    gap: compact ? 4 : 12,
+    width: '100%',
+  },
+  iconCircle: { width: compact ? 34 : 40, height: compact ? 34 : 40, borderRadius: compact ? 17 : 20, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
+  triggerTitle: { color: 'white', fontSize: compact ? 12 : 15, fontWeight: '800', textAlign: 'center' },
+  triggerSub: { color: 'rgba(255,255,255,0.9)', fontSize: compact ? 10 : 12, textAlign: 'center', fontWeight: '600' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: 340, backgroundColor: 'white', borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
