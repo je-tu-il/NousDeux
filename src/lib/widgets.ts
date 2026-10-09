@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COSMETICS, Cosmetic } from '../data/cosmetics';
 
@@ -160,8 +160,12 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
     // 3. Sur natif Android / iOS : transmission au stockage natif pour AppWidget / WidgetKit
     if (Platform.OS === 'android') {
       try {
-        // Envoi au pont Android ou SharedPreferences si module présent
-      } catch {}
+        if (NativeModules.WidgetBridge?.updateWidgetData) {
+          await NativeModules.WidgetBridge.updateWidgetData(JSON.stringify(merged));
+        }
+      } catch (bridgeErr) {
+        console.warn('[Widgets] WidgetBridge.updateWidgetData failed:', bridgeErr);
+      }
     } else if (Platform.OS === 'ios') {
       try {
         // Envoi à UserDefaults AppGroup si module présent
@@ -170,6 +174,35 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
   } catch (err) {
     console.warn('[Widgets] syncWidgetData error:', err);
   }
+}
+
+/**
+ * Vérifie si l'épinglage direct du widget à l'écran d'accueil est supporté (Android 8.0+)
+ */
+export async function isWidgetPinSupported(): Promise<boolean> {
+  if (Platform.OS === 'android' && NativeModules.WidgetBridge?.isPinSupported) {
+    try {
+      return await NativeModules.WidgetBridge.isPinSupported();
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * Demande au système Android d'ajouter/épingler le widget directement à l'écran d'accueil
+ */
+export async function requestPinWidget(type: 'question' | 'streak' = 'streak'): Promise<boolean> {
+  if (Platform.OS === 'android' && NativeModules.WidgetBridge?.requestPinWidget) {
+    try {
+      return await NativeModules.WidgetBridge.requestPinWidget(type);
+    } catch (e) {
+      console.warn('[Widgets] requestPinWidget error:', e);
+      return false;
+    }
+  }
+  return false;
 }
 
 /**

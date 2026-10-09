@@ -1,14 +1,8 @@
-ANAIS
-
-CHIARA
-
 |A faire|BUGS|Verif|A Reflechir|
 |-|-|-|-|
-|Screen Ipad<br />Referencer le site|Pub web Debut bas petale <br />Icone + version glass ?<br />Pb vercel<br />Remet en privé|Envoie mail noreply@bloum-5456.firebaseapp.com verif si marche + modif<br />Notif<br />|Score de corda<br />Debloquage au fur et a mesure<br />Verif Secu<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Plan de test<br />Mascotte ?<br />Swip vers le haut pour au suivant<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Son<br />Restaure la streak ?<br />Page de vente<br />Vide un peu firebase ? Code 6 chiffres<br />Process de test<br />Secur encore plus message clé privé ?<br />Panel Modif<br />Forcer les maj<br />Retention ?<br />Backup Firebase<br />Animation<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Revoir certaines questions nul, pas mettre les défis dans les trucs quotidien<br />Pose de questions sur lui-même pas si fou ?<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Voir la reponse de la veille ?<br />Domaine|
+|Screen Ipad<br />Referencer le site|Pub web Debut bas petale <br />Icone + version glass ?<br />Pb vercel<br />Remet en privé|Notif<br />|Score de corda<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Mascotte ?<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Retention ?<br />Backup<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Pose de questions sur lui-même pas si fou ?<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Domaine<br />Parler de la version web<br />LIMITE BUG|
 
 
-
-Parler de la version web
 
 
 
@@ -18,11 +12,25 @@ Son
 
 
 
+Sur l'app la roulette bloquée sa case est super longue ce qui pousse tout hors de l'ecran
+
+La connexion avec apple ne marche pas
+
+Verif Secu
+
+Paramètres Mon Profil et preference Pas visible
+
+Voir la question et la reponse de la veille si on clic sur un bouton
+
+Forcer les maj les anciennes versions affichent un pop up empêchant l'app de se lancer et un lien vers la maj ( play store apple store)
+
+Ca serait utile de vider un peu firebase ? Tout les coes a 6 chiffres, et autres…
+
+Swip vers le haut pour au suivant ou valider sa reponse
+
+Option quand on viens le lendemain d'une perte de streak on propose pour 2000 de Restaure la streak ?
 
 
-
-
-Clavier Qwzerty
 
 Hitbox de clic de la page de synchro depuis le Dashboard trop petite
 
@@ -34,7 +42,7 @@ Si je clic sur retour quand je suis sur synchro ca me remet sur l'age au lieu d'
 
 Parler de la version web
 
-Affichage creaion + mise en couple
+Affichage creation + mise en couple
 
 Haut de l'ecran apk bien ?
 
@@ -44,41 +52,9 @@ Tourner l'ecran pendant un changement donne unecran totalement dezomer en tout p
 
 Appuyer sur entré valide sur tout les appareilles
 
-
-
-
-
-Paramètres 
-
-Mon Profil
-
-Pas visible
-
-
-
-
-
-Appuie pour changer
-
-Compte Google : jules.reymond0509@gmail.com
-
-Pseudo
-
-
-
-Ca non plus
-
-
-
 Soucis le retour arriere sur telephone affiche toutes les infos de l'ancien couple avec en partenaire ca met le profil actuel connécté en couple avec le partenaire de l'ancien connecté avec les ressources le calendrier...
 
 Toujours afifchage moche sur apk voir
-
-Sur version mobile ou web sur telephone rester sur l'ancienne interface de moins de calendrier et la roulette a coté
-
-Sur la version app je peut plus me connecter le pop up google n'apparait pas
-
-Ajouter la Connexion avec apple
 
 Ajouter des virbations ou micro impulsions un peu partout dans les app et si possible dans la version web
 

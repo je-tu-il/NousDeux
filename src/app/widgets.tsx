@@ -15,11 +15,12 @@ import { Colors } from '../constants/Colors';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { useTopInset } from '../hooks/useTopInset';
 import { getCosmeticById, getCosmeticImage, WIDGETS, isOwned } from '../data/cosmetics';
-import { WidgetSize, WidgetType, WidgetPlatform, WidgetPayload, getWidgetData, syncWidgetData, getWidgetTheme } from '../lib/widgets';
+import { WidgetSize, WidgetType, WidgetPlatform, WidgetPayload, getWidgetData, syncWidgetData, getWidgetTheme, requestPinWidget, isWidgetPinSupported } from '../lib/widgets';
 import AdaptiveWidget from '../components/AdaptiveWidget';
 import { getUserProfile, saveUserProfile, getInventory } from '../lib/economy';
 import { sound } from '../lib/sound';
 import { triggerHaptic } from '../lib/haptics';
+import { useToastStore } from '../store/toastStore';
 
 export default function WidgetsScreen() {
   const store = useOnboardingStore();
@@ -75,6 +76,28 @@ export default function WidgetsScreen() {
     }
     if (store.uid) {
       await saveUserProfile(store.uid, { selectedWidget: themeId });
+    }
+  };
+
+  const handlePinWidget = async () => {
+    sound.tap();
+    triggerHaptic('light');
+
+    if (Platform.OS === 'android') {
+      try {
+        const res = await requestPinWidget(widgetType);
+        if (res) {
+          sound.reward();
+          triggerHaptic('success');
+          useToastStore.getState().showToast('Demande envoyée ! Confirme sur ton écran d’accueil ✨');
+        } else {
+          useToastStore.getState().showToast('Maintiens l’écran d’accueil pour ajouter le widget');
+        }
+      } catch {
+        useToastStore.getState().showToast('Consulte le guide ci-dessous pour l’ajouter manuellement');
+      }
+    } else {
+      useToastStore.getState().showToast('Consulte les 3 étapes faciles ci-dessous pour iPhone');
     }
   };
 
@@ -312,6 +335,32 @@ export default function WidgetsScreen() {
           <Text style={[styles.activeThemeText, { color: store.isDarkMode ? '#D4B8B4' : '#6B5B59' }]}>
             Style actif : <Text style={{ fontWeight: '800', color: theme.text }}>{currentTheme.name} {currentTheme.emoji}</Text>
           </Text>
+
+          {/* Bouton d'ajout / épinglage direct à l'écran d'accueil */}
+          <Pressable
+            onPress={handlePinWidget}
+            style={{
+              marginTop: 14,
+              backgroundColor: theme.tint,
+              paddingVertical: 13,
+              paddingHorizontal: 18,
+              borderRadius: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              shadowColor: theme.tint,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 4,
+            }}
+          >
+            <Smartphone color="white" size={18} />
+            <Text style={{ color: 'white', fontWeight: '800', fontSize: 14 }}>
+              {Platform.OS === 'android' ? '📲 Épingler à l’écran d’accueil' : '📲 Guide d’ajout à l’écran d’accueil'}
+            </Text>
+          </Pressable>
         </View>
 
         {/* CHOISIR UN STYLE DE WIDGET DÉBLOQUÉ */}

@@ -1,4 +1,4 @@
-const { withAndroidManifest, withDangerousMod, AndroidConfig } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod, withStringsXml, AndroidConfig } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,11 +10,29 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
+import org.json.JSONObject
 
 class QuestionWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        val prefs = context.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
+        val payloadStr = prefs.getString("widget_payload", null)
+        var questionText = "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?"
+
+        if (payloadStr != null) {
+            try {
+                val json = JSONObject(payloadStr)
+                if (json.has("todayQuestion")) {
+                    val q = json.getString("todayQuestion")
+                    if (q.isNotBlank()) questionText = q
+                }
+            } catch (e: Exception) {
+                // fallback
+            }
+        }
+
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_question)
+            views.setTextViewText(R.id.widget_question_text, questionText)
 
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -39,11 +57,30 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
+import org.json.JSONObject
 
 class StreakWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        val prefs = context.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
+        val payloadStr = prefs.getString("widget_payload", null)
+        var streakNumber = "🔥 1"
+        var streakLabel = "JOUR ENSEMBLE"
+
+        if (payloadStr != null) {
+            try {
+                val json = JSONObject(payloadStr)
+                val streak = if (json.has("streak")) json.getInt("streak") else 1
+                streakNumber = "🔥 $streak"
+                streakLabel = if (streak > 1) "JOURS ENSEMBLE" else "JOUR ENSEMBLE"
+            } catch (e: Exception) {
+                // fallback
+            }
+        }
+
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_streak)
+            views.setTextViewText(R.id.streak_number, streakNumber)
+            views.setTextViewText(R.id.streak_label, streakLabel)
 
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -60,6 +97,117 @@ class StreakWidgetProvider : AppWidgetProvider() {
 }
 `;
 
+const WIDGET_BRIDGE_MODULE_KT = `package com.pixelthings.nousdeux
+
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+
+class WidgetBridgeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+
+    override fun getName(): String = "WidgetBridge"
+
+    @ReactMethod
+    fun isPinSupported(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val appWidgetManager = AppWidgetManager.getInstance(reactApplicationContext)
+                promise.resolve(appWidgetManager.isRequestPinAppWidgetSupported)
+            } else {
+                promise.resolve(false)
+            }
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    @ReactMethod
+    fun requestPinWidget(widgetType: String, promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val appWidgetManager = AppWidgetManager.getInstance(reactApplicationContext)
+                if (!appWidgetManager.isRequestPinAppWidgetSupported) {
+                    promise.resolve(false)
+                    return
+                }
+
+                val providerClass = if (widgetType == "streak") {
+                    StreakWidgetProvider::class.java
+                } else {
+                    QuestionWidgetProvider::class.java
+                }
+
+                val myProvider = ComponentName(reactApplicationContext, providerClass)
+                val success = appWidgetManager.requestPinAppWidget(myProvider, null, null)
+                promise.resolve(success)
+            } else {
+                promise.resolve(false)
+            }
+        } catch (e: Exception) {
+            promise.reject("PIN_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun updateWidgetData(jsonPayload: String, promise: Promise) {
+        try {
+            val prefs = reactApplicationContext.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
+            prefs.edit().putString("widget_payload", jsonPayload).apply()
+
+            val appWidgetManager = AppWidgetManager.getInstance(reactApplicationContext)
+
+            val questionIds = appWidgetManager.getAppWidgetIds(ComponentName(reactApplicationContext, QuestionWidgetProvider::class.java))
+            if (questionIds.isNotEmpty()) {
+                val intent = Intent(reactApplicationContext, QuestionWidgetProvider::class.java).apply {
+                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, questionIds)
+                }
+                reactApplicationContext.sendBroadcast(intent)
+            }
+
+            val streakIds = appWidgetManager.getAppWidgetIds(ComponentName(reactApplicationContext, StreakWidgetProvider::class.java))
+            if (streakIds.isNotEmpty()) {
+                val intent = Intent(reactApplicationContext, StreakWidgetProvider::class.java).apply {
+                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, streakIds)
+                }
+                reactApplicationContext.sendBroadcast(intent)
+            }
+
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("UPDATE_ERROR", e.message, e)
+        }
+    }
+}
+`;
+
+const WIDGET_BRIDGE_PACKAGE_KT = `package com.pixelthings.nousdeux
+
+import android.view.View
+import com.facebook.react.ReactPackage
+import com.facebook.react.bridge.NativeModule
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.uimanager.ReactShadowNode
+import com.facebook.react.uimanager.ViewManager
+
+class WidgetBridgePackage : ReactPackage {
+    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
+        return listOf(WidgetBridgeModule(reactContext))
+    }
+
+    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<View, ReactShadowNode<*>>> {
+        return emptyList()
+    }
+}
+`;
+
 const QUESTION_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="140dp"
@@ -70,6 +218,7 @@ const QUESTION_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:maxResizeHeight="360dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_question"
+    android:previewLayout="@layout/widget_question"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:description="@string/widget_question_desc" />
@@ -85,6 +234,7 @@ const STREAK_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:maxResizeHeight="360dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_streak"
+    android:previewLayout="@layout/widget_streak"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:description="@string/widget_streak_desc" />
@@ -262,7 +412,21 @@ const WIDGET_STREAK_LAYOUT_XML = `<?xml version="1.0" encoding="utf-8"?>
  * Plugin Expo pour injecter les widgets natifs Android (Question du jour & Flamme).
  */
 const withAndroidWidgets = (config) => {
-  // 1. Déclarer les récepteurs dans AndroidManifest.xml
+  // 1. Injecter les chaînes de description et titres dans strings.xml via withStringsXml
+  config = withStringsXml(config, (config) => {
+    config.modResults = AndroidConfig.Strings.setStringItem(
+      [
+        { $: { name: 'widget_question_title' }, _: 'Question du Jour' },
+        { $: { name: 'widget_question_desc' }, _: "Affiche la question du jour de votre couple sur votre écran d'accueil" },
+        { $: { name: 'widget_streak_title' }, _: 'Flamme & Série' },
+        { $: { name: 'widget_streak_desc' }, _: 'Affiche votre série de jours ensemble et votre flamme' },
+      ],
+      config.modResults
+    );
+    return config;
+  });
+
+  // 2. Déclarer les récepteurs dans AndroidManifest.xml
   config = withAndroidManifest(config, (config) => {
     const mainApplication = AndroidConfig.Manifest.getMainApplicationOrThrow(config.modResults);
 
@@ -273,12 +437,14 @@ const withAndroidWidgets = (config) => {
     const receivers = mainApplication.receiver;
 
     const questionReceiverExists = receivers.some(
-      (r) => r.$ && r.$['android:name'] === '.QuestionWidgetProvider'
+      (r) => r.$ && (r.$['android:name'] === '.QuestionWidgetProvider' || r.$['android:name'] === 'com.pixelthings.nousdeux.QuestionWidgetProvider')
     );
     if (!questionReceiverExists) {
       receivers.push({
         $: {
-          'android:name': '.QuestionWidgetProvider',
+          'android:name': 'com.pixelthings.nousdeux.QuestionWidgetProvider',
+          'android:label': '@string/widget_question_title',
+          'android:description': '@string/widget_question_desc',
           'android:exported': 'true',
         },
         'intent-filter': [
@@ -304,12 +470,14 @@ const withAndroidWidgets = (config) => {
     }
 
     const streakReceiverExists = receivers.some(
-      (r) => r.$ && r.$['android:name'] === '.StreakWidgetProvider'
+      (r) => r.$ && (r.$['android:name'] === '.StreakWidgetProvider' || r.$['android:name'] === 'com.pixelthings.nousdeux.StreakWidgetProvider')
     );
     if (!streakReceiverExists) {
       receivers.push({
         $: {
-          'android:name': '.StreakWidgetProvider',
+          'android:name': 'com.pixelthings.nousdeux.StreakWidgetProvider',
+          'android:label': '@string/widget_streak_title',
+          'android:description': '@string/widget_streak_desc',
           'android:exported': 'true',
         },
         'intent-filter': [
@@ -337,7 +505,7 @@ const withAndroidWidgets = (config) => {
     return config;
   });
 
-  // 2. Écrire les fichiers natifs Kotlin, XML et Layouts
+  // 3. Écrire les fichiers natifs Kotlin, XML et Layouts
   config = withDangerousMod(config, [
     'android',
     async (config) => {
@@ -357,9 +525,24 @@ const withAndroidWidgets = (config) => {
         }
       });
 
-      // Providers Kotlin
+      // Providers Kotlin & Bridge Module
       fs.writeFileSync(path.join(javaDir, 'QuestionWidgetProvider.kt'), QUESTION_PROVIDER_KT, 'utf8');
       fs.writeFileSync(path.join(javaDir, 'StreakWidgetProvider.kt'), STREAK_PROVIDER_KT, 'utf8');
+      fs.writeFileSync(path.join(javaDir, 'WidgetBridgeModule.kt'), WIDGET_BRIDGE_MODULE_KT, 'utf8');
+      fs.writeFileSync(path.join(javaDir, 'WidgetBridgePackage.kt'), WIDGET_BRIDGE_PACKAGE_KT, 'utf8');
+
+      // Patch MainApplication.kt pour enregistrer WidgetBridgePackage
+      const mainAppPath = path.join(javaDir, 'MainApplication.kt');
+      if (fs.existsSync(mainAppPath)) {
+        let mainAppContent = fs.readFileSync(mainAppPath, 'utf8');
+        if (!mainAppContent.includes('WidgetBridgePackage')) {
+          mainAppContent = mainAppContent.replace(
+            /PackageList\(this\)\.packages\.apply\s*\{/,
+            'PackageList(this).packages.apply {\n          add(WidgetBridgePackage())'
+          );
+          fs.writeFileSync(mainAppPath, mainAppContent, 'utf8');
+        }
+      }
 
       // Widget XML Metadata
       fs.writeFileSync(path.join(xmlDir, 'question_widget_info.xml'), QUESTION_WIDGET_INFO_XML, 'utf8');
@@ -373,7 +556,7 @@ const withAndroidWidgets = (config) => {
       fs.writeFileSync(path.join(layoutDir, 'widget_question.xml'), WIDGET_QUESTION_LAYOUT_XML, 'utf8');
       fs.writeFileSync(path.join(layoutDir, 'widget_streak.xml'), WIDGET_STREAK_LAYOUT_XML, 'utf8');
 
-      // Strings
+      // Fallback direct pour strings.xml
       const stringsPath = path.join(valuesDir, 'strings.xml');
       if (fs.existsSync(stringsPath)) {
         let stringsXml = fs.readFileSync(stringsPath, 'utf8');

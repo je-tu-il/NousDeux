@@ -86,9 +86,20 @@ test('AdaptiveWidget and widgets screen support Streak & Question formats across
 test('app.json configures withAndroidWidgets Expo config plugin for APK generation', async () => {
   const appJsonSrc = await read('app.json');
   const pluginSrc = await read('plugins/withAndroidWidgets.js');
+  const widgetsLibSrc = await read('src/lib/widgets.ts');
+  const widgetsScreenSrc = await read('src/app/widgets.tsx');
 
   assert.match(appJsonSrc, /\.\/plugins\/withAndroidWidgets/, 'app.json plugins must register withAndroidWidgets');
   assert.match(pluginSrc, /QuestionWidgetProvider/, 'withAndroidWidgets must declare QuestionWidgetProvider');
   assert.match(pluginSrc, /StreakWidgetProvider/, 'withAndroidWidgets must declare StreakWidgetProvider');
   assert.match(pluginSrc, /withAndroidManifest/, 'withAndroidWidgets must inject receivers into manifest');
+  assert.match(pluginSrc, /withStringsXml/, 'withAndroidWidgets must inject strings via withStringsXml');
+  assert.match(pluginSrc, /previewLayout/, 'withAndroidWidgets must configure previewLayout for launcher drawers');
+  assert.match(pluginSrc, /WidgetBridgeModule/, 'withAndroidWidgets must compile WidgetBridgeModule');
+
+  // Verify JS library and screen support for pinning
+  assert.match(widgetsLibSrc, /export async function requestPinWidget/, 'widgets.ts must export requestPinWidget');
+  assert.match(widgetsLibSrc, /export async function isWidgetPinSupported/, 'widgets.ts must export isWidgetPinSupported');
+  assert.match(widgetsScreenSrc, /handlePinWidget/, 'WidgetsScreen must implement handlePinWidget');
+  assert.match(widgetsScreenSrc, /Épingler à l’écran d’accueil/, 'WidgetsScreen must provide button to pin widget');
 });
