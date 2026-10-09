@@ -50,6 +50,7 @@ import type { Question } from '../data/questions';
 import { QUESTIONS } from '../data/questions';
 import { decryptText, encryptText } from '../lib/crypto';
 import { checkQuests, updateWalletStreak } from '../lib/economy';
+import { sound } from '../lib/sound';
 
 type AnyQuestion = Question | PileOuFaceQuestion;
 
@@ -531,6 +532,9 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
     const finalAnswer = (choice || myAnswer).trim();
     if (!finalAnswer || finalAnswer.length === 0 || !myUid || !partnerUid || !question || !slotKey || !cId || savingAnswer || isSubmitted) return;
 
+    if (choice) sound.pop();
+    else sound.tap();
+
     setSavingAnswer(true);
     if (choice) setMyAnswer(choice);
     else setMyAnswer(finalAnswer);
@@ -568,9 +572,11 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         const decryptedPartner = await safeDecrypt(pAns.data(), cId);
         if (decryptedPartner && decryptedPartner.length > 0) {
           setPartnerAnswer(decryptedPartner);
+          sound.success();
         }
         const res = await completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid);
         if (res && typeof res === 'object' && res.justReachedTen && res.unlockedCategory) {
+          sound.reward();
           setCelebration({
             categoryName: CATEGORY_NAMES[res.unlockedCategory] || res.unlockedCategory,
           });
@@ -591,9 +597,11 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
         const decryptedPartner = await safeDecrypt(snap.data(), cId);
         if (decryptedPartner && decryptedPartner.length > 0) {
           setPartnerAnswer(decryptedPartner);
+          sound.success();
           const resolvedCat = categoryFilter || (question && isPof(question) ? 'pile_ou_face' : (question as Question)?.category);
           const res = await completeUnlimitedQuestion(cId, slotKey, resolvedCat, myUid, partnerUid).catch(() => {});
           if (res && typeof res === 'object' && res.justReachedTen && res.unlockedCategory) {
+            sound.reward();
             setCelebration({
               categoryName: CATEGORY_NAMES[res.unlockedCategory] || res.unlockedCategory,
             });
@@ -607,6 +615,7 @@ export default function UnlimitedQuestions({ categoryFilter }: { categoryFilter?
   // ── Question suivante — stockage provisoire avec flag movedToNext ────────
   const handleNext = async () => {
     if (!myUid || !partnerUid || !cId) return;
+    sound.pop();
     setLoadingNext(true);
 
     const myAnsRef = doc(db, 'couples', cId, 'daily', slotKey, 'answers', myUid);

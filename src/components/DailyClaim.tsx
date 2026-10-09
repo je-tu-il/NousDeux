@@ -9,6 +9,7 @@ import { Colors } from '../constants/Colors';
 import { calculateDailyPetals, claimDaily, WalletData } from '../lib/economy';
 import { db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
+import { sound } from '../lib/sound';
 
 interface Segment { multiplier: number; color: string; label: string; isJackpot?: boolean; isRespin?: boolean; }
 
@@ -186,6 +187,7 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
   // Calcul du gain cible au moment de cliquer
   const doSpin = useCallback(() => {
     if (wheelPhase === 'spinning') return;
+    sound.pop();
     const segIdx = weightedRandom();
     const seg = SEGMENTS[segIdx];
     const amount = seg.isRespin ? 0 : Math.round(base * seg.multiplier);
@@ -202,6 +204,17 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
 
     setWheelPhase('spinning');
     resultScale.value = 0;
+
+    // Micro-ticks sonores pendant la rotation
+    let tickCount = 0;
+    const tickInterval = setInterval(() => {
+      tickCount++;
+      if (tickCount < 14) {
+        sound.tick();
+      } else {
+        clearInterval(tickInterval);
+      }
+    }, 220);
     
     // Fallback animation easing (très fluide, pas de risque d'erreur bezier)
     rotation.value = withTiming(totalRotation, { 
@@ -209,6 +222,7 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
       easing: Easing.out(Easing.cubic),
       reduceMotion: ReduceMotion.Never 
     }, (finished) => {
+      clearInterval(tickInterval);
       if (finished) runOnJS(onSpinDone)(segIdx, amount, seg.isRespin ?? false);
     });
   }, [wheelPhase, base, coupleId, rotation, resultScale]);
@@ -217,6 +231,7 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
     setWonSeg(segIdx);
 
     if (isRespinResult) {
+      sound.tap();
       setTimeout(() => { setWheelPhase('idle'); }, 1500);
       return;
     }
@@ -231,9 +246,15 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
     setClaimedTotalEarned(claim.totalEarned);
     resultScale.value = withSpring(1, { damping: 10 });
     setWheelPhase('result');
+    if (SEGMENTS[segIdx]?.isJackpot) {
+      sound.reward();
+    } else {
+      sound.coin();
+    }
   }, [coupleId, myUid, resultScale]);
 
   const handleCollect = () => {
+    sound.coin();
     setShowModal(false);
     setPhase('done');
     const nextBalance = claimedBalance ?? ((wallet?.petals ?? 0) + wonAmount);
@@ -256,6 +277,7 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
   }
 
   const handleTriggerPress = () => {
+    sound.tap();
     if (phase === 'button') {
       setShowModal(true);
     } else if (phase === 'locked') {

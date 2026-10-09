@@ -28,7 +28,7 @@ import {
 import CoinWallet from '../components/CoinWallet';
 import UIModal, { UIModalType } from '../components/UIModal';
 import { useTopInset } from '@/hooks/useTopInset';
-import { BACKGROUNDS, BORDERS, Cosmetic, TAGS, UnlockCondition, isOwned, parseGradientColors } from '../data/cosmetics';
+import { BACKGROUNDS, BORDERS, Cosmetic, TAGS, WIDGETS, UnlockCondition, isOwned, parseGradientColors } from '../data/cosmetics';
 import { QUESTS } from '../data/quests';
 import {
     InventoryData,
@@ -46,6 +46,8 @@ import GoogleAdBanner from '../components/GoogleAdBanner';
 import RewardedAdButton from '../components/RewardedAdButton';
 import { db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
+import { sound } from '../lib/sound';
+import { syncWidgetData } from '../lib/widgets';
 
 // ——— Helpers ————————————————————————————————————————————————————————————————
 
@@ -67,12 +69,13 @@ function canShowPurchase(item: Cosmetic, streak: number): boolean {
   return true;
 }
 
-type TabType = 'backgrounds' | 'borders' | 'tags';
+type TabType = 'backgrounds' | 'borders' | 'tags' | 'widgets';
 
 const TAB_DATA: Record<TabType, Cosmetic[]> = {
   backgrounds: BACKGROUNDS,
   borders: BORDERS,
   tags: TAGS,
+  widgets: WIDGETS,
 };
 
 // ——— Composant ——————————————————————————————————————————————————————————————
@@ -209,18 +212,28 @@ export default function ShopScreen() {
     const isEquipped = 
       (item.type === 'background' && userProfile?.selectedBackground === item.id) ||
       (item.type === 'border' && userProfile?.selectedBorder === item.id) ||
-      (item.type === 'tag' && userProfile?.selectedTag === item.id);
+      (item.type === 'tag' && userProfile?.selectedTag === item.id) ||
+      (item.type === 'widget' && (userProfile?.selectedWidget === item.id || store.selectedWidget === item.id));
 
     const onSelect = async () => {
       // Selecting the currently equipped default/free item must never open
       // the purchase dialog, even while the inventory listener is loading.
-      if (isEquipped) return;
+      if (isEquipped) {
+        sound.pop();
+        return;
+      }
       if (owned) {
+        sound.pop();
         if (myUid) {
           const updates: Partial<UserProfile> = {};
           if (item.type === 'background') updates.selectedBackground = item.id;
           if (item.type === 'border') updates.selectedBorder = item.id;
           if (item.type === 'tag') updates.selectedTag = item.id;
+          if (item.type === 'widget') {
+            updates.selectedWidget = item.id;
+            store.setSelectedWidget(item.id);
+            void syncWidgetData({ themeId: item.id });
+          }
           await saveUserProfile(myUid, updates);
           const newProfile = await getUserProfile(myUid);
           setUserProfile(newProfile);
@@ -234,6 +247,7 @@ export default function ShopScreen() {
           }
         }
       } else {
+        sound.tap();
         setSelectedItem(item);
       }
     };
@@ -290,6 +304,17 @@ export default function ShopScreen() {
               {windowWidth >= 360 && <Text style={styles.tagName} numberOfLines={1}>{item.name}</Text>}
             </View>
           )}
+          {item.type === 'widget' && (
+            <LinearGradient
+              colors={parseGradientColors(item.preview) as [string, string]}
+              style={[styles.bgPreview, { alignItems: 'center', justifyContent: 'center' }]}
+            >
+              <Text style={{ fontSize: 32 }}>{item.emoji ?? '📱'}</Text>
+              <View style={{ backgroundColor: 'rgba(0,0,0,0.25)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, marginTop: 4 }}>
+                <Text style={{ color: 'white', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>WIDGET</Text>
+              </View>
+            </LinearGradient>
+          )}
 
           {isLocked && (
             <View style={styles.lockOverlay}>
@@ -309,7 +334,7 @@ export default function ShopScreen() {
         {/* Badge prix/statut */}
         {windowWidth < 360 ? (
           <View style={styles.compactStatus}><Text style={styles.compactStatusText}>{owned ? '✓' : isLocked ? '🔒' : '🌸'}</Text></View>
-        ) : item.id === 'tag_free_0' ? (
+        ) : (item.id === 'tag_free_0' || item.id === 'widget_default') ? (
           <View style={[styles.badgeFree, isEquipped && { backgroundColor: '#4CAF50' }]}>
             <Text style={[styles.badgeFreeText, isEquipped && { color: 'white' }]}>
               {isEquipped ? 'Équipé ✅' : 'Défaut'}
@@ -389,18 +414,49 @@ export default function ShopScreen() {
 
         {/* Onglets */}
         <View style={[styles.tabs, { marginTop: 4 }]}>
-          {(['backgrounds', 'borders', 'tags'] as TabType[]).map(tab => (
+          {(['backgrounds', 'borders', 'tags', 'widgets'] as TabType[]).map(tab => (
             <Pressable
               key={tab}
               style={[styles.tab, activeTab === tab && styles.tabActive]}
-              onPress={() => setActiveTab(tab)}
+              onPress={() => {
+                sound.tap();
+                setActiveTab(tab);
+              }}
             >
               <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                {tab === 'backgrounds' ? 'Fonds' : tab === 'borders' ? 'Bordures' : 'Tags'}
+                {tab === 'backgrounds' ? 'Fonds' : tab === 'borders' ? 'Bordures' : tab === 'tags' ? 'Titres' : 'Widgets'}
               </Text>
             </Pressable>
           ))}
         </View>
+
+        {activeTab === 'widgets' && (
+          <Pressable
+            onPress={() => {
+              sound.tap();
+              router.push('/widgets');
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: theme.tint,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderRadius: 16,
+              marginBottom: 10,
+              marginHorizontal: 12,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 18 }}>📱</Text>
+              <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>
+                Personnaliser mes widgets en direct ›
+              </Text>
+            </View>
+            <Text style={{ color: 'white', fontWeight: '900', fontSize: 14 }}>Voir</Text>
+          </Pressable>
+        )}
 
         {/* Grille */}
         <FlatList
@@ -456,6 +512,17 @@ export default function ShopScreen() {
                   <View style={{ flex: 1, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' }}>
                     <Text style={{ fontSize: 50 }}>{selectedItem.emoji}</Text>
                   </View>
+                )}
+                {selectedItem.type === 'widget' && (
+                  <LinearGradient
+                    colors={parseGradientColors(selectedItem.preview) as [string, string]}
+                    style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Text style={{ fontSize: 50 }}>{selectedItem.emoji || '📱'}</Text>
+                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 12, marginTop: 4, letterSpacing: 1 }}>
+                      STYLE WIDGET
+                    </Text>
+                  </LinearGradient>
                 )}
               </View>
             )}
@@ -590,8 +657,8 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderBottomWidth: 2, borderBottomColor: 'transparent',
   },
   tabActive: { borderBottomColor: '#FF9A8B' },
-  tabText:       { color: theme.tabIconDefault, fontWeight: '600', fontSize: 14 },
-  tabTextActive: { color: '#FF9A8B', fontWeight: '800' },
+  tabText:       { color: theme.tabIconDefault, fontWeight: '700', fontSize: 13 },
+  tabTextActive: { color: '#FF9A8B', fontWeight: '900' },
 
   listContent: {
     padding: 12, paddingBottom: 40,

@@ -4,8 +4,8 @@ import { QUESTS, Quest, QuestEvent, QuestTierLevel } from '../data/quests';
 import { db } from './firebase';
 
 export type WalletData = { petals: number; streak: number; lastClaimDate: string; totalEarned: number; dailyClaims?: Record<string, string>; lastOperationIds?: string[] };
-export type InventoryData = { backgrounds: string[]; borders: string[]; tags: string[]; avatarParts: string[] };
-export type ItemType = 'background' | 'border' | 'tag' | 'avatarPart';
+export type InventoryData = { backgrounds: string[]; borders: string[]; tags: string[]; avatarParts: string[]; widgets?: string[] };
+export type ItemType = 'background' | 'border' | 'tag' | 'avatarPart' | 'widget';
 export type QuestTier = QuestTierLevel;
 export type QuestProgressEntry = {
   current: number;
@@ -16,7 +16,7 @@ export type QuestProgressEntry = {
 };
 export type QuestProgressMap = Record<string, QuestProgressEntry>;
 export type AvatarConfig = { body: string; skin: string; hair: string; hairColor: string; eyes: string; mouth: string; accessory: string; hat: string; outfit: string };
-export type UserProfile = { selectedBackground: string; selectedBorder: string; selectedTag: string; avatar: AvatarConfig };
+export type UserProfile = { selectedBackground: string; selectedBorder: string; selectedTag: string; avatar: AvatarConfig; selectedWidget?: string };
 
 export type { QuestEvent } from '../data/quests';
 
@@ -365,7 +365,7 @@ export async function getInventory(cId: string): Promise<InventoryData> {
   if (snap.exists()) {
     return snap.data() as InventoryData;
   }
-  const defaultInv: InventoryData = { backgrounds: [], borders: [], tags: [], avatarParts: [] };
+  const defaultInv: InventoryData = { backgrounds: [], borders: [], tags: [], avatarParts: [], widgets: [] };
   await setDoc(invRef, defaultInv);
   return defaultInv;
 }
@@ -582,6 +582,7 @@ export async function getUserProfile(uid: string, createIfMissing: boolean = fal
     selectedBackground: 'bg_free_1',
     selectedBorder: 'bd_free_1',
     selectedTag: 'tag_free_0',
+    selectedWidget: 'widget_default',
     avatar: {
       body: 'default',
       skin: 'light',

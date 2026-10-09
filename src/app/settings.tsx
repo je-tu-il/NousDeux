@@ -18,6 +18,7 @@ import { takePhotoWithCamera, pickImageFromGallery } from '@/lib/avatarPicker';
 import { useTopInset } from '@/hooks/useTopInset';
 import { clearEconomyCache } from '@/lib/economy';
 import { triggerHaptic } from '@/lib/haptics';
+import { sound } from '@/lib/sound';
 
 // Durée du debounce pour pseudo/age (ms)
 const DEBOUNCE_DELAY = 1000;
@@ -91,6 +92,7 @@ export default function SettingsScreen() {
       if (fields.age !== undefined) store.setAge(fields.age);
       if (fields.avatarUrl !== undefined) store.setAvatar(fields.avatarUrl ?? null);
       setSavedIndicator('saved');
+      sound.success();
       setTimeout(() => setSavedIndicator('idle'), 2000);
     } catch (err: any) {
       setSavedIndicator('idle');
@@ -453,237 +455,317 @@ export default function SettingsScreen() {
         <ScrollView style={styles.safeArea} contentContainerStyle={{ paddingBottom: 60, paddingTop: 10 }} showsVerticalScrollIndicator={false}>
 
           {/* Formulaire Profil */}
-          <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Mon Profil</Text>
 
             <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, alignItems: 'center' }]}>
 
               {/* Photo de profil — avec choix appareil photo / galerie / suppression */}
-              <Pressable style={[styles.avatarWrapper, { borderColor: theme.tint }]} onPress={() => setAvatarPickerVisible(true)}>
-              {avatar ? (
-                <Image source={{ uri: avatar }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Camera color={theme.tint} size={30} />
-                </View>
-              )}
-              {/* Badge "modifier" */}
-              <View style={[styles.cameraOverlay, { backgroundColor: theme.tint }]}>
-                <Camera color="white" size={14} />
-              </View>
-            </Pressable>
-            <Text style={styles.changePhotoText}>Appuie pour changer</Text>
-
-            {auth.currentUser?.email && (
-              <View style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: store.isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }}>
-                <Text style={{ fontSize: 12, color: theme.tabIconDefault }}>Compte Google : <Text style={{ fontWeight: '600', color: theme.text }}>{auth.currentUser.email}</Text></Text>
-              </View>
-            )}
-
-            <View style={{ width: '100%', marginTop: 20 }}>
-
-              {/* Pseudo — autosave après 1s sans frappe */}
-              <Text style={[styles.label, { color: theme.text }]}>Pseudo</Text>
-              <TextInput
-                style={styles.input}
-                value={pseudo}
-                onChangeText={handlePseudoChange}
-                maxLength={MAX_PSEUDO_LENGTH}
-                placeholder="Ton pseudo"
-                placeholderTextColor={theme.tabIconDefault}
-                returnKeyType="done"
-                onSubmitEditing={submitPseudo}
-                onKeyPress={(e) => {
-                  if (e.nativeEvent.key === 'Enter') {
-                    submitPseudo();
-                  }
+              <Pressable
+                style={[styles.avatarWrapper, { borderColor: theme.tint }]}
+                onPress={() => {
+                  sound.tap();
+                  setAvatarPickerVisible(true);
                 }}
-              />
-              <Text style={[styles.inputHint, { color: theme.tabIconDefault }]}>
-                {pseudo.length}/{MAX_PSEUDO_LENGTH} caractères maximum
+              >
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Camera color={theme.tint} size={30} />
+                  </View>
+                )}
+                {/* Badge "modifier" */}
+                <View style={[styles.cameraOverlay, { backgroundColor: theme.tint }]}>
+                  <Camera color="white" size={14} />
+                </View>
+              </Pressable>
+
+              <Text style={[styles.changePhotoText, { color: store.isDarkMode ? '#FFB8AD' : '#E05A47' }]}>
+                Appuie pour changer
               </Text>
 
-              {/* Âge — autosave après 1s sans frappe */}
-              <Text style={[styles.label, { color: theme.text }]}>Âge</Text>
-              <TextInput
-                style={styles.input}
-                value={age}
-                onChangeText={handleAgeChange}
-                keyboardType="numeric"
-                placeholder="Ton âge"
-                placeholderTextColor={theme.tabIconDefault}
-                returnKeyType="done"
-                onSubmitEditing={submitAge}
-                onKeyPress={(e) => {
-                  if (e.nativeEvent.key === 'Enter') {
-                    submitAge();
-                  }
+              {(auth.currentUser?.email || (auth.currentUser?.providerData?.[0]?.email)) && (
+                <View style={{ marginTop: 8, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: store.isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }}>
+                  <Text style={{ fontSize: 13, color: store.isDarkMode ? '#E0D0CE' : '#5A4B49', fontWeight: '600' }}>
+                    Compte : <Text style={{ fontWeight: '800', color: theme.text }}>{auth.currentUser?.email || auth.currentUser?.providerData?.[0]?.email}</Text>
+                  </Text>
+                </View>
+              )}
+
+              <View style={{ width: '100%', marginTop: 20 }}>
+
+                {/* Pseudo — autosave après 1s sans frappe */}
+                <Text style={[styles.label, { color: theme.text }]}>Pseudo</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.text }]}
+                  value={pseudo}
+                  onChangeText={handlePseudoChange}
+                  maxLength={MAX_PSEUDO_LENGTH}
+                  placeholder="Ton pseudo"
+                  placeholderTextColor={store.isDarkMode ? '#888' : '#A99693'}
+                  returnKeyType="done"
+                  onSubmitEditing={submitPseudo}
+                  onKeyPress={(e) => {
+                    if (e.nativeEvent.key === 'Enter') {
+                      submitPseudo();
+                    }
+                  }}
+                />
+                <Text style={[styles.inputHint, { color: store.isDarkMode ? '#B8A4A0' : '#8A7A78' }]}>
+                  {pseudo.length}/{MAX_PSEUDO_LENGTH} caractères maximum
+                </Text>
+
+                {/* Âge — autosave après 1s sans frappe */}
+                <Text style={[styles.label, { color: theme.text }]}>Âge</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.text }]}
+                  value={age}
+                  onChangeText={handleAgeChange}
+                  keyboardType="numeric"
+                  placeholder="Ton âge"
+                  placeholderTextColor={store.isDarkMode ? '#888' : '#A99693'}
+                  returnKeyType="done"
+                  onSubmitEditing={submitAge}
+                  onKeyPress={(e) => {
+                    if (e.nativeEvent.key === 'Enter') {
+                      submitAge();
+                    }
+                  }}
+                />
+
+                {isAlone && (
+                  <View style={{ marginTop: 25, width: '100%', alignItems: 'center' }}>
+                    {store.myCode ? (
+                      <View style={styles.codeBox}>
+                        <Text style={[styles.label, { color: theme.text, textAlign: 'center', marginBottom: 15 }]}>
+                          Ton code de partage
+                        </Text>
+                        <Pressable
+                          style={[styles.codeDisplay, { borderColor: theme.tint, backgroundColor: theme.glassBackground }]}
+                          onPress={async () => {
+                            sound.pop();
+                            const Clipboard = await import('expo-clipboard');
+                            await Clipboard.setStringAsync(store.myCode!);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                          }}
+                        >
+                          <Text style={[styles.codeText, { color: theme.text }]}>{store.myCode}</Text>
+                          {copied ? <CheckCircle2 color="green" size={24} /> : <Copy color={theme.tint} size={24} />}
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        style={({ pressed }) => [styles.actionButton, { backgroundColor: theme.card, opacity: pressed || loading ? 0.8 : 1 }]}
+                        onPress={() => {
+                          sound.tap();
+                          generateNewCode();
+                        }}
+                        disabled={loading}
+                      >
+                        <Text style={[styles.actionButtonText, { color: theme.text }]}>Régénérer mon code de partage</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Déconnexion */}
+          <View style={styles.section}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.disconnectButton,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              onPress={() => {
+                sound.tap();
+                handleDisconnect();
+              }}
+            >
+              <LogOut color="white" size={20} />
+              <Text style={styles.disconnectText}>Se déconnecter</Text>
+            </Pressable>
+          </View>
+
+          {/* Préférences */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Préférences</Text>
+            <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, gap: 14 }]}>
+              
+              {/* Dark Mode Toggle — animé */}
+              <DarkModeToggle
+                isDark={store.isDarkMode}
+                onToggle={() => {
+                  sound.pop();
+                  store.setDarkMode(!store.isDarkMode);
                 }}
+                theme={theme}
+                styles={styles}
               />
 
-              {isAlone && (
-                <Animated.View entering={FadeInUp} style={{ marginTop: 25, width: '100%', alignItems: 'center' }}>
-                  {store.myCode ? (
-                    <View style={styles.codeBox}>
-                      <Text style={[styles.label, { color: theme.text, textAlign: 'center', marginBottom: 15 }]}>
-                        Ton code de partage
-                      </Text>
-                      <Pressable
-                        style={[styles.codeDisplay, { borderColor: theme.tint, backgroundColor: theme.glassBackground }]}
-                        onPress={async () => {
-                          const Clipboard = await import('expo-clipboard');
-                          await Clipboard.setStringAsync(store.myCode!);
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 2000);
-                        }}
-                      >
-                        <Text style={[styles.codeText, { color: theme.text }]}>{store.myCode}</Text>
-                        {copied ? <CheckCircle2 color="green" size={24} /> : <Copy color={theme.tint} size={24} />}
-                      </Pressable>
+              <View style={styles.dividerLight} />
+
+              {/* Effets Sonores Toggle — animé */}
+              <SoundToggle
+                isEnabled={store.soundEnabled}
+                onToggle={() => {
+                  sound.pop();
+                  store.setSoundEnabled(!store.soundEnabled);
+                }}
+                theme={theme}
+                styles={styles}
+              />
+
+              <View style={styles.dividerLight} />
+
+              {/* Raccourci Widgets */}
+              <Link href="/widgets" asChild>
+                <Pressable
+                  onPress={() => sound.tap()}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,154,139,0.18)' }]}>
+                      <Text style={{ fontSize: 20 }}>📱</Text>
                     </View>
-                  ) : (
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>
+                        Widgets Écran d’accueil
+                      </Text>
+                      <Text style={{ fontSize: 12, color: store.isDarkMode ? '#B8A4A0' : '#8A7A78' }}>
+                        Question du jour & Flamme (iPhone & Samsung)
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: '#C4B4B2', fontSize: 20 }}>›</Text>
+                </Pressable>
+              </Link>
+
+              {/* Admin Panel Link - Only visible to admins */}
+              {(isUserAdmin(authUid) || isUserAdmin(store.uid)) && (
+                <>
+                  <View style={styles.dividerLight} />
+                  <Link href="/admin" asChild>
                     <Pressable
-                      style={({ pressed }) => [styles.actionButton, { backgroundColor: theme.card, opacity: pressed || loading ? 0.8 : 1 }]}
-                      onPress={generateNewCode}
+                      onPress={() => sound.tap()}
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={[styles.supportIcon, { backgroundColor: 'rgba(234,179,8,0.15)' }]}>
+                          <Text style={{ fontSize: 20 }}>⚙️</Text>
+                        </View>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Panel Administrateur</Text>
+                      </View>
+                      <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
+                    </Pressable>
+                  </Link>
+                </>
+              )}
+
+            </View>
+          </View>
+
+          {/* Contact & Support */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Support</Text>
+            <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, gap: 12 }]}>
+              <Link href="/contact" asChild>
+                <Pressable
+                  onPress={() => sound.tap()}
+                  style={styles.supportRow}
+                >
+                  <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,154,139,0.15)' }]}>
+                    <Mail color={theme.tint} size={22} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.supportTitle, { color: theme.text }]}>Formulaire de contact</Text>
+                    <Text style={styles.supportSub}>Bug, suggestion, question…</Text>
+                  </View>
+                  <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
+                </Pressable>
+              </Link>
+            </View>
+          </View>
+
+          {/* Zone Danger */}
+          <View style={styles.section}>
+
+            <Text style={[styles.sectionTitle, { color: 'red' }]}>Zone Danger</Text>
+
+            <View style={[styles.card, { backgroundColor: 'rgba(255,200,200,0.7)', borderColor: 'red' }]}>
+
+              {!isAlone && (
+                <>
+                  <View style={styles.dangerItem}>
+                    <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
+                      En quittant le couple, vous serez désynchronisés. Ton partenaire sera archivé pour conserver vos succès.
+                    </Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.dangerButton, { opacity: pressed || loading ? 0.8 : 1 }]}
+                      onPress={() => {
+                        sound.tap();
+                        setShowDesyncModal(true);
+                      }}
                       disabled={loading}
                     >
-                      <Text style={[styles.actionButtonText, { color: theme.text }]}>Régénérer mon code de partage</Text>
+                      <HeartCrack color="white" size={20} />
+                      <Text style={styles.dangerButtonText}>Quitter le couple</Text>
                     </Pressable>
-                  )}
-                </Animated.View>
+                  </View>
+                  <View style={styles.divider} />
+                </>
               )}
+
+              <View style={styles.dangerItem}>
+                <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
+                  Cette action supprimera définitivement toutes tes données personnelles et tes réponses (conformément au RGPD).
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [styles.dangerButton, { backgroundColor: '#8B0000', opacity: pressed || loading ? 0.8 : 1 }]}
+                  onPress={() => {
+                    sound.tap();
+                    setShowDeleteModal(true);
+                  }}
+                  disabled={loading}
+                >
+                  <Trash2 color="white" size={20} />
+                  <Text style={styles.dangerButtonText}>Supprimer le compte</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
-        </Animated.View>
 
-        {/* Déconnexion */}
-        <Animated.View entering={FadeInUp.duration(600).delay(200)} style={styles.section}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.disconnectButton,
-              { opacity: pressed ? 0.8 : 1 },
-            ]}
-            onPress={handleDisconnect}
-          >
-            <LogOut color="white" size={20} />
-            <Text style={styles.disconnectText}>Se déconnecter</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* Préférences */}
-        <Animated.View entering={FadeInUp.duration(600).delay(240)} style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Préférences</Text>
-          <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, gap: 15 }]}>
-            
-            {/* Dark Mode Toggle — animé */}
-            <DarkModeToggle isDark={store.isDarkMode} onToggle={() => store.setDarkMode(!store.isDarkMode)} theme={theme} styles={styles} />
-
-            {/* Admin Panel Link - Only visible to admins */}
-            {(isUserAdmin(authUid) || isUserAdmin(store.uid)) && (
-              <>
-                <View style={styles.divider} />
-                <Link href="/admin" asChild>
-                  <Pressable style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <View style={[styles.supportIcon, { backgroundColor: 'rgba(234,179,8,0.15)' }]}>
-                        <Text style={{ fontSize: 20 }}>⚙️</Text>
-                      </View>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Panel Administrateur</Text>
-                    </View>
-                    <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
-                  </Pressable>
-                </Link>
-              </>
-            )}
-
-          </View>
-        </Animated.View>
-
-        {/* Contact & Support */}
-        <Animated.View entering={FadeInUp.duration(600).delay(280)} style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Support</Text>
-          <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, gap: 12 }]}>
-            <Link href="/contact" asChild>
-              <Pressable style={styles.supportRow}>
-                <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,154,139,0.15)' }]}>
-                  <Mail color={theme.tint} size={22} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.supportTitle, { color: theme.text }]}>Formulaire de contact</Text>
-                  <Text style={styles.supportSub}>Bug, suggestion, question…</Text>
-                </View>
-                <Text style={{ color: '#C4B4B2', fontSize: 18 }}>›</Text>
+          {/* Liens légaux */}
+          <View style={[styles.section, { alignItems: 'center', gap: 12 }]}>
+            <Text style={{ color: store.isDarkMode ? '#B8A4A0' : '#8A7A78', fontSize: 12, marginBottom: 4 }}>Informations légales</Text>
+            <Link href="/terms" asChild>
+              <Pressable onPress={() => sound.tap()} style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
+                <FileText color={theme.text} size={14} />
+                <Text style={[styles.legalLinkText, { color: theme.text }]}>Conditions Générales d’Utilisation</Text>
               </Pressable>
             </Link>
-          </View>
-        </Animated.View>
-
-        {/* Zone Danger */}
-        <Animated.View entering={FadeInUp.duration(600).delay(300)} style={styles.section}>
-
-          <Text style={[styles.sectionTitle, { color: 'red' }]}>Zone Danger</Text>
-
-          <View style={[styles.card, { backgroundColor: 'rgba(255,200,200,0.7)', borderColor: 'red' }]}>
-
-            {!isAlone && (
-              <>
-                <View style={styles.dangerItem}>
-                  <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
-                    En quittant le couple, vous serez désynchronisés. Ton partenaire sera archivé pour conserver vos succès.
-                  </Text>
-                  <Pressable
-                    style={({ pressed }) => [styles.dangerButton, { opacity: pressed || loading ? 0.8 : 1 }]}
-                    onPress={() => setShowDesyncModal(true)}
-                    disabled={loading}
-                  >
-                    <HeartCrack color="white" size={20} />
-                    <Text style={styles.dangerButtonText}>Quitter le couple</Text>
-                  </Pressable>
-                </View>
-                <View style={styles.divider} />
-              </>
-            )}
-
-            <View style={styles.dangerItem}>
-              <Text style={{ color: '#444', marginBottom: 15, textAlign: 'center' }}>
-                Cette action supprimera définitivement toutes tes données personnelles et tes réponses (conformément au RGPD).
-              </Text>
-              <Pressable
-                style={({ pressed }) => [styles.dangerButton, { backgroundColor: '#8B0000', opacity: pressed || loading ? 0.8 : 1 }]}
-                onPress={() => setShowDeleteModal(true)}
-                disabled={loading}
-              >
-                <Trash2 color="white" size={20} />
-                <Text style={styles.dangerButtonText}>Supprimer le compte</Text>
+            <Link href="/privacy" asChild>
+              <Pressable onPress={() => sound.tap()} style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
+                <Shield color={theme.text} size={14} />
+                <Text style={[styles.legalLinkText, { color: theme.text }]}>Politique de Confidentialité</Text>
               </Pressable>
+            </Link>
+            <View style={{
+              backgroundColor: store.isDarkMode ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)',
+              paddingHorizontal: 14,
+              paddingVertical: 6,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: store.isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 154, 139, 0.25)',
+              marginTop: 10,
+            }}>
+              <Text style={{ color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', fontSize: 11, fontWeight: '600' }}>NousDeux v1.0.0 — © 2026</Text>
             </View>
           </View>
-        </Animated.View>
-
-        {/* Liens légaux */}
-        <Animated.View entering={FadeInUp.duration(600).delay(400)} style={[styles.section, { alignItems: 'center', gap: 12 }]}>
-          <Text style={{ color: '#A99693', fontSize: 12, marginBottom: 4 }}>Informations légales</Text>
-            <Link href="/terms" style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
-              <FileText color={theme.text} size={14} />
-              <Text style={[styles.legalLinkText, { color: theme.text }]}>Conditions Générales d’Utilisation</Text>
-            </Link>
-            <Link href="/privacy" style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
-              <Shield color={theme.text} size={14} />
-              <Text style={[styles.legalLinkText, { color: theme.text }]}>Politique de Confidentialité</Text>
-            </Link>
-          <View style={{
-            backgroundColor: store.isDarkMode ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)',
-            paddingHorizontal: 14,
-            paddingVertical: 6,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: store.isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 154, 139, 0.25)',
-            marginTop: 10,
-          }}>
-            <Text style={{ color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', fontSize: 11, fontWeight: '600' }}>NousDeux v1.0.0 — © 2026</Text>
-          </View>
-        </Animated.View>
-      </ScrollView>
+        </ScrollView>
       </View>
 
       <AvatarPickerModal
@@ -798,6 +880,61 @@ function DarkModeToggle({ isDark, onToggle, theme, styles }: { isDark: boolean; 
           height: 30,
           borderRadius: 15,
           backgroundColor: isDark ? '#FF9A8B' : '#E5E7EB',
+          padding: 2,
+          justifyContent: 'center',
+        }}
+      >
+        <Animated.View
+          style={[
+            {
+              width: 26,
+              height: 26,
+              borderRadius: 13,
+              backgroundColor: 'white',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 3,
+              elevation: 3,
+            },
+            thumbStyle,
+          ]}
+        />
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Composant Toggle Effets Sonores Animé ────────────────────────────────────
+function SoundToggle({ isEnabled, onToggle, theme, styles }: { isEnabled: boolean; onToggle: () => void; theme: any; styles: any }) {
+  const thumbX = useSharedValue(isEnabled ? 20 : 0);
+
+  useEffect(() => {
+    thumbX.value = withTiming(isEnabled ? 20 : 0, {
+      duration: 250,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+    });
+  }, [isEnabled]);
+
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: thumbX.value }],
+  }));
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={[styles.supportIcon, { backgroundColor: isEnabled ? 'rgba(34,197,94,0.15)' : 'rgba(156,163,175,0.15)' }]}>
+          <Text style={{ fontSize: 20 }}>{isEnabled ? '🔊' : '🔇'}</Text>
+        </View>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Effets Sonores</Text>
+      </View>
+      <Pressable
+        onPress={onToggle}
+        style={{
+          width: 52,
+          height: 30,
+          borderRadius: 15,
+          backgroundColor: isEnabled ? '#4ADE80' : '#E5E7EB',
           padding: 2,
           justifyContent: 'center',
         }}

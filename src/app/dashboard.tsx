@@ -18,6 +18,7 @@ import * as Clipboard from 'expo-clipboard';
 import { ensureUserPairingCode } from '@/lib/pairing';
 import { useToastStore } from '@/store/toastStore';
 import { triggerHaptic } from '@/lib/haptics';
+import { sound } from '@/lib/sound';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -595,6 +596,7 @@ export default function DashboardScreen() {
               <Pressable 
                 style={{ width: 76, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
                 onPress={() => {
+                  sound.tap();
                   triggerHaptic('light');
                   router.push('/settings');
                 }}
@@ -614,6 +616,7 @@ export default function DashboardScreen() {
                     myUid={store.uid} 
                     wallet={wallet}
                     onClaimed={(newW) => {
+                      sound.reward();
                       triggerHaptic('success');
                       cacheWallet(partner.coupleId!, newW);
                       setWallet(newW);
@@ -624,7 +627,10 @@ export default function DashboardScreen() {
                   <Link href="/calendar" asChild>
                     <Pressable 
                       style={{ width: '100%', height: '100%' }}
-                      onPress={() => triggerHaptic('light')}
+                      onPress={() => {
+                        sound.tap();
+                        triggerHaptic('light');
+                      }}
                     >
                       <StreakCalendar 
                         coupleId={partner.coupleId} 
@@ -794,7 +800,11 @@ export default function DashboardScreen() {
           </View>
 
           <Animated.View entering={FadeInUp.delay(150).duration(400)}>
-            <Link href="/daylink" style={[styles.mainCard, { backgroundColor: store.isDarkMode ? 'rgba(5,22,20,0.88)' : 'rgba(240,253,250,0.85)', borderColor: 'rgba(20,184,166,0.3)' }]}>
+            <Link 
+              href="/daylink" 
+              style={[styles.mainCard, { backgroundColor: store.isDarkMode ? 'rgba(5,22,20,0.88)' : 'rgba(240,253,250,0.85)', borderColor: 'rgba(20,184,166,0.3)' }]}
+              onPress={() => sound.tap()}
+            >
               <Animated.View style={[styles.iconWrapper, { backgroundColor: theme.tint }, pulseStyle]}>
                 <CalendarHeart color="white" size={32} />
               </Animated.View>
@@ -807,7 +817,10 @@ export default function DashboardScreen() {
           <Animated.View entering={FadeInUp.delay(220).duration(400)}>
             <Pressable 
               style={[styles.mainCard, { backgroundColor: store.isDarkMode ? 'rgba(20,8,30,0.88)' : 'rgba(250,245,255,0.85)', borderColor: 'rgba(168,85,247,0.3)' }]}
-              onPress={() => router.push('/unlimited' as any)}
+              onPress={() => {
+                sound.tap();
+                router.push('/unlimited' as any);
+              }}
             >
               <View style={[styles.iconWrapper, { backgroundColor: '#A855F7' }]}>
                 <InfinityIcon color="white" size={32} />
@@ -848,6 +861,7 @@ export default function DashboardScreen() {
                     <Pressable 
                       style={[styles.categoryCard, { backgroundColor: store.isDarkMode ? 'rgba(38,28,27,0.95)' : 'rgba(245,245,247,0.95)', borderColor: store.isDarkMode ? 'rgba(80,60,58,0.8)' : '#D1D5DB' }]}
                       onPress={() => {
+                        sound.tap();
                         setAlertMessage(
                           `Le thème "${cat.title}" est verrouillé. Répondez ensemble à 10 questions de ce thème en mode Illimité pour le débloquer ! (${count}/10)`,
                         );
@@ -865,7 +879,11 @@ export default function DashboardScreen() {
                       </View>
                     </Pressable>
                   ) : (
-                    <Link href={`/unlimited?category=${cat.id}`} style={[styles.categoryCard, { backgroundColor: cardBg, borderColor: cat.border }]}>
+                    <Link 
+                      href={`/unlimited?category=${cat.id}`} 
+                      style={[styles.categoryCard, { backgroundColor: cardBg, borderColor: cat.border }]}
+                      onPress={() => sound.tap()}
+                    >
                       {cat.icon}
                       {partnerAnsweredCategories.has(cat.id) && <View style={styles.partnerAnswerDot} />}
                       <Text style={styles.categoryCardTitle}>{cat.title}</Text>

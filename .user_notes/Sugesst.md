@@ -22,6 +22,74 @@ Son
 
 
 
+Clavier Qwzerty
+
+Hitbox de clic de la page de synchro depuis le Dashboard trop petite
+
+Enlever le bouton en base de synchro solo car il est en haut a droite
+
+Retirer le chat si je suis sur la page de connexion
+
+Si je clic sur retour quand je suis sur synchro ca me remet sur l'age au lieu d'image
+
+Parler de la version web
+
+Affichage creaion + mise en couple
+
+Haut de l'ecran apk bien ?
+
+Peut mettre une photo apk ?
+
+Tourner l'ecran pendant un changement donne unecran totalement dezomer en tout petit en haut a gauche
+
+Appuyer sur entré valide sur tout les appareilles
+
+
+
+
+
+Paramètres 
+
+Mon Profil
+
+Pas visible
+
+
+
+
+
+Appuie pour changer
+
+Compte Google : jules.reymond0509@gmail.com
+
+Pseudo
+
+
+
+Ca non plus
+
+
+
+Soucis le retour arriere sur telephone affiche toutes les infos de l'ancien couple avec en partenaire ca met le profil actuel connécté en couple avec le partenaire de l'ancien connecté avec les ressources le calendrier...
+
+Toujours afifchage moche sur apk voir
+
+Sur version mobile ou web sur telephone rester sur l'ancienne interface de moins de calendrier et la roulette a coté
+
+Sur la version app je peut plus me connecter le pop up google n'apparait pas
+
+Ajouter la Connexion avec apple
+
+Ajouter des virbations ou micro impulsions un peu partout dans les app et si possible dans la version web
+
+
+
+
+
+
+
+
+
 Logo
 
 7 Anto
@@ -150,7 +218,7 @@ Trait plus epais logo ?
 
 ## 🌐 1. Référencement du site Web (SEO \& Indexation)
 
-* \[ ] **Acheter et lier un nom de domaine personnalisé** (ex: `nousdeux.app` ou `nousdeux-app.fr`) sur Vercel (évite les URLs temporaires `\*.vercel.app`).
+* \[ ] **Acheter et lier un nom de domaine personnalisé** (ex: `nousdeux.app` ou `nousdeux-app.fr`) sur Vercel (évite les URLs temporaires `\\\*.vercel.app`).
 * \[ ] **Google Search Console** :
 
   * \[ ] Ajouter la propriété de domaine sur [search.google.com/search-console](https://search.google.com/search-console).

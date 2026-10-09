@@ -1,6 +1,6 @@
 import { InventoryData, QuestProgressMap } from '../lib/economy';
 
-export type CosmeticType = 'background' | 'border' | 'tag';
+export type CosmeticType = 'background' | 'border' | 'tag' | 'widget';
 
 export type UnlockCondition = 
   | { type: 'free' }
@@ -96,12 +96,24 @@ export const COSMETICS: Cosmetic[] = [
   { id: 'tag_shop_11', name: 'Gourmand(e)', description: 'Aime manger', type: 'tag', unlock: { type: 'purchase', price: 220 }, preview: '', emoji: '🍕' },
   { id: 'tag_shop_12', name: 'Ambitieux/se', description: 'Vise loin', type: 'tag', unlock: { type: 'purchase', price: 250 }, preview: '', emoji: '🚀' },
   { id: 'tag_shop_13', name: 'Malin(e)', description: 'Très intelligent', type: 'tag', unlock: { type: 'purchase', price: 280 }, preview: '', emoji: '🦊' },
-  { id: 'tag_shop_14', name: 'Magique', description: 'Fait des merveilles', type: 'tag', unlock: { type: 'purchase', price: 300 }, preview: '', emoji: '💫' }
+  { id: 'tag_shop_14', name: 'Magique', description: 'Fait des merveilles', type: 'tag', unlock: { type: 'purchase', price: 300 }, preview: '', emoji: '💫' },
+
+  // WIDGETS (Styles d'affichage de widgets personnalisables)
+  { id: 'widget_default', name: 'Classique Douceur', description: 'Le widget officiel NousDeux pêche et crème', type: 'widget', unlock: { type: 'free' }, preview: 'linear-gradient(135deg, #FF9A8B 0%, #FF6A88 100%)', emoji: '🌸', tags: ['clair', 'simple'] },
+  { id: 'widget_streak_7', name: 'Cœur Passion', description: 'Amour flamboyant aux reflets pourpres', type: 'widget', unlock: { type: 'streak', days: 7 }, preview: 'linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)', emoji: '❤️', tags: ['romantique', 'rouge'] },
+  { id: 'widget_streak_14', name: 'Nuit Étoilée', description: 'Ciel nocturne profond et étincelles célestes', type: 'widget', unlock: { type: 'streak', days: 14 }, preview: 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)', emoji: '✨', tags: ['sombre', 'cosmos'] },
+  { id: 'widget_streak_30', name: 'Forêt Dorée', description: 'Émeraude mystique et lueurs féeriques', type: 'widget', unlock: { type: 'streak', days: 30 }, preview: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', emoji: '🍃', tags: ['nature', 'vert'] },
+  { id: 'widget_shop_1', name: 'Néon Cyberpunk', description: 'Ambiance futuriste violette et cyan luminescent', type: 'widget', unlock: { type: 'purchase', price: 100 }, preview: 'linear-gradient(135deg, #8A2387 0%, #E94057 50%, #F27121 100%)', emoji: '⚡', tags: ['neon', 'vif'] },
+  { id: 'widget_shop_2', name: 'Aurore Boréale', description: 'Ondes polaires turquoises et vert émeraude', type: 'widget', unlock: { type: 'purchase', price: 120 }, preview: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', emoji: '🌌', tags: ['eau', 'turquoise'] },
+  { id: 'widget_shop_3', name: 'Coucher de Soleil', description: 'Chaleur crépusculaire ambrée et rose velours', type: 'widget', unlock: { type: 'purchase', price: 150 }, preview: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', emoji: '🌅', tags: ['chaud', 'orange'] },
+  { id: 'widget_shop_4', name: 'Or Impérial', description: 'Prestige royal or scintillant et satin noir', type: 'widget', unlock: { type: 'purchase', price: 200 }, preview: 'linear-gradient(135deg, #BF953F 0%, #FCF6BA 50%, #B38728 100%)', emoji: '👑', tags: ['luxe', 'or'] },
+  { id: 'widget_shop_5', name: 'Galaxie Pastel', description: 'Nuages stellaires lilas, rose et ciel', type: 'widget', unlock: { type: 'purchase', price: 250 }, preview: 'linear-gradient(135deg, #b8cbb8 0%, #eacda3 50%, #d6ae7b 100%)', emoji: '🪐', tags: ['magie', 'pastel'] }
 ];
 
 export const BACKGROUNDS = COSMETICS.filter(c => c.type === 'background');
 export const BORDERS = COSMETICS.filter(c => c.type === 'border');
 export const TAGS = COSMETICS.filter(c => c.type === 'tag');
+export const WIDGETS = COSMETICS.filter(c => c.type === 'widget');
 
 export function getCosmeticById(id: string): Cosmetic | undefined {
   return COSMETICS.find(c => c.id === id);
@@ -130,6 +142,7 @@ export function isOwned(inventory: InventoryData, cosmetic: Cosmetic, streak: nu
   if (cosmetic.type === 'background' && inventory?.backgrounds?.includes(cosmetic.id)) return true;
   if (cosmetic.type === 'border' && inventory?.borders?.includes(cosmetic.id)) return true;
   if (cosmetic.type === 'tag' && inventory?.tags?.includes(cosmetic.id)) return true;
+  if (cosmetic.type === 'widget' && ((inventory as any)?.widgets?.includes(cosmetic.id) || cosmetic.id === 'widget_default')) return true;
   return false;
 }
 

@@ -14,6 +14,7 @@ interface OnboardingState {
   isSynced: boolean;
   hasAcceptedTerms: boolean;
   isDarkMode: boolean;
+  soundEnabled: boolean;
   // Cache partenaire pour éviter les refetch répétés
   partnerUid: string | null;
   partnerPseudo: string;
@@ -23,6 +24,7 @@ interface OnboardingState {
   selectedBackground: string;
   selectedBorder: string;
   selectedTag: string;
+  selectedWidget: string;
 
   setUid: (uid: string | null) => void;
   setPseudo: (pseudo: string) => void;
@@ -33,10 +35,12 @@ interface OnboardingState {
   setSynced: (status: boolean) => void;
   setHasAcceptedTerms: (accepted: boolean) => void;
   setDarkMode: (isDark: boolean) => void;
+  setSoundEnabled: (enabled: boolean) => void;
   setPartnerCache: (uid: string | null, pseudo: string, avatar: string | null) => void;
   clearPartnerCache: () => void;
   setAvatarConfig: (config: AvatarConfig) => void;
   setSelectedCosmetics: (bg: string, border: string, tag: string) => void;
+  setSelectedWidget: (widgetId: string) => void;
   resetSession: () => void;
 }
 
@@ -52,6 +56,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       isSynced: false,
       hasAcceptedTerms: false,
       isDarkMode: false,
+      soundEnabled: true,
       partnerUid: null,
       partnerPseudo: '',
       partnerAvatar: null,
@@ -59,6 +64,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       selectedBackground: 'bg_free_1',
       selectedBorder: 'border_none',
       selectedTag: '',
+      selectedWidget: 'widget_default',
 
       setUid: (uid) => set({ uid }),
       setPseudo: (pseudo) => set({ pseudo }),
@@ -69,10 +75,12 @@ export const useOnboardingStore = create<OnboardingState>()(
       setSynced: (status) => set({ isSynced: status }),
       setHasAcceptedTerms: (accepted) => set({ hasAcceptedTerms: accepted }),
       setDarkMode: (isDark) => set({ isDarkMode: isDark }),
+      setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
       setPartnerCache: (uid, pseudo, avatar) => set({ partnerUid: uid, partnerPseudo: pseudo, partnerAvatar: avatar }),
       clearPartnerCache: () => set({ partnerUid: null, partnerPseudo: '', partnerAvatar: null }),
       setAvatarConfig: (config) => set({ avatarConfig: config }),
       setSelectedCosmetics: (bg, border, tag) => set({ selectedBackground: bg, selectedBorder: border, selectedTag: tag }),
+      setSelectedWidget: (widgetId) => set({ selectedWidget: widgetId }),
       resetSession: () => {
         try {
           clearEconomyCache();
@@ -85,6 +93,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           partnerCode: '',
           myCode: '',
           isSynced: false,
+          soundEnabled: true,
           partnerUid: null,
           partnerPseudo: '',
           partnerAvatar: null,
@@ -92,6 +101,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           selectedBackground: 'bg_free_1',
           selectedBorder: 'border_none',
           selectedTag: '',
+          selectedWidget: 'widget_default',
         });
       },
     }),
