@@ -671,15 +671,15 @@ export default function DashboardScreen() {
 
               {/* REGLAGES */}
               <Pressable 
-                style={{ width: 76, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+                accessibilityLabel="Réglages"
+                style={{ width: 60, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
                 onPress={() => {
                   sound.tap();
                   triggerHaptic('light');
                   router.push('/settings');
                 }}
               >
-                <Settings color="#FF6A88" size={30} />
-                <Text style={{ color: theme.text, fontSize: 12, marginTop: 6, fontWeight: '700' }}>Réglages</Text>
+                <Settings color="#FF6A88" size={28} />
               </Pressable>
             </View>
 
@@ -815,14 +815,15 @@ export default function DashboardScreen() {
 
               {/* BLOC 3: REGLAGES */}
               <Pressable 
-                style={{ flex: partner?.coupleId ? 0.9 : 1, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+                accessibilityLabel="Réglages"
+                style={{ width: 64, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
                 onPress={() => {
+                  sound.tap();
                   triggerHaptic('light');
                   router.push('/settings');
                 }}
               >
-                <Settings color="#FF6A88" size={30} />
-                <Text style={{ color: theme.text, fontSize: 12, marginTop: 6, fontWeight: '700' }}>Réglages</Text>
+                <Settings color="#FF6A88" size={28} />
               </Pressable>
             </View>
 

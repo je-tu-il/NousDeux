@@ -32,6 +32,37 @@ jobs:
       - name: Prebuild native iOS project
         run: npx expo prebuild --platform ios --clean --no-install
 
+      - name: Ensure iOS 17 containerBackground in WidgetKit files
+        run: |
+          node -e '
+            const fs = require("fs");
+
+            function patchWidget(file, colorCode) {
+              if (!fs.existsSync(file)) {
+                console.log("File not found to patch:", file);
+                return;
+              }
+              let content = fs.readFileSync(file, "utf8");
+              if (content.includes(".containerBackground")) {
+                console.log("File already has containerBackground:", file);
+                return;
+              }
+              content = content.replace(
+                /WidgetsEntryView\(entry:\s*entry\)/g,
+                "if #available(iOS 17.0, *) {\n        WidgetsEntryView(entry: entry)\n          .containerBackground(for: .widget) {\n            " + colorCode + "\n          }\n      } else {\n        WidgetsEntryView(entry: entry)\n      }"
+              );
+              fs.writeFileSync(file, content, "utf8");
+              console.log("Successfully adopted containerBackground for:", file);
+            }
+
+            patchWidget("ios/ExpoWidgetsTarget/QuestionWidget.swift", "Color(red: 1.0, green: 0.42, blue: 0.53)");
+            patchWidget("ios/ExpoWidgetsTarget/StreakWidget.swift", "Color(red: 1.0, green: 0.29, blue: 0.17)");
+          '
+          echo "=== QuestionWidget.swift snippet ==="
+          grep -C 5 "containerBackground" ios/ExpoWidgetsTarget/QuestionWidget.swift || true
+          echo "=== StreakWidget.swift snippet ==="
+          grep -C 5 "containerBackground" ios/ExpoWidgetsTarget/StreakWidget.swift || true
+
       - name: Cache CocoaPods download cache
         uses: actions/cache@v4
         with:

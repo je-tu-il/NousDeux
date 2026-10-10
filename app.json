@@ -75,6 +75,7 @@
           "cameraPermission": "NousDeux a besoin d'accéder à votre appareil photo pour vous prendre en photo pour votre profil."
         }
       ],
+      "./plugins/withIosWidgets",
       [
         "expo-widgets",
         {
@@ -101,7 +102,6 @@
           ]
         }
       ],
-      "./plugins/withIosWidgets",
       "./plugins/withAndroidWidgets"
     ],
     "experiments": {
