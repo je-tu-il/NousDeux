@@ -262,7 +262,17 @@ class WidgetBridgePackage : ReactPackage {
 }
 `;
 
-const QUESTION_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
+const QUESTION_WIDGET_INFO_BASE_XML = `<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_question"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />
+`;
+
+const QUESTION_WIDGET_INFO_V31_XML = `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"
     android:minHeight="110dp"
@@ -272,14 +282,23 @@ const QUESTION_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:maxResizeHeight="360dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_question"
-    android:previewImage="@mipmap/ic_launcher"
     android:previewLayout="@layout/widget_question"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:description="@string/widget_question_desc" />
 `;
 
-const STREAK_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
+const STREAK_WIDGET_INFO_BASE_XML = `<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_streak"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />
+`;
+
+const STREAK_WIDGET_INFO_V31_XML = `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"
     android:minHeight="110dp"
@@ -289,7 +308,6 @@ const STREAK_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:maxResizeHeight="360dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_streak"
-    android:previewImage="@mipmap/ic_launcher"
     android:previewLayout="@layout/widget_streak"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
@@ -455,8 +473,10 @@ const WIDGET_STREAK_LAYOUT_XML = `<?xml version="1.0" encoding="utf-8"?>
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:background="@drawable/widget_card_bg"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="4dp"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
             android:text="Touche pour voir ➔"
             android:textColor="#FFFFFF"
             android:textSize="10sp" />
@@ -472,9 +492,10 @@ const withAndroidWidgets = (config) => {
   config = withStringsXml(config, (config) => {
     config.modResults = AndroidConfig.Strings.setStringItem(
       [
-        { $: { name: 'widget_question_title' }, _: 'Question du Jour' },
+        { $: { name: 'app_name' }, _: 'NousDeux' },
+        { $: { name: 'widget_question_title' }, _: 'NousDeux - Question du Jour' },
         { $: { name: 'widget_question_desc' }, _: "Affiche la question du jour de votre couple sur votre écran d'accueil" },
-        { $: { name: 'widget_streak_title' }, _: 'Flamme & Série' },
+        { $: { name: 'widget_streak_title' }, _: 'NousDeux - Flamme & Série' },
         { $: { name: 'widget_streak_desc' }, _: 'Affiche votre série de jours ensemble et votre flamme' },
       ],
       config.modResults
@@ -484,6 +505,12 @@ const withAndroidWidgets = (config) => {
 
   // 2. Déclarer les récepteurs dans AndroidManifest.xml
   config = withAndroidManifest(config, (config) => {
+    if (!config.modResults.manifest.$) {
+      config.modResults.manifest.$ = {};
+    }
+    // internalOnly est essentiel pour que l'OS publie les AppWidgetProviders lors du sideload
+    config.modResults.manifest.$['android:installLocation'] = 'internalOnly';
+
     const mainApplication = AndroidConfig.Manifest.getMainApplicationOrThrow(config.modResults);
 
     if (!mainApplication.receiver) {
@@ -492,16 +519,18 @@ const withAndroidWidgets = (config) => {
 
     const receivers = mainApplication.receiver;
 
-    // Nettoyer les anciens attributs invalides (ex: android:description n'existe pas sur <receiver>)
+    // Nettoyer les anciens attributs invalides et normaliser
     receivers.forEach((r) => {
       if (r.$ && (r.$['android:name'] === '.QuestionWidgetProvider' || r.$['android:name'] === 'com.pixelthings.nousdeux.QuestionWidgetProvider')) {
         delete r.$['android:description'];
+        r.$['android:name'] = '.QuestionWidgetProvider';
         r.$['android:icon'] = '@mipmap/ic_launcher';
         r.$['android:label'] = '@string/widget_question_title';
         r.$['android:exported'] = 'true';
       }
       if (r.$ && (r.$['android:name'] === '.StreakWidgetProvider' || r.$['android:name'] === 'com.pixelthings.nousdeux.StreakWidgetProvider')) {
         delete r.$['android:description'];
+        r.$['android:name'] = '.StreakWidgetProvider';
         r.$['android:icon'] = '@mipmap/ic_launcher';
         r.$['android:label'] = '@string/widget_streak_title';
         r.$['android:exported'] = 'true';
@@ -514,7 +543,7 @@ const withAndroidWidgets = (config) => {
     if (!questionReceiverExists) {
       receivers.push({
         $: {
-          'android:name': 'com.pixelthings.nousdeux.QuestionWidgetProvider',
+          'android:name': '.QuestionWidgetProvider',
           'android:label': '@string/widget_question_title',
           'android:icon': '@mipmap/ic_launcher',
           'android:exported': 'true',
@@ -547,7 +576,7 @@ const withAndroidWidgets = (config) => {
     if (!streakReceiverExists) {
       receivers.push({
         $: {
-          'android:name': 'com.pixelthings.nousdeux.StreakWidgetProvider',
+          'android:name': '.StreakWidgetProvider',
           'android:label': '@string/widget_streak_title',
           'android:icon': '@mipmap/ic_launcher',
           'android:exported': 'true',
@@ -587,11 +616,12 @@ const withAndroidWidgets = (config) => {
       const javaDir = path.join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'pixelthings', 'nousdeux');
       const resDir = path.join(androidRoot, 'app', 'src', 'main', 'res');
       const xmlDir = path.join(resDir, 'xml');
+      const xmlV31Dir = path.join(resDir, 'xml-v31');
       const layoutDir = path.join(resDir, 'layout');
       const drawableDir = path.join(resDir, 'drawable');
       const valuesDir = path.join(resDir, 'values');
 
-      [javaDir, xmlDir, layoutDir, drawableDir, valuesDir].forEach((dir) => {
+      [javaDir, xmlDir, xmlV31Dir, layoutDir, drawableDir, valuesDir].forEach((dir) => {
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
         }
@@ -623,9 +653,11 @@ const withAndroidWidgets = (config) => {
         }
       }
 
-      // Widget XML Metadata
-      fs.writeFileSync(path.join(xmlDir, 'question_widget_info.xml'), QUESTION_WIDGET_INFO_XML, 'utf8');
-      fs.writeFileSync(path.join(xmlDir, 'streak_widget_info.xml'), STREAK_WIDGET_INFO_XML, 'utf8');
+      // Widget XML Metadata (Base pour API <= 30 et V31 pour API >= 31)
+      fs.writeFileSync(path.join(xmlDir, 'question_widget_info.xml'), QUESTION_WIDGET_INFO_BASE_XML, 'utf8');
+      fs.writeFileSync(path.join(xmlDir, 'streak_widget_info.xml'), STREAK_WIDGET_INFO_BASE_XML, 'utf8');
+      fs.writeFileSync(path.join(xmlV31Dir, 'question_widget_info.xml'), QUESTION_WIDGET_INFO_V31_XML, 'utf8');
+      fs.writeFileSync(path.join(xmlV31Dir, 'streak_widget_info.xml'), STREAK_WIDGET_INFO_V31_XML, 'utf8');
 
       // Drawables
       fs.writeFileSync(path.join(drawableDir, 'widget_background.xml'), WIDGET_BACKGROUND_XML, 'utf8');
@@ -643,9 +675,10 @@ const withAndroidWidgets = (config) => {
           const insertIdx = stringsXml.lastIndexOf('</resources>');
           if (insertIdx !== -1) {
             const extraStrings = `
-    <string name="widget_question_title">Question du Jour</string>
+    <string name="app_name">NousDeux</string>
+    <string name="widget_question_title">NousDeux - Question du Jour</string>
     <string name="widget_question_desc">Affiche la question du jour de votre couple sur votre écran d'accueil</string>
-    <string name="widget_streak_title">Flamme &amp; Série</string>
+    <string name="widget_streak_title">NousDeux - Flamme &amp; Série</string>
     <string name="widget_streak_desc">Affiche votre série de jours ensemble et votre flamme</string>
 `;
             stringsXml = stringsXml.slice(0, insertIdx) + extraStrings + stringsXml.slice(insertIdx);
