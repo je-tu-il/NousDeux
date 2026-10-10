@@ -92,7 +92,8 @@
               "ios": {
                 "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"],
                 "contentMarginsDisabled": true
-              }
+              },
+              "android": null
             },
             {
               "name": "StreakWidget",
@@ -101,7 +102,8 @@
               "ios": {
                 "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"],
                 "contentMarginsDisabled": true
-              }
+              },
+              "android": null
             }
           ]
         }

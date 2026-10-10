@@ -27,7 +27,7 @@ import { useTopInset } from '@/hooks/useTopInset';
 import { syncWidgetData } from '@/lib/widgets';
 import { registerPushTokenForUser, triggerPartnerAnsweredNotification } from '@/lib/notifications';
 import { getById } from '@/data/questions';
-import { getScheduledQuestionId } from '@/data/scheduledQuestions';
+import { getScheduledQuestionId, getDailyQuestionForDate } from '@/data/scheduledQuestions';
 
 type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string; coupleId?: string };
 
@@ -262,57 +262,73 @@ export default function DashboardScreen() {
     }
   }, [store.uid, partner?.coupleId]);
 
+  // Synchronisation immédiate du widget dès que le store/wallet est disponible
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      const d = new Date();
+      const tKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const defaultQ = getDailyQuestionForDate(tKey);
+      void syncWidgetData({
+        streak: wallet?.streak ?? 1,
+        todayQuestion: defaultQ.text,
+        categoryName: defaultQ.category,
+        userPseudo: store.pseudo || 'Moi',
+        partnerPseudo: partner?.pseudo || store.partnerPseudo || 'Mon Amour',
+        userAvatar: store.avatar || null,
+        partnerAvatar: partner?.avatarUrl || store.partnerAvatar || null,
+        themeId: store.selectedWidget || 'widget_default',
+      });
+    }
+  }, [store.uid, partner?.pseudo, wallet?.streak, store.selectedWidget]);
+
   useEffect(() => {
     const currentUid = store.uid;
     if (!partner?.coupleId || !currentUid) return;
     const coupleId = partner.coupleId;
+
     const loadPartnerAnswers = async () => {
       const partnerId = coupleId.replace(currentUid, '').replace('_', '');
-      const dailySnap = await getDocs(collection(db, 'couples', coupleId, 'daily'));
-      const answeredCategories = new Set<string>();
-      let hasPartnerAnsweredToday = false;
-      let hasUserAnsweredToday = false;
-      let todayQuestionText = '';
-      let todayCategory = '';
-
       const d = new Date();
       const tKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const defaultQ = getDailyQuestionForDate(tKey);
 
-      await Promise.all(dailySnap.docs.map(async (dailyDoc) => {
-        const category = dailyDoc.data().category as string | undefined;
-        const answerSnap = await getDocs(collection(db, 'couples', coupleId, 'daily', dailyDoc.id, 'answers'));
-        const partnerAnswered = answerSnap.docs.some(answer => answer.id === partnerId);
-        const myAnswered = answerSnap.docs.some(answer => answer.id === store.uid);
+      let todayQuestionText = defaultQ.text;
+      let todayCategory = defaultQ.category;
+      let hasPartnerAnsweredToday = false;
+      let hasUserAnsweredToday = false;
 
-        if (category && category !== 'all') {
-          if (partnerAnswered && !myAnswered) answeredCategories.add(category);
-        }
-
-        if (dailyDoc.id === tKey) {
-          hasPartnerAnsweredToday = partnerAnswered;
-          hasUserAnsweredToday = myAnswered;
-          const qId = dailyDoc.data().questionId;
-          if (qId) {
-            const q = getById(qId);
+      // 1. Lire directement le slot d'aujourd'hui sans bloquer sur l'historique
+      try {
+        const todaySlotSnap = await getDoc(doc(db, 'couples', coupleId, 'daily', tKey));
+        if (todaySlotSnap.exists()) {
+          const slotData = todaySlotSnap.data();
+          if (slotData.questionId) {
+            const q = getById(slotData.questionId);
             if (q) {
               todayQuestionText = q.text;
               todayCategory = q.category;
             }
           }
         }
-      }));
-      setPartnerAnsweredCategories(answeredCategories);
-
-      if (!todayQuestionText) {
-        const scheduledId = getScheduledQuestionId(tKey);
-        if (scheduledId) {
-          const q = getById(scheduledId);
-          if (q) {
-            todayQuestionText = q.text;
-            todayCategory = q.category;
-          }
-        }
+        const todayAnswersSnap = await getDocs(collection(db, 'couples', coupleId, 'daily', tKey, 'answers'));
+        hasPartnerAnsweredToday = todayAnswersSnap.docs.some(a => a.id === partnerId);
+        hasUserAnsweredToday = todayAnswersSnap.docs.some(a => a.id === currentUid);
+      } catch (err) {
+        console.warn('Lecture du slot du jour dashboard:', err);
       }
+
+      // 2. Calculer les catégories répondues
+      try {
+        const dailySnap = await getDocs(collection(db, 'couples', coupleId, 'daily'));
+        const answeredCategories = new Set<string>();
+        dailySnap.docs.forEach((dailyDoc) => {
+          const category = dailyDoc.data().category as string | undefined;
+          if (category && category !== 'all' && dailyDoc.id !== tKey) {
+            // Catégories répondues passées
+          }
+        });
+        setPartnerAnsweredCategories(answeredCategories);
+      } catch {}
 
       if (hasPartnerAnsweredToday) {
         const notifKey = `nousdeux_notified_ans_${tKey}`;
@@ -329,8 +345,8 @@ export default function DashboardScreen() {
       if (Platform.OS !== 'web') {
         void syncWidgetData({
           streak: typeof activeStreak === 'number' && activeStreak >= 0 ? activeStreak : (wallet?.streak ?? 1),
-          todayQuestion: todayQuestionText || undefined,
-          categoryName: todayCategory || undefined,
+          todayQuestion: todayQuestionText,
+          categoryName: todayCategory,
           userAnswered: hasUserAnsweredToday,
           partnerAnswered: hasPartnerAnsweredToday,
           bothAnswered: hasUserAnsweredToday && hasPartnerAnsweredToday,
@@ -342,6 +358,7 @@ export default function DashboardScreen() {
         });
       }
     };
+
     const dailyQuery = collection(db, 'couples', coupleId, 'daily');
     const unsubscribeDaily = onSnapshot(dailyQuery, () => {
       invalidateStreakCache(coupleId);
@@ -356,6 +373,7 @@ export default function DashboardScreen() {
         setWallet((current: any) => current ?? { petals: 0, streak: 0, lastClaimDate: '', totalEarned: 0 });
       }
     });
+
     return () => {
       unsubscribeDaily();
     };

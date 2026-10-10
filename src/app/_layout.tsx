@@ -10,7 +10,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import FloatingToast from '@/components/FloatingToast';
 import ForceUpdateModal from '@/components/ForceUpdateModal';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImageBackground, LogBox, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -34,6 +34,7 @@ export default function RootLayout() {
   const uid = useOnboardingStore((state) => state.uid);
   const pseudo = useOnboardingStore((state) => state.pseudo);
   const age = useOnboardingStore((state) => state.age);
+  const pendingDeepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -66,10 +67,19 @@ export default function RootLayout() {
         const raw = (event.url || '').toLowerCase();
         const parsed = Linking.parse(event.url);
         const path = (parsed.path || parsed.hostname || '').toLowerCase();
+        let target: string | null = null;
         if (path.includes('daylink') || raw.includes('daylink')) {
-          router.push('/daylink');
+          target = '/daylink';
         } else if (path.includes('dashboard') || raw.includes('dashboard')) {
-          router.push('/dashboard');
+          target = '/dashboard';
+        }
+
+        if (target) {
+          if (!authReady || !uid) {
+            pendingDeepLinkRef.current = target;
+          } else {
+            router.push(target as any);
+          }
         }
       } catch (e) {
         console.warn('[Linking] Error handling url:', e);
@@ -84,7 +94,7 @@ export default function RootLayout() {
     return () => {
       subscription.remove();
     };
-  }, [router]);
+  }, [router, authReady, uid]);
 
   useEffect(() => {
     const clearDeletedSession = async () => {
@@ -262,7 +272,13 @@ export default function RootLayout() {
     // Empêcher de rester sur login SEULEMENT si le profil est déjà totalement configuré
     if (currentRoute === 'login') {
       if (pseudo && age) {
-        router.replace('/dashboard');
+        if (pendingDeepLinkRef.current) {
+          const next = pendingDeepLinkRef.current;
+          pendingDeepLinkRef.current = null;
+          router.replace(next as any);
+        } else {
+          router.replace('/dashboard');
+        }
       }
       return;
     }
@@ -276,6 +292,13 @@ export default function RootLayout() {
       if (!age) {
         router.replace('/onboarding/age');
         return;
+      }
+      if (pendingDeepLinkRef.current && (currentRoute === 'dashboard' || currentRoute === 'index')) {
+        const next = pendingDeepLinkRef.current;
+        pendingDeepLinkRef.current = null;
+        if (next !== '/dashboard') {
+          router.push(next as any);
+        }
       }
     }
   }, [authReady, firebaseUser, segments, uid, pseudo, age]);

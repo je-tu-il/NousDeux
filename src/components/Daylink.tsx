@@ -28,7 +28,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Colors } from '../constants/Colors';
 import type { Question } from '../data/questions';
 import { getById, getUnseen, QUESTIONS } from '../data/questions';
-import { getScheduledQuestionId } from '../data/scheduledQuestions';
+import { getScheduledQuestionId, getDailyQuestionForDate } from '../data/scheduledQuestions';
 import { decryptText, encryptText } from '../lib/crypto';
 import { checkQuests, updateWalletStreak } from '../lib/economy';
 import { auth, db } from '../lib/firebase';
@@ -65,35 +65,15 @@ async function pickDailyQuestion(cId: string, slotKey: string): Promise<string> 
       if (getById(cachedId)) return cachedId;
     }
 
-    const scheduled = getScheduledQuestionId(slotKey);
-    if (scheduled && getById(scheduled)) {
-      const q = getById(scheduled)!;
-      tx.set(slotRef, {
-        questionId: scheduled,
-        createdAt: new Date(),
-        mode: 'daily',
-        category: q.category || 'quotidien',
-        questionCategory: q.category || 'quotidien',
-      });
-      return scheduled;
-    }
-
-    const progressRef = doc(db, 'couples', cId, 'progress', 'seen');
-    const progressDoc = await tx.get(progressRef);
-    const seenIds: string[] = progressDoc.exists() ? progressDoc.data().questionIds ?? [] : [];
-    let unseen = getUnseen(seenIds);
-    let newSeenIds = seenIds;
-    if (unseen.length === 0) { unseen = [...QUESTIONS]; newSeenIds = []; }
-    const picked = unseen[Math.floor(Math.random() * unseen.length)];
-    tx.set(progressRef, { questionIds: [...newSeenIds, picked.id], updatedAt: new Date() });
+    const dailyQ = getDailyQuestionForDate(slotKey);
     tx.set(slotRef, {
-      questionId: picked.id,
+      questionId: dailyQ.id,
       createdAt: new Date(),
       mode: 'daily',
-      category: picked.category || 'quotidien',
-      questionCategory: picked.category || 'quotidien',
+      category: dailyQ.category || 'quotidien',
+      questionCategory: dailyQ.category || 'quotidien',
     });
-    return picked.id;
+    return dailyQ.id;
   });
 }
 

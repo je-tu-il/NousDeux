@@ -697,14 +697,145 @@ function run() {
 
   // 4. ios/Pods/ExpoWidgets/ (if pod install has run)
   const podsExpoWidgets = path.join(rootDir, 'ios/Pods/ExpoWidgets');
-  patchTimelineProvider(path.join(podsExpoWidgets, 'Widgets/TimelineProvider.swift'));
-  patchEntryView(path.join(podsExpoWidgets, 'Widgets/EntryView.swift'));
-  patchDynamicView(path.join(podsExpoWidgets, 'Widgets/DynamicView.swift'));
-  patchWidgetObject(path.join(podsExpoWidgets, 'WidgetObject.swift'));
-  patchWidgetsStorage(path.join(podsExpoWidgets, 'WidgetsStorage.swift'));
-  patchWidgetsModule(path.join(podsExpoWidgets, 'WidgetsModule.swift'));
+  // 5. Android node_modules/expo-widgets/android/
+  const expoWidgetsAndroid = path.join(rootDir, 'node_modules/expo-widgets/android/src/main/java/expo/modules/widgets');
+  patchAndroidWidgetsModule(path.join(expoWidgetsAndroid, 'WidgetsModule.kt'));
 
-  log('iOS widgets patch completed successfully.');
+  log('Native widgets patch (iOS & Android) completed successfully.');
+}
+
+function patchAndroidWidgetsModule(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  let content = fs.readFileSync(filePath, 'utf8');
+
+  if (content.includes('updateWidgetProps') && content.includes('updateWidgetData')) {
+    log(`Android WidgetsModule already patched: ${filePath}`);
+    return;
+  }
+
+  const newAndroidWidgetsModule = `package expo.modules.widgets
+
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
+import org.json.JSONObject
+
+class WidgetsModule : Module() {
+  override fun definition() = ModuleDefinition {
+    Name("ExpoWidgets")
+
+    AsyncFunction("updateWidgetProps") { widgetName: String, props: Map<String, Any?> ->
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      val prefs = context.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
+      val json = JSONObject(props)
+      val jsonStr = json.toString()
+      prefs.edit()
+        .putString("widget_payload", jsonStr)
+        .putString("widget_payload_\$widgetName", jsonStr)
+        .apply()
+
+      updateAllNativeWidgets(context)
+      true
+    }
+
+    AsyncFunction("updateWidgetData") { jsonPayload: String ->
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      val prefs = context.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
+      prefs.edit().putString("widget_payload", jsonPayload).apply()
+
+      updateAllNativeWidgets(context)
+      true
+    }
+
+    AsyncFunction("reloadAllWidgets") {
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      updateAllNativeWidgets(context)
+      true
+    }
+
+    AsyncFunction("isPinSupported") {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val context = appContext.reactContext ?: return@AsyncFunction false
+        val appWidgetManager = AppWidgetManager.getInstance(context)
+        appWidgetManager.isRequestPinAppWidgetSupported
+      } else {
+        false
+      }
+    }
+
+    AsyncFunction("requestPinWidget") { widgetType: String ->
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val context = appContext.reactContext ?: return@AsyncFunction false
+        val appWidgetManager = AppWidgetManager.getInstance(context)
+        if (!appWidgetManager.isRequestPinAppWidgetSupported) {
+          return@AsyncFunction false
+        }
+        val targetClass = if (widgetType == "streak" || widgetType == "StreakWidget") {
+          "com.pixelthings.nousdeux.StreakWidgetProvider"
+        } else {
+          "com.pixelthings.nousdeux.QuestionWidgetProvider"
+        }
+        val myProvider = ComponentName(context, targetClass)
+        appWidgetManager.requestPinAppWidget(myProvider, null, null)
+      } else {
+        false
+      }
+    }
+  }
+
+  private fun updateAllNativeWidgets(context: Context) {
+    try {
+      val appWidgetManager = AppWidgetManager.getInstance(context)
+
+      try {
+        val qClass = Class.forName("com.pixelthings.nousdeux.QuestionWidgetProvider")
+        val qIds = appWidgetManager.getAppWidgetIds(ComponentName(context, qClass))
+        if (qIds != null && qIds.isNotEmpty()) {
+          val provider = qClass.getDeclaredConstructor().newInstance()
+          val onUpdate = qClass.getMethod("onUpdate", Context::class.java, AppWidgetManager::class.java, IntArray::class.java)
+          onUpdate.invoke(provider, context, appWidgetManager, qIds)
+
+          val intent = Intent(context, qClass).apply {
+            action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, qIds)
+          }
+          context.sendBroadcast(intent)
+        }
+      } catch (e: Throwable) {
+        android.util.Log.w("ExpoWidgets", "Failed to update QuestionWidgetProvider: " + e.message)
+      }
+
+      try {
+        val sClass = Class.forName("com.pixelthings.nousdeux.StreakWidgetProvider")
+        val sIds = appWidgetManager.getAppWidgetIds(ComponentName(context, sClass))
+        if (sIds != null && sIds.isNotEmpty()) {
+          val provider = sClass.getDeclaredConstructor().newInstance()
+          val onUpdate = sClass.getMethod("onUpdate", Context::class.java, AppWidgetManager::class.java, IntArray::class.java)
+          onUpdate.invoke(provider, context, appWidgetManager, sIds)
+
+          val intent = Intent(context, sClass).apply {
+            action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, sIds)
+          }
+          context.sendBroadcast(intent)
+        }
+      } catch (e: Throwable) {
+        android.util.Log.w("ExpoWidgets", "Failed to update StreakWidgetProvider: " + e.message)
+      }
+    } catch (e: Throwable) {
+      android.util.Log.w("ExpoWidgets", "updateAllNativeWidgets error: " + e.message)
+    }
+  }
+}
+`;
+
+  fs.writeFileSync(filePath, newAndroidWidgetsModule, 'utf8');
+  log(`Patched Android WidgetsModule.kt: ${filePath}`);
 }
 
 run();
+

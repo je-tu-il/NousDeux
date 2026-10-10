@@ -15,8 +15,8 @@ import org.json.JSONObject
 class QuestionWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val prefs = context.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
-        val payloadStr = prefs.getString("widget_payload", null)
-        var questionText = "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?"
+        val payloadStr = prefs.getString("widget_payload", null) ?: prefs.getString("widget_payload_QuestionWidget", null)
+        var questionText = "Ouvrez NousDeux pour synchroniser ✨"
         var partnerAnswered = false
         var userAnswered = false
         var bothAnswered = false
@@ -47,7 +47,7 @@ class QuestionWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        var badgeText = "💬 QUESTION"
+        var badgeText = "💬 QUESTION DU JOUR"
         var ctaText = "Touche pour répondre ✨"
 
         if (bothAnswered || (userAnswered && partnerAnswered)) {
@@ -107,7 +107,7 @@ import org.json.JSONObject
 class StreakWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val prefs = context.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
-        val payloadStr = prefs.getString("widget_payload", null)
+        val payloadStr = prefs.getString("widget_payload", null) ?: prefs.getString("widget_payload_StreakWidget", null)
         var streakNumber = "🔥 1"
         var streakLabel = "JOUR ENSEMBLE"
         var partnerAnswered = false
@@ -173,6 +173,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
         }
     }
 }
+
 `;
 
 const WIDGET_BRIDGE_MODULE_KT = `package com.pixelthings.nousdeux
@@ -657,6 +658,16 @@ const withAndroidWidgets = (config) => {
       fs.writeFileSync(path.join(javaDir, 'StreakWidgetProvider.kt'), STREAK_PROVIDER_KT, 'utf8');
       fs.writeFileSync(path.join(javaDir, 'WidgetBridgeModule.kt'), WIDGET_BRIDGE_MODULE_KT, 'utf8');
       fs.writeFileSync(path.join(javaDir, 'WidgetBridgePackage.kt'), WIDGET_BRIDGE_PACKAGE_KT, 'utf8');
+
+      // Garantir que expo-widgets Android WidgetsModule.kt est patché
+      try {
+        const patchScript = path.join(androidRoot, '..', 'scripts', 'patch-ios-widgets.js');
+        if (fs.existsSync(patchScript)) {
+          require(patchScript);
+        }
+      } catch (e) {
+        // Ignorer si déjà exécuté
+      }
 
       // Patch MainApplication.kt pour enregistrer WidgetBridgePackage
       const mainAppPath = path.join(javaDir, 'MainApplication.kt');

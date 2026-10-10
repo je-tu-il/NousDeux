@@ -117,7 +117,7 @@ export async function triggerPartnerAnsweredNotification(partnerPseudo: string):
         data: { url: '/dashboard' },
         sound: 'default',
         channelId: 'partner-alerts',
-      },
+      } as any,
       trigger: null,
     });
   } catch (err) {

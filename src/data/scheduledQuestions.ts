@@ -14,6 +14,8 @@
  * pour TOUS les couples ce jour-là.
  */
 
+import { QUESTIONS, getById, Question } from './questions';
+
 export const SCHEDULED_QUESTIONS: Record<string, string> = {
   // ── Août 2026 ────────────────────────────────────────────
   "2026-08-01": "q_gen_amour_001", 
@@ -71,3 +73,25 @@ export const SCHEDULED_QUESTIONS: Record<string, string> = {
 export function getScheduledQuestionId(dateKey: string): string | null {
   return SCHEDULED_QUESTIONS[dateKey] ?? null;
 }
+
+/**
+ * Retourne la Question officielle du jour pour une date donnée.
+ * Si une question est planifiée dans SCHEDULED_QUESTIONS, elle est retournée.
+ * Sinon, un hachage déterministe basé sur la date retourne TOUJOURS la même question
+ * pour les deux partenaires et pour les widgets.
+ */
+export function getDailyQuestionForDate(dateKey: string): Question {
+  const scheduledId = getScheduledQuestionId(dateKey);
+  if (scheduledId) {
+    const q = getById(scheduledId);
+    if (q) return q;
+  }
+  let hash = 0;
+  for (let i = 0; i < dateKey.length; i++) {
+    hash = ((hash << 5) - hash) + dateKey.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % QUESTIONS.length;
+  return QUESTIONS[index];
+}
+

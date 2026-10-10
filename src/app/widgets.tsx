@@ -17,7 +17,7 @@ import { useTopInset } from '../hooks/useTopInset';
 import { getCosmeticById, getCosmeticImage, WIDGETS, isOwned } from '../data/cosmetics';
 import { WidgetSize, WidgetType, WidgetPlatform, WidgetPayload, getWidgetData, syncWidgetData, getWidgetTheme, requestPinWidget, isWidgetPinSupported } from '../lib/widgets';
 import AdaptiveWidget from '../components/AdaptiveWidget';
-import { getUserProfile, saveUserProfile, getInventory } from '../lib/economy';
+import { getUserProfile, saveUserProfile, getInventory, getWallet, computeStreakCached } from '../lib/economy';
 import { sound } from '../lib/sound';
 import { triggerHaptic } from '../lib/haptics';
 import { useToastStore } from '../store/toastStore';
@@ -34,6 +34,7 @@ export default function WidgetsScreen() {
   const [widgetData, setWidgetData] = useState<WidgetPayload | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [inventory, setInventory] = useState<any>(null);
+  const [currentStreak, setCurrentStreak] = useState<number>(0);
 
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
   const defaultBg = store.isDarkMode
@@ -58,8 +59,18 @@ export default function WidgetsScreen() {
 
         if (store.partnerUid) {
           const cId = [store.uid, store.partnerUid].sort().join('_');
-          const inv = await getInventory(cId).catch(() => null);
+          const [inv, w, s] = await Promise.all([
+            getInventory(cId).catch(() => null),
+            getWallet(cId).catch(() => null),
+            computeStreakCached(cId).catch(() => 0),
+          ]);
           setInventory(inv);
+          const activeStreak = typeof w?.streak === 'number' && w.streak > 0 ? w.streak : (s || 0);
+          setCurrentStreak(activeStreak);
+          if (activeStreak > 0) {
+            data.streak = activeStreak;
+            setWidgetData({ ...data, streak: activeStreak });
+          }
         }
       }
     }
@@ -136,20 +147,7 @@ export default function WidgetsScreen() {
 
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={[styles.title, { color: theme.text }]}>Widgets Écran d’accueil</Text>
-            <Text style={[styles.subtitle, { color: store.isDarkMode ? '#D4B8B4' : '#6B5B59' }]}>
-              {Platform.OS === 'ios' ? 'iPhone • Personnalisable' : Platform.OS === 'android' ? 'Samsung & Android • Personnalisable' : 'iPhone & Samsung • Personnalisables'}
-            </Text>
           </View>
-
-          <Pressable
-            onPress={() => {
-              sound.tap();
-              router.push({ pathname: '/shop', params: { tab: 'widgets' } });
-            }}
-            style={[styles.shopButton, { backgroundColor: theme.tint }]}
-          >
-            <ShoppingBag color="white" size={18} />
-          </Pressable>
         </View>
       </View>
 
@@ -250,7 +248,7 @@ export default function WidgetsScreen() {
 
           <View style={styles.themeGrid}>
             {WIDGETS.map((item) => {
-              const owned = isOwned(inventory, item, 0, {});
+              const owned = isOwned(inventory, item, currentStreak, {});
               const isEquipped = (store.selectedWidget || 'widget_default') === item.id;
               const widgetConf = getWidgetTheme(item.id);
 

@@ -1,46 +1,42 @@
+
+
 |A faire|BUGS|Verif|A Reflechir|
 |-|-|-|-|
-|Screen Ipad<br />Referencer le site|Pub web Debut bas petale <br />Icone + version glass ?<br />Pb vercel<br />Remet en privé|Notif<br />|Score de corda<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Mascotte ?<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Retention ?<br />Backup<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Pose de questions sur lui-même pas si fou ?<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Domaine<br />Parler de la version web<br />LIMITE BUG|
+|Screen Ipad<br />Referencer le site|Pub web Debut bas petale <br />Icone + version glass ?<br />Pb vercel<br />Remet en privé|Notif<br />|Score de corda<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Mascotte ?<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Retention ?<br />Backup<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Pose de questions sur lui-même pas si fou ?<br />Son<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Domaine<br />Verif Firebase<br />Parler de la version web<br />LIMITE BUG|
 
 
 
 
-
-Widget + en debloquer
-
-Son
-
-
-
-Sur l'app la roulette bloquée sa case est super longue ce qui pousse tout hors de l'ecran
 
 La connexion avec apple ne marche pas
 
+La question sur le widget n'est pas la bonne
+
+La serie de jour non plus
+
+Ca ne s'actualise pas
+
+changer le theme n'actualise pas le widget
+
 Verif Secu
 
-Paramètres Mon Profil et preference Pas visible
+Paramètres et Widget ecran d'acceuil Pas visible
 
-Voir la question et la reponse de la veille si on clic sur un bouton
+IPhone personnalisable retirer et le petit bouton shop en haut a droite
+
+Je possede cœur passion en widget mais il le marque verouiller dans la categorie widget ecran d'acceuil
+
+
 
 Forcer les maj les anciennes versions affichent un pop up empêchant l'app de se lancer et un lien vers la maj ( play store apple store)
 
-Ca serait utile de vider un peu firebase ? Tout les coes a 6 chiffres, et autres…
-
-Swip vers le haut pour au suivant ou valider sa reponse
-
 Option quand on viens le lendemain d'une perte de streak on propose pour 2000 de Restaure la streak ?
-
-
-
-Hitbox de clic de la page de synchro depuis le Dashboard trop petite
 
 Enlever le bouton en base de synchro solo car il est en haut a droite
 
 Retirer le chat si je suis sur la page de connexion
 
 Si je clic sur retour quand je suis sur synchro ca me remet sur l'age au lieu d'image
-
-Parler de la version web
 
 Affichage creation + mise en couple
 
@@ -56,9 +52,9 @@ Soucis le retour arriere sur telephone affiche toutes les infos de l'ancien coup
 
 Toujours afifchage moche sur apk voir
 
-Ajouter des virbations ou micro impulsions un peu partout dans les app et si possible dans la version web
 
 
+Parler de la version web
 
 
 
@@ -194,7 +190,7 @@ Trait plus epais logo ?
 
 ## 🌐 1. Référencement du site Web (SEO \& Indexation)
 
-* \[ ] **Acheter et lier un nom de domaine personnalisé** (ex: `nousdeux.app` ou `nousdeux-app.fr`) sur Vercel (évite les URLs temporaires `\\\*.vercel.app`).
+* \[ ] **Acheter et lier un nom de domaine personnalisé** (ex: `nousdeux.app` ou `nousdeux-app.fr`) sur Vercel (évite les URLs temporaires `\\\\\\\*.vercel.app`).
 * \[ ] **Google Search Console** :
 
   * \[ ] Ajouter la propriété de domaine sur [search.google.com/search-console](https://search.google.com/search-console).

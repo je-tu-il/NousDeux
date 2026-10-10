@@ -93,9 +93,10 @@ export default function ShopScreen() {
     : require('../../assets/images/nousdeux_warm_background.png'));
   const myUid = useOnboardingStore(s => s.uid);
 
-  const params = useLocalSearchParams<{ tab?: string }>();
-  const initialTab: TabType = (params.tab && ['backgrounds', 'borders', 'tags', 'widgets'].includes(params.tab))
-    ? (params.tab as TabType)
+  const params = useLocalSearchParams<{ tab?: string | string[] }>();
+  const rawTab = Array.isArray(params?.tab) ? params.tab[0] : params?.tab;
+  const initialTab: TabType = (rawTab && ['backgrounds', 'borders', 'tags', 'widgets'].includes(rawTab))
+    ? (rawTab as TabType)
     : 'backgrounds';
 
   const [loading,       setLoading]       = useState(true);
@@ -115,10 +116,11 @@ export default function ShopScreen() {
   }>({ visible: false });
 
   useEffect(() => {
-    if (params.tab && ['backgrounds', 'borders', 'tags', 'widgets'].includes(params.tab)) {
-      setActiveTab(params.tab as TabType);
+    const currentTab = Array.isArray(params?.tab) ? params.tab[0] : params?.tab;
+    if (currentTab && ['backgrounds', 'borders', 'tags', 'widgets'].includes(currentTab)) {
+      setActiveTab(currentTab as TabType);
     }
-  }, [params.tab]);
+  }, [params?.tab]);
 
   const fetchShopData = useCallback(async () => {
     if (!myUid) return;
@@ -433,7 +435,7 @@ export default function ShopScreen() {
         </View>
 
         {/* Bouton Publicité Récompensée (+15 Pétales) sous la barre d'onglets */}
-        <View style={{ marginTop: 14, marginBottom: 12 }}>
+        <View style={{ marginTop: 18, marginBottom: 14 }}>
           <RewardedAdButton
             coupleId={coupleId}
             onRewardEarned={() => {
@@ -456,10 +458,10 @@ export default function ShopScreen() {
               justifyContent: 'space-between',
               backgroundColor: theme.tint,
               paddingHorizontal: 16,
-              paddingVertical: 12,
+              paddingVertical: 14,
               borderRadius: 16,
-              marginTop: 2,
-              marginBottom: 14,
+              marginTop: 6,
+              marginBottom: 18,
               marginHorizontal: 12,
             }}
           >

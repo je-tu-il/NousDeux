@@ -1,7 +1,7 @@
 import { Platform, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COSMETICS, Cosmetic } from '../data/cosmetics';
-import { getScheduledQuestionId } from '../data/scheduledQuestions';
+import { getScheduledQuestionId, getDailyQuestionForDate } from '../data/scheduledQuestions';
 import { getById } from '../data/questions';
 
 export type WidgetType = 'question' | 'streak';
@@ -125,11 +125,10 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
     const existingRaw = await AsyncStorage.getItem(WIDGET_STORAGE_KEY);
     const d = new Date();
     const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const scheduledId = getScheduledQuestionId(todayKey);
-    const scheduledQ = scheduledId ? getById(scheduledId) : null;
+    const todayQ = getDailyQuestionForDate(todayKey);
 
-    const defaultQuestion = scheduledQ?.text || "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?";
-    const defaultCategory = scheduledQ?.category || "Quotidien";
+    const defaultQuestion = todayQ.text;
+    const defaultCategory = todayQ.category;
 
     const existing: WidgetPayload = existingRaw ? JSON.parse(existingRaw) : {
       streak: 1,
@@ -149,12 +148,10 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
       updatedAt: new Date().toISOString(),
     };
 
-    // Auto-update to today's scheduled question if existing only had fallback
-    if (!payload.todayQuestion && (!existing.todayQuestion || existing.todayQuestion.startsWith('Quelle est la plus belle'))) {
-      if (scheduledQ) {
-        existing.todayQuestion = scheduledQ.text;
-        existing.categoryName = scheduledQ.category;
-      }
+    // Auto-update to today's question if existing was empty or placeholder
+    if (!payload.todayQuestion && (!existing.todayQuestion || existing.todayQuestion.startsWith('Quelle est la plus belle') || existing.todayQuestion.startsWith('Ouvrez NousDeux'))) {
+      existing.todayQuestion = todayQ.text;
+      existing.categoryName = todayQ.category;
     }
 
     const merged: WidgetPayload = {
@@ -178,11 +175,23 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
     // 3. Sur natif Android / iOS : transmission au stockage natif pour AppWidget / WidgetKit
     if (Platform.OS === 'android') {
       try {
+        const { requireNativeModule } = require('expo');
+        const ExpoWidgets = requireNativeModule('ExpoWidgets');
+        if (ExpoWidgets?.updateWidgetData) {
+          await ExpoWidgets.updateWidgetData(JSON.stringify(merged));
+        } else if (ExpoWidgets?.updateWidgetProps) {
+          await ExpoWidgets.updateWidgetProps('QuestionWidget', merged);
+          await ExpoWidgets.updateWidgetProps('StreakWidget', merged);
+        }
+      } catch (expoErr) {
+        // Fallback to NativeModules.WidgetBridge below
+      }
+      try {
         if (NativeModules.WidgetBridge?.updateWidgetData) {
           await NativeModules.WidgetBridge.updateWidgetData(JSON.stringify(merged));
         }
       } catch (bridgeErr) {
-        console.warn('[Widgets] WidgetBridge.updateWidgetData failed:', bridgeErr);
+        console.warn('[Widgets] WidgetBridge.updateWidgetData fallback error:', bridgeErr);
       }
     } else if (Platform.OS === 'ios') {
       try {
@@ -218,11 +227,18 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
  * Vérifie si l'épinglage direct du widget à l'écran d'accueil est supporté (Android 8.0+)
  */
 export async function isWidgetPinSupported(): Promise<boolean> {
-  if (Platform.OS === 'android' && NativeModules.WidgetBridge?.isPinSupported) {
+  if (Platform.OS === 'android') {
     try {
-      return await NativeModules.WidgetBridge.isPinSupported();
-    } catch {
-      return false;
+      const { requireNativeModule } = require('expo');
+      const ExpoWidgets = requireNativeModule('ExpoWidgets');
+      if (ExpoWidgets?.isPinSupported) {
+        return await ExpoWidgets.isPinSupported();
+      }
+    } catch {}
+    if (NativeModules.WidgetBridge?.isPinSupported) {
+      try {
+        return await NativeModules.WidgetBridge.isPinSupported();
+      } catch {}
     }
   }
   return false;
@@ -232,12 +248,20 @@ export async function isWidgetPinSupported(): Promise<boolean> {
  * Demande au système Android d'ajouter/épingler le widget directement à l'écran d'accueil
  */
 export async function requestPinWidget(type: 'question' | 'streak' = 'streak'): Promise<boolean> {
-  if (Platform.OS === 'android' && NativeModules.WidgetBridge?.requestPinWidget) {
+  if (Platform.OS === 'android') {
     try {
-      return await NativeModules.WidgetBridge.requestPinWidget(type);
-    } catch (e) {
-      console.warn('[Widgets] requestPinWidget error:', e);
-      return false;
+      const { requireNativeModule } = require('expo');
+      const ExpoWidgets = requireNativeModule('ExpoWidgets');
+      if (ExpoWidgets?.requestPinWidget) {
+        return await ExpoWidgets.requestPinWidget(type);
+      }
+    } catch {}
+    if (NativeModules.WidgetBridge?.requestPinWidget) {
+      try {
+        return await NativeModules.WidgetBridge.requestPinWidget(type);
+      } catch (e) {
+        console.warn('[Widgets] requestPinWidget error:', e);
+      }
     }
   }
   return false;
@@ -249,16 +273,15 @@ export async function requestPinWidget(type: 'question' | 'streak' = 'streak'): 
 export async function getWidgetData(): Promise<WidgetPayload> {
   const d = new Date();
   const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const scheduledId = getScheduledQuestionId(todayKey);
-  const scheduledQ = scheduledId ? getById(scheduledId) : null;
+  const todayQ = getDailyQuestionForDate(todayKey);
 
   try {
     const raw = await AsyncStorage.getItem(WIDGET_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if ((!parsed.todayQuestion || parsed.todayQuestion.startsWith('Quelle est la plus belle') || parsed.todayQuestion.startsWith('Quel est ton plus')) && scheduledQ) {
-        parsed.todayQuestion = scheduledQ.text;
-        parsed.categoryName = scheduledQ.category;
+      if ((!parsed.todayQuestion || parsed.todayQuestion.startsWith('Quelle est la plus belle') || parsed.todayQuestion.startsWith('Quel est ton plus') || parsed.todayQuestion.startsWith('Ouvrez NousDeux'))) {
+        parsed.todayQuestion = todayQ.text;
+        parsed.categoryName = todayQ.category;
       }
       return parsed;
     }
@@ -268,8 +291,8 @@ export async function getWidgetData(): Promise<WidgetPayload> {
   return {
     streak: 1,
     daysTogether: 1,
-    todayQuestion: scheduledQ?.text || "Quel est ton plus beau souvenir avec ton partenaire ?",
-    categoryName: scheduledQ?.category || "Amour & Romance",
+    todayQuestion: todayQ.text,
+    categoryName: todayQ.category,
     userAnswered: false,
     partnerAnswered: false,
     bothAnswered: false,
