@@ -47,9 +47,15 @@ jobs:
       - name: Build Xcode Archive
         run: |
           cd ios
+          WORKSPACE=$(ls -d *.xcworkspace 2>/dev/null | head -n 1)
+          if [ -z "$WORKSPACE" ]; then
+            WORKSPACE="NousDeux.xcworkspace"
+          fi
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          echo "Building workspace: $WORKSPACE with scheme: $SCHEME"
           xcodebuild archive \
-            -workspace nousdeux.xcworkspace \
-            -scheme nousdeux \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
             -configuration Release \
             -archivePath $PWD/build/nousdeux.xcarchive \
             -sdk iphoneos \

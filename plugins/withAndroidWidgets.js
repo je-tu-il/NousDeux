@@ -492,7 +492,6 @@ const withAndroidWidgets = (config) => {
   config = withStringsXml(config, (config) => {
     config.modResults = AndroidConfig.Strings.setStringItem(
       [
-        { $: { name: 'app_name' }, _: 'NousDeux' },
         { $: { name: 'widget_question_title' }, _: 'NousDeux - Question du Jour' },
         { $: { name: 'widget_question_desc' }, _: "Affiche la question du jour de votre couple sur votre écran d'accueil" },
         { $: { name: 'widget_streak_title' }, _: 'NousDeux - Flamme & Série' },
@@ -675,7 +674,6 @@ const withAndroidWidgets = (config) => {
           const insertIdx = stringsXml.lastIndexOf('</resources>');
           if (insertIdx !== -1) {
             const extraStrings = `
-    <string name="app_name">NousDeux</string>
     <string name="widget_question_title">NousDeux - Question du Jour</string>
     <string name="widget_question_desc">Affiche la question du jour de votre couple sur votre écran d'accueil</string>
     <string name="widget_streak_title">NousDeux - Flamme &amp; Série</string>
@@ -684,6 +682,20 @@ const withAndroidWidgets = (config) => {
             stringsXml = stringsXml.slice(0, insertIdx) + extraStrings + stringsXml.slice(insertIdx);
             fs.writeFileSync(stringsPath, stringsXml, 'utf8');
           }
+        }
+
+        // Dédoublonnage défensif de app_name pour garantir l'absence d'erreur Gradle mergeReleaseResources
+        const appNameMatches = stringsXml.match(/<string name="app_name">.*?<\/string>/g);
+        if (appNameMatches && appNameMatches.length > 1) {
+          let keptFirst = false;
+          stringsXml = stringsXml.replace(/<string name="app_name">.*?<\/string>[\r\n]*/g, () => {
+            if (!keptFirst) {
+              keptFirst = true;
+              return '<string name="app_name">NousDeux</string>\n';
+            }
+            return '';
+          });
+          fs.writeFileSync(stringsPath, stringsXml, 'utf8');
         }
       }
 

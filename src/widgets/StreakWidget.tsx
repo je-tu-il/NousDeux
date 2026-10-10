@@ -1,5 +1,5 @@
 import { HStack, VStack, Text } from '@expo/ui/swift-ui';
-import { font, foregroundStyle, padding } from '@expo/ui/swift-ui/modifiers';
+import { font, foregroundStyle, padding, containerBackground } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 export interface StreakWidgetProps {
@@ -33,7 +33,7 @@ const StreakWidgetLayout = (props: StreakWidgetProps, _environment: WidgetEnviro
   const streakLabel = streak > 1 ? 'JOURS ENSEMBLE' : 'JOUR ENSEMBLE';
 
   return (
-    <VStack modifiers={[padding({ all: 14 })]}>
+    <VStack modifiers={[containerBackground('#FF4B2B', 'widget'), padding({ all: 14 })]}>
       <HStack>
         <Text modifiers={[font({ size: 12, weight: 'bold' }), foregroundStyle('#FFFFFF')]}>
           NousDeux

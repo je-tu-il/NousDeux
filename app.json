@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "nousdeux",
+    "name": "NousDeux",
     "slug": "nousdeux",
     "version": "1.0.0",
     "platforms": [
@@ -85,7 +85,8 @@
               "displayName": "NousDeux - Question du Jour",
               "description": "Affiche la question du jour de votre couple sur votre écran d'accueil",
               "ios": {
-                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"]
+                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"],
+                "contentMarginsDisabled": true
               }
             },
             {
@@ -93,12 +94,14 @@
               "displayName": "NousDeux - Flamme & Série",
               "description": "Affiche votre série de jours ensemble et votre flamme",
               "ios": {
-                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"]
+                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"],
+                "contentMarginsDisabled": true
               }
             }
           ]
         }
       ],
+      "./plugins/withIosWidgets",
       "./plugins/withAndroidWidgets"
     ],
     "experiments": {

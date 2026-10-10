@@ -116,12 +116,41 @@ test('app.json and widgets/ configure iOS WidgetKit extension via expo-widgets',
   assert.match(appJsonSrc, /QuestionWidget/, 'app.json must declare QuestionWidget');
   assert.match(appJsonSrc, /StreakWidget/, 'app.json must declare StreakWidget');
 
+  assert.match(appJsonSrc, /"name":\s*"NousDeux"/, 'app.json must set app name to NousDeux');
+  assert.match(appJsonSrc, /contentMarginsDisabled/, 'app.json must enable contentMarginsDisabled for iOS widgets');
+  assert.match(appJsonSrc, /\.\/plugins\/withIosWidgets/, 'app.json must register withIosWidgets plugin');
+
   assert.match(questionWidgetSrc, /createWidget\('QuestionWidget'/, 'QuestionWidget.tsx must create QuestionWidget');
   assert.match(streakWidgetSrc, /createWidget\('StreakWidget'/, 'StreakWidget.tsx must create StreakWidget');
+  assert.match(questionWidgetSrc, /containerBackground\(/, 'QuestionWidget must adopt containerBackground API for iOS 17');
+  assert.match(streakWidgetSrc, /containerBackground\(/, 'StreakWidget must adopt containerBackground API for iOS 17');
 
   assert.match(widgetsLibSrc, /QuestionWidget\.updateSnapshot/, 'widgets.ts must update QuestionWidget snapshot on iOS');
   assert.match(widgetsLibSrc, /StreakWidget\.updateSnapshot/, 'widgets.ts must update StreakWidget snapshot on iOS');
 
   assert.match(workflowSrc, /PlugIns/, 'build-ios workflow must verify embedded PlugIns in IPA');
+  assert.match(workflowSrc, /WORKSPACE=/, 'build-ios workflow must resolve workspace dynamically');
 });
+
+test('iOS and Android widget plugins configure native containerBackground and deduplicate strings', async () => {
+  const iosPluginSrc = await read('plugins/withIosWidgets.js');
+  const androidPluginSrc = await read('plugins/withAndroidWidgets.js');
+  const stringsXmlSrc = await read('android/app/src/main/res/values/strings.xml');
+
+  // iOS plugin must inject containerBackground
+  assert.match(iosPluginSrc, /containerBackground/, 'withIosWidgets must handle containerBackground');
+  assert.match(iosPluginSrc, /ExpoWidgetsTarget/, 'withIosWidgets must target ExpoWidgetsTarget');
+
+  // Android plugin must NOT inject duplicate app_name into stringsXml
+  assert.doesNotMatch(
+    androidPluginSrc,
+    /name:\s*['"]app_name['"]/,
+    'withAndroidWidgets must not inject duplicate app_name in setStringItem'
+  );
+
+  // strings.xml must have exactly ONE app_name definition
+  const matches = stringsXmlSrc.match(/<string name="app_name">/g) || [];
+  assert.equal(matches.length, 1, 'strings.xml must declare app_name exactly once');
+});
+
 
