@@ -52,6 +52,14 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS !== 'web') {
+      import('@/lib/widgets')
+        .then(({ syncWidgetData }) => syncWidgetData({}))
+        .catch((err) => console.warn('[App] Initial widget sync error:', err));
+    }
+  }, []);
+
+  useEffect(() => {
     const clearDeletedSession = async () => {
       if (Platform.OS !== 'web') {
         try {

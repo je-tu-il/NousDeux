@@ -2,6 +2,13 @@ const { withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
+// Ensure node_modules/expo-widgets is patched immediately on plugin load
+try {
+  require('../scripts/patch-ios-widgets');
+} catch (e) {
+  console.warn('[withIosWidgets] Warning running initial patch:', e?.message || e);
+}
+
 /**
  * Patches a Swift widget source file to wrap WidgetsEntryView with .containerBackground(for: .widget)
  * to satisfy iOS 17+ WidgetKit containerBackground requirement without warnings.
@@ -30,30 +37,10 @@ function patchSourceFileIfPresent(filePath, bgSwiftColor) {
   }
 }
 
-// Opportunistically patch node_modules/expo-widgets Swift code generator if present
-try {
-  const expoWidgetsGeneratorPath = path.resolve(
-    __dirname,
-    '../node_modules/expo-widgets/plugin/build/ios/withWidgetSourceFiles.js'
-  );
-  if (fs.existsSync(expoWidgetsGeneratorPath)) {
-    let genContent = fs.readFileSync(expoWidgetsGeneratorPath, 'utf8');
-    if (!genContent.includes('.containerBackground')) {
-      genContent = genContent.replace(
-        /WidgetsEntryView\(entry:\s*entry\)/g,
-        `if #available(iOS 17.0, *) {\n        WidgetsEntryView(entry: entry)\n          .containerBackground(for: .widget) {\n            Color(red: 1.0, green: 0.42, blue: 0.53)\n          }\n      } else {\n        WidgetsEntryView(entry: entry)\n      }`
-      );
-      fs.writeFileSync(expoWidgetsGeneratorPath, genContent, 'utf8');
-    }
-  }
-} catch {
-  // Ignore in environments where node_modules is not yet present
-}
-
 /**
  * Expo Config Plugin for iOS WidgetKit customization:
- * Injects containerBackground(for: .widget) and content margins configuration
- * for iOS 17+ home screen widgets.
+ * Injects containerBackground(for: .widget), safe timeline entries,
+ * and native fallback views for iOS 17+ widgets targeting ExpoWidgetsTarget.
  */
 const withIosWidgets = (config) => {
   return withDangerousMod(config, [
@@ -65,12 +52,25 @@ const withIosWidgets = (config) => {
       const questionWidgetSwift = path.join(targetDir, 'QuestionWidget.swift');
       const streakWidgetSwift = path.join(targetDir, 'StreakWidget.swift');
 
-      // Coral/Rose tint for QuestionWidget (#FF6A88)
-      patchSourceFileIfPresent(questionWidgetSwift, 'Color(red: 1.0, green: 0.42, blue: 0.53)');
+      // Coral/Rose gradient for QuestionWidget
+      patchSourceFileIfPresent(
+        questionWidgetSwift,
+        'LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)'
+      );
 
-      // Fire orange/red tint for StreakWidget (#FF4B2B)
-      patchSourceFileIfPresent(streakWidgetSwift, 'Color(red: 1.0, green: 0.29, blue: 0.17)');
+      // Fire orange/red gradient for StreakWidget
+      patchSourceFileIfPresent(
+        streakWidgetSwift,
+        'LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)'
+      );
 
+      try {
+        const patchScript = path.resolve(__dirname, '../scripts/patch-ios-widgets.js');
+        delete require.cache[require.resolve(patchScript)];
+        require(patchScript);
+      } catch (err) {
+        console.warn('[withIosWidgets] Error patching iOS widgets in mod:', err?.message || err);
+      }
       return config;
     },
   ]);
