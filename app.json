@@ -75,6 +75,30 @@
           "cameraPermission": "NousDeux a besoin d'accéder à votre appareil photo pour vous prendre en photo pour votre profil."
         }
       ],
+      [
+        "expo-widgets",
+        {
+          "groupIdentifier": "group.com.pixelthings.nousdeuxapp",
+          "widgets": [
+            {
+              "name": "QuestionWidget",
+              "displayName": "NousDeux - Question du Jour",
+              "description": "Affiche la question du jour de votre couple sur votre écran d'accueil",
+              "ios": {
+                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"]
+              }
+            },
+            {
+              "name": "StreakWidget",
+              "displayName": "NousDeux - Flamme & Série",
+              "description": "Affiche votre série de jours ensemble et votre flamme",
+              "ios": {
+                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"]
+              }
+            }
+          ]
+        }
+      ],
       "./plugins/withAndroidWidgets"
     ],
     "experiments": {

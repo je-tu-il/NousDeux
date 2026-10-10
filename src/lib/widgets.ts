@@ -168,8 +168,15 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
       }
     } else if (Platform.OS === 'ios') {
       try {
-        // Envoi à UserDefaults AppGroup si module présent
-      } catch {}
+        const { QuestionWidget } = require('../widgets/QuestionWidget');
+        const { StreakWidget } = require('../widgets/StreakWidget');
+        QuestionWidget.updateSnapshot(merged);
+        StreakWidget.updateSnapshot(merged);
+        QuestionWidget.reload();
+        StreakWidget.reload();
+      } catch (iosErr) {
+        console.warn('[Widgets] iOS widget update error:', iosErr);
+      }
     }
   } catch (err) {
     console.warn('[Widgets] syncWidgetData error:', err);

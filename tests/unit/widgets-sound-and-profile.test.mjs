@@ -103,3 +103,25 @@ test('app.json configures withAndroidWidgets Expo config plugin for APK generati
   assert.match(widgetsScreenSrc, /handlePinWidget/, 'WidgetsScreen must implement handlePinWidget');
   assert.match(widgetsScreenSrc, /Épingler à l’écran d’accueil/, 'WidgetsScreen must provide button to pin widget');
 });
+
+test('app.json and widgets/ configure iOS WidgetKit extension via expo-widgets', async () => {
+  const appJsonSrc = await read('app.json');
+  const questionWidgetSrc = await read('src/widgets/QuestionWidget.tsx');
+  const streakWidgetSrc = await read('src/widgets/StreakWidget.tsx');
+  const widgetsLibSrc = await read('src/lib/widgets.ts');
+  const workflowSrc = await read('.github/workflows/build-ios.yml');
+
+  assert.match(appJsonSrc, /expo-widgets/, 'app.json must include expo-widgets plugin');
+  assert.match(appJsonSrc, /group\.com\.pixelthings\.nousdeuxapp/, 'app.json must configure groupIdentifier for App Group sharing');
+  assert.match(appJsonSrc, /QuestionWidget/, 'app.json must declare QuestionWidget');
+  assert.match(appJsonSrc, /StreakWidget/, 'app.json must declare StreakWidget');
+
+  assert.match(questionWidgetSrc, /createWidget\('QuestionWidget'/, 'QuestionWidget.tsx must create QuestionWidget');
+  assert.match(streakWidgetSrc, /createWidget\('StreakWidget'/, 'StreakWidget.tsx must create StreakWidget');
+
+  assert.match(widgetsLibSrc, /QuestionWidget\.updateSnapshot/, 'widgets.ts must update QuestionWidget snapshot on iOS');
+  assert.match(widgetsLibSrc, /StreakWidget\.updateSnapshot/, 'widgets.ts must update StreakWidget snapshot on iOS');
+
+  assert.match(workflowSrc, /PlugIns/, 'build-ios workflow must verify embedded PlugIns in IPA');
+});
+

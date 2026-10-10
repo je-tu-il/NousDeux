@@ -62,6 +62,8 @@ jobs:
         run: |
           mkdir -p Payload
           cp -r ios/build/nousdeux.xcarchive/Products/Applications/*.app Payload/
+          echo "Embedded PlugIns directory contents:"
+          ls -la Payload/*.app/PlugIns || echo "No PlugIns directory found"
           zip -r NousDeux.ipa Payload
 
       - name: Upload IPA Artifact
