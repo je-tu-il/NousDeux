@@ -158,6 +158,22 @@ function patchWithWidgetSourceFiles(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
+  // Clean up any duplicated bgGradient declarations if previously corrupted
+  if ((content.match(/const bgGradient =/g) || []).length > 1) {
+    while ((content.match(/const bgGradient =/g) || []).length > 1) {
+      content = content.replace(/const bgGradient = widget\.name === "StreakWidget"[\s\S]*?;\s*(?=const bgGradient =)/, '');
+    }
+    fs.writeFileSync(filePath, content, 'utf8');
+    log(`Cleaned up duplicate bgGradient declarations in: ${filePath}`);
+    return;
+  }
+
+  // Idempotency check: if already patched, do not patch again
+  if (content.includes('bgGradient') && content.includes('.containerBackground(for: .widget)')) {
+    log(`withWidgetSourceFiles.js already patched: ${filePath}`);
+    return;
+  }
+
   // Match the if (!configuration) block inside widgetSwift
   const configBlockPattern = /if \(!configuration\)\s*return `import WidgetKit[\s\S]*?supportedFamilies[\s\S]*?`\s*;/;
 
@@ -203,6 +219,11 @@ struct \${widget.name}: Widget {
 function patchSwiftTargetFile(filePath, bgSwiftGradient) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
+
+  if (content.includes('containerBackground(for: .widget)')) {
+    log(`Swift widget source already has containerBackground: ${filePath}`);
+    return;
+  }
 
   // Replace any existing WidgetsEntryView(entry: entry) or partial containerBackground
   const blockPattern = /StaticConfiguration\(kind: name, provider: WidgetsTimelineProvider\(name: name\)\)\s*\{[\s\S]*?WidgetsEntryView\(entry: entry\)[\s\S]*?\}/g;
