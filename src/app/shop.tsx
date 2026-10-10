@@ -7,7 +7,7 @@
 import { Colors } from '@/constants/Colors';
 import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { ArrowLeft, Check, Lock } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -93,8 +93,13 @@ export default function ShopScreen() {
     : require('../../assets/images/nousdeux_warm_background.png'));
   const myUid = useOnboardingStore(s => s.uid);
 
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const initialTab: TabType = (params.tab && ['backgrounds', 'borders', 'tags', 'widgets'].includes(params.tab))
+    ? (params.tab as TabType)
+    : 'backgrounds';
+
   const [loading,       setLoading]       = useState(true);
-  const [activeTab,     setActiveTab]     = useState<TabType>('backgrounds');
+  const [activeTab,     setActiveTab]     = useState<TabType>(initialTab);
   const [wallet,        setWallet]        = useState<WalletData | null>(null);
   const [inventory,     setInventory]     = useState<InventoryData | null>(null);
   const [questProgress, setQuestProgress] = useState<QuestProgressMap>({});
@@ -108,6 +113,12 @@ export default function ShopScreen() {
     title?: string;
     message?: string;
   }>({ visible: false });
+
+  useEffect(() => {
+    if (params.tab && ['backgrounds', 'borders', 'tags', 'widgets'].includes(params.tab)) {
+      setActiveTab(params.tab as TabType);
+    }
+  }, [params.tab]);
 
   const fetchShopData = useCallback(async () => {
     if (!myUid) return;

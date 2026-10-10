@@ -144,7 +144,7 @@ export default function WidgetsScreen() {
           <Pressable
             onPress={() => {
               sound.tap();
-              router.push('/shop');
+              router.push({ pathname: '/shop', params: { tab: 'widgets' } });
             }}
             style={[styles.shopButton, { backgroundColor: theme.tint }]}
           >
@@ -157,14 +157,17 @@ export default function WidgetsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* SÉLECTEURS DE TYPE & FORMAT */}
-        <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
-          <Text style={[styles.cardSectionTitle, { color: theme.text }]}>
-            1. Choisis ton Widget
-          </Text>
+        {/* APERÇU EN DIRECT DU WIDGET */}
+        <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, alignItems: 'center' }]}>
+          <View style={styles.previewHeaderRow}>
+            <Sparkles color={theme.tint} size={18} />
+            <Text style={[styles.previewTitle, { color: theme.text }]}>
+              Aperçu en direct sur ton écran
+            </Text>
+          </View>
 
-          {/* Type : Flamme vs Question */}
-          <View style={styles.tabToggleRow}>
+          {/* Sélecteur simple de prévisualisation : Série vs Question */}
+          <View style={[styles.tabToggleRow, { width: '100%', marginBottom: 14 }]}>
             <Pressable
               onPress={() => {
                 sound.tap();
@@ -206,125 +209,6 @@ export default function WidgetsScreen() {
             </Pressable>
           </View>
 
-          {/* Format : 1 case, rectangle, 4 cases */}
-          <Text style={[styles.cardSectionSub, { color: theme.text, marginTop: 14 }]}>
-            Format d’affichage
-          </Text>
-          <View style={styles.sizeToggleRow}>
-            <Pressable
-              onPress={() => {
-                sound.tap();
-                setWidgetSize('small');
-              }}
-              style={[
-                styles.sizeToggleBtn,
-                widgetSize === 'small' && { backgroundColor: theme.tint, borderColor: theme.tint },
-                { borderColor: theme.cardBorder },
-              ]}
-            >
-              <Text style={{ fontSize: 16 }}>▫️</Text>
-              <Text
-                style={[
-                  styles.sizeToggleText,
-                  { color: widgetSize === 'small' ? 'white' : theme.text },
-                ]}
-              >
-                1 Case (Carré)
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                sound.tap();
-                setWidgetSize('medium');
-              }}
-              style={[
-                styles.sizeToggleBtn,
-                widgetSize === 'medium' && { backgroundColor: theme.tint, borderColor: theme.tint },
-                { borderColor: theme.cardBorder },
-              ]}
-            >
-              <Text style={{ fontSize: 16 }}>▭</Text>
-              <Text
-                style={[
-                  styles.sizeToggleText,
-                  { color: widgetSize === 'medium' ? 'white' : theme.text },
-                ]}
-              >
-                Rectangle
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                sound.tap();
-                setWidgetSize('large');
-              }}
-              style={[
-                styles.sizeToggleBtn,
-                widgetSize === 'large' && { backgroundColor: theme.tint, borderColor: theme.tint },
-                { borderColor: theme.cardBorder },
-              ]}
-            >
-              <Text style={{ fontSize: 16 }}>⏹️</Text>
-              <Text
-                style={[
-                  styles.sizeToggleText,
-                  { color: widgetSize === 'large' ? 'white' : theme.text },
-                ]}
-              >
-                4 Cases (Grand)
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Toggle Style Appareil : iPhone vs Samsung */}
-          <View style={styles.platformToggleRow}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>
-              Style du bord :
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              <Pressable
-                onPress={() => {
-                  sound.tap();
-                  setPlatform('ios');
-                }}
-                style={[
-                  styles.platformChip,
-                  platform === 'ios' && { backgroundColor: theme.tint },
-                ]}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '700', color: platform === 'ios' ? 'white' : theme.text }}>
-                  🍏 iPhone
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  sound.tap();
-                  setPlatform('android');
-                }}
-                style={[
-                  styles.platformChip,
-                  platform === 'android' && { backgroundColor: theme.tint },
-                ]}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '700', color: platform === 'android' ? 'white' : theme.text }}>
-                  🤖 Samsung
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-
-        {/* APERÇU EN DIRECT DU WIDGET */}
-        <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder, alignItems: 'center' }]}>
-          <View style={styles.previewHeaderRow}>
-            <Sparkles color={theme.tint} size={18} />
-            <Text style={[styles.previewTitle, { color: theme.text }]}>
-              Aperçu en direct sur ton écran
-            </Text>
-          </View>
-
           <View style={styles.widgetSimulatorFrame}>
             {widgetData && (
               <AdaptiveWidget
@@ -339,32 +223,6 @@ export default function WidgetsScreen() {
           <Text style={[styles.activeThemeText, { color: store.isDarkMode ? '#D4B8B4' : '#6B5B59' }]}>
             Style actif : <Text style={{ fontWeight: '800', color: theme.text }}>{currentTheme.name} {currentTheme.emoji}</Text>
           </Text>
-
-          {/* Bouton d'ajout / épinglage direct à l'écran d'accueil */}
-          <Pressable
-            onPress={handlePinWidget}
-            style={{
-              marginTop: 14,
-              backgroundColor: theme.tint,
-              paddingVertical: 13,
-              paddingHorizontal: 18,
-              borderRadius: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              shadowColor: theme.tint,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 4,
-            }}
-          >
-            <Smartphone color="white" size={18} />
-            <Text style={{ color: 'white', fontWeight: '800', fontSize: 14 }}>
-              {Platform.OS === 'android' ? '📲 Épingler à l’écran d’accueil' : '📲 Guide d’ajout à l’écran d’accueil'}
-            </Text>
-          </Pressable>
         </View>
 
         {/* CHOISIR UN STYLE DE WIDGET DÉBLOQUÉ */}
@@ -373,14 +231,14 @@ export default function WidgetsScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Palette color={theme.tint} size={20} />
               <Text style={[styles.cardSectionTitle, { color: theme.text, marginBottom: 0 }]}>
-                2. Styles Débloqués
+                Styles Débloqués
               </Text>
             </View>
 
             <Pressable
               onPress={() => {
                 sound.tap();
-                router.push('/shop');
+                router.push({ pathname: '/shop', params: { tab: 'widgets' } });
               }}
               style={styles.moreShopLink}
             >
@@ -404,7 +262,7 @@ export default function WidgetsScreen() {
                       void handleSelectTheme(item.id);
                     } else {
                       sound.tap();
-                      router.push('/shop');
+                      router.push({ pathname: '/shop', params: { tab: 'widgets' } });
                     }
                   }}
                   style={[

@@ -101,7 +101,7 @@ test('app.json configures withAndroidWidgets Expo config plugin for APK generati
   assert.match(widgetsLibSrc, /export async function requestPinWidget/, 'widgets.ts must export requestPinWidget');
   assert.match(widgetsLibSrc, /export async function isWidgetPinSupported/, 'widgets.ts must export isWidgetPinSupported');
   assert.match(widgetsScreenSrc, /handlePinWidget/, 'WidgetsScreen must implement handlePinWidget');
-  assert.match(widgetsScreenSrc, /Épingler à l’écran d’accueil/, 'WidgetsScreen must provide button to pin widget');
+  assert.match(widgetsScreenSrc, /Sur Samsung & Android/, 'WidgetsScreen must provide Android guide');
 });
 
 test('app.json and widgets/ configure iOS WidgetKit extension via expo-widgets', async () => {

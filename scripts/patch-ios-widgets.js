@@ -95,8 +95,8 @@ function patchEntryView(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('effectiveProps') && content.includes('streakView')) {
-    log(`EntryView already has dynamic native widgets: ${filePath}`);
+  if (content.includes('effectiveProps') && content.includes('streakView') && content.includes('widgetURL')) {
+    log(`EntryView already has dynamic native widgets with widgetURL: ${filePath}`);
     return;
   }
 
@@ -127,30 +127,28 @@ public struct WidgetsEntryView: View {
 
   public var body: some View {
     Group {
-      if let props = effectiveProps {
-        if entry.name == "StreakWidget" {
-          streakView(props: props)
-        } else {
-          questionView(props: props)
-        }
+      if entry.name == "StreakWidget" {
+        streakView(props: effectiveProps)
+          .widgetURL(URL(string: "nousdeuxapp://dashboard"))
       } else {
-        emptyFallbackView
+        questionView(props: effectiveProps)
+          .widgetURL(URL(string: "nousdeuxapp://daylink"))
       }
     }
     .modifier(WidgetContainerBackgroundModifier(name: entry.name))
   }
 
-  private func streakView(props: [String: Any]) -> some View {
+  private func streakView(props: [String: Any]?) -> some View {
     let streakInt: Int = {
-      if let i = props["streak"] as? Int { return i }
-      if let d = props["streak"] as? Double { return Int(d) }
-      if let s = props["streak"] as? String, let parsed = Int(s) { return parsed }
+      if let p = props, let i = p["streak"] as? Int { return i }
+      if let p = props, let d = p["streak"] as? Double { return Int(d) }
+      if let p = props, let s = p["streak"] as? String, let parsed = Int(s) { return parsed }
       return 1
     }()
-    let partnerPseudo = props["partnerPseudo"] as? String ?? "Partenaire"
-    let userAnswered = props["userAnswered"] as? Bool ?? false
-    let partnerAnswered = props["partnerAnswered"] as? Bool ?? false
-    let bothAnswered = props["bothAnswered"] as? Bool ?? (userAnswered && partnerAnswered)
+    let partnerPseudo = (props?["partnerPseudo"] as? String) ?? "Partenaire"
+    let userAnswered = props?["userAnswered"] as? Bool ?? false
+    let partnerAnswered = props?["partnerAnswered"] as? Bool ?? false
+    let bothAnswered = props?["bothAnswered"] as? Bool ?? (userAnswered && partnerAnswered)
 
     let streakLabel = streakInt > 1 ? "\\(streakInt) JOURS ENSEMBLE" : "\\(streakInt) JOUR ENSEMBLE"
     let statusText: String
@@ -161,7 +159,7 @@ public struct WidgetsEntryView: View {
     } else if userAnswered {
       statusText = "⏳ En attente de \\(partnerPseudo)"
     } else {
-      statusText = "Touche pour ouvrir ➔"
+      statusText = "Touche pour voir ➔"
     }
 
     return VStack(alignment: .leading, spacing: 3) {
@@ -194,12 +192,12 @@ public struct WidgetsEntryView: View {
     .padding(12)
   }
 
-  private func questionView(props: [String: Any]) -> some View {
-    let question = props["todayQuestion"] as? String ?? "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?"
-    let partnerPseudo = props["partnerPseudo"] as? String ?? "Partenaire"
-    let userAnswered = props["userAnswered"] as? Bool ?? false
-    let partnerAnswered = props["partnerAnswered"] as? Bool ?? false
-    let bothAnswered = props["bothAnswered"] as? Bool ?? (userAnswered && partnerAnswered)
+  private func questionView(props: [String: Any]?) -> some View {
+    let question = (props?["todayQuestion"] as? String) ?? "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?"
+    let partnerPseudo = (props?["partnerPseudo"] as? String) ?? "Partenaire"
+    let userAnswered = props?["userAnswered"] as? Bool ?? false
+    let partnerAnswered = props?["partnerAnswered"] as? Bool ?? false
+    let bothAnswered = props?["bothAnswered"] as? Bool ?? (userAnswered && partnerAnswered)
 
     let badgeText: String
     let ctaText: String
@@ -246,29 +244,6 @@ public struct WidgetsEntryView: View {
     }
     .padding(12)
   }
-
-  private var emptyFallbackView: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      HStack {
-        Text("NousDeux")
-          .font(.system(size: 13, weight: .bold))
-          .foregroundColor(.white)
-        Spacer()
-        Text(entry.name == "StreakWidget" ? "🔥 SÉRIE" : "💬 QUESTION")
-          .font(.system(size: 10, weight: .bold))
-          .foregroundColor(Color.white.opacity(0.85))
-      }
-      Spacer()
-      Text(entry.name == "StreakWidget" ? "Votre série de couple" : "Question du Jour")
-        .font(.system(size: 15, weight: .heavy))
-        .foregroundColor(.white)
-      Text("Ouvrez NousDeux pour synchroniser ✨")
-        .font(.system(size: 11, weight: .medium))
-        .foregroundColor(Color.white.opacity(0.9))
-      Spacer()
-    }
-    .padding(12)
-  }
 }
 
 private struct WidgetContainerBackgroundModifier: ViewModifier {
@@ -297,7 +272,7 @@ private struct WidgetContainerBackgroundModifier: ViewModifier {
 `;
 
   fs.writeFileSync(filePath, newEntryViewCode, 'utf8');
-  log(`Patched EntryView.swift with native dynamic widgets + containerBackground in: ${filePath}`);
+  log(`Patched EntryView.swift with native dynamic widgets + widgetURL + containerBackground in: ${filePath}`);
 }
 
 // 3. Patch DynamicView.swift
@@ -374,7 +349,7 @@ function patchWidgetsStorage(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('sharedContainerURL')) {
+  if (content.includes('UserDefaults.standard') && content.includes('group.com.pixelthings.nousdeuxapp')) {
     log(`WidgetsStorage already patched: ${filePath}`);
     return;
   }
@@ -382,7 +357,7 @@ function patchWidgetsStorage(filePath) {
   const newWidgetsStorage = `import Foundation
 
 public enum WidgetsStorage {
-  public static var appGroupIdentifier: String? = Bundle.main.object(forInfoDictionaryKey: "ExpoWidgetsAppGroupIdentifier") as? String
+  public static var appGroupIdentifier: String? = (Bundle.main.object(forInfoDictionaryKey: "ExpoWidgetsAppGroupIdentifier") as? String) ?? "group.com.pixelthings.nousdeuxapp"
   static let defaults = UserDefaults(suiteName: appGroupIdentifier)
 
   static var sharedContainerURL: URL? {
@@ -392,6 +367,7 @@ public enum WidgetsStorage {
 
   static func set(_ value: [String: Any], forKey key: String) {
     defaults?.set(value, forKey: key)
+    UserDefaults.standard.set(value, forKey: key)
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).json")
       if let data = try? JSONSerialization.data(withJSONObject: value, options: []) {
@@ -402,6 +378,7 @@ public enum WidgetsStorage {
 
   static func set(_ value: [[String: Any]], forKey key: String) {
     defaults?.set(value, forKey: key)
+    UserDefaults.standard.set(value, forKey: key)
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).json")
       if let data = try? JSONSerialization.data(withJSONObject: value, options: []) {
@@ -412,6 +389,7 @@ public enum WidgetsStorage {
 
   static func set(_ value: String, forKey key: String) {
     defaults?.set(value, forKey: key)
+    UserDefaults.standard.set(value, forKey: key)
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).txt")
       try? value.write(to: file, atomically: true, encoding: .utf8)
@@ -420,6 +398,7 @@ public enum WidgetsStorage {
 
   static func set(_ value: Data, forKey key: String) {
     defaults?.set(value, forKey: key)
+    UserDefaults.standard.set(value, forKey: key)
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).bin")
       try? value.write(to: file)
@@ -428,6 +407,9 @@ public enum WidgetsStorage {
 
   public static func getDictionary(forKey key: String) -> [String: Any]? {
     if let dict = defaults?.dictionary(forKey: key) {
+      return dict
+    }
+    if let dict = UserDefaults.standard.dictionary(forKey: key) {
       return dict
     }
     if let containerURL = sharedContainerURL {
@@ -444,6 +426,9 @@ public enum WidgetsStorage {
     if let arr = defaults?.array(forKey: key) {
       return arr
     }
+    if let arr = UserDefaults.standard.array(forKey: key) {
+      return arr
+    }
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).json")
       if let data = try? Data(contentsOf: file),
@@ -456,6 +441,9 @@ public enum WidgetsStorage {
 
   public static func getData(forKey key: String) -> Data? {
     if let data = defaults?.data(forKey: key) {
+      return data
+    }
+    if let data = UserDefaults.standard.data(forKey: key) {
       return data
     }
     if let containerURL = sharedContainerURL {
@@ -471,6 +459,9 @@ public enum WidgetsStorage {
     if let str = defaults?.string(forKey: key) {
       return str
     }
+    if let str = UserDefaults.standard.string(forKey: key) {
+      return str
+    }
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).txt")
       if let str = try? String(contentsOf: file, encoding: .utf8) {
@@ -482,6 +473,7 @@ public enum WidgetsStorage {
 
   static func removeObject(forKey key: String) {
     defaults?.removeObject(forKey: key)
+    UserDefaults.standard.removeObject(forKey: key)
     if let containerURL = sharedContainerURL {
       let f1 = containerURL.appendingPathComponent("\\(key).json")
       let f2 = containerURL.appendingPathComponent("\\(key).txt")
@@ -502,20 +494,21 @@ function patchWithWidgetSourceFiles(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
+  // Idempotency check: if already patched with widgetURL and no duplicates, do not patch again
+  const bgCount = (content.match(/const bgGradient =/g) || []).length;
+  if (bgCount === 1 && content.includes('.containerBackground(for: .widget)') && content.includes('.widgetURL')) {
+    log(`withWidgetSourceFiles.js already patched with widgetURL: ${filePath}`);
+    return;
+  }
+
   // Clean up any duplicated bgGradient declarations if previously corrupted
-  if ((content.match(/const bgGradient =/g) || []).length > 1) {
+  if (bgCount > 1) {
     while ((content.match(/const bgGradient =/g) || []).length > 1) {
       content = content.replace(/const bgGradient = widget\.name === "StreakWidget"[\s\S]*?;\s*(?=const bgGradient =)/, '');
     }
     fs.writeFileSync(filePath, content, 'utf8');
     log(`Cleaned up duplicate bgGradient declarations in: ${filePath}`);
-    return;
-  }
-
-  // Idempotency check: if already patched, do not patch again
-  if (content.includes('bgGradient') && content.includes('.containerBackground(for: .widget)')) {
-    log(`withWidgetSourceFiles.js already patched: ${filePath}`);
-    return;
+    if (content.includes('.widgetURL')) return;
   }
 
   // Match the if (!configuration) block inside widgetSwift
@@ -524,6 +517,7 @@ function patchWithWidgetSourceFiles(filePath) {
   const newSnippet = `const bgGradient = widget.name === "StreakWidget"
       ? "LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)"
       : "LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)";
+    const widgetDeepLink = widget.name === "StreakWidget" ? "nousdeuxapp://dashboard" : "nousdeuxapp://daylink";
 
     if (!configuration)
         return \`import WidgetKit
@@ -537,11 +531,13 @@ struct \${widget.name}: Widget {
     StaticConfiguration(kind: name, provider: WidgetsTimelineProvider(name: name)) { entry in
       if #available(iOS 17.0, *) {
         WidgetsEntryView(entry: entry)
+          .widgetURL(URL(string: "\${widgetDeepLink}"))
           .containerBackground(for: .widget) {
             \${bgGradient}
           }
       } else {
         WidgetsEntryView(entry: entry)
+          .widgetURL(URL(string: "\${widgetDeepLink}"))
       }
     }
     .configurationDisplayName(\${JSON.stringify(widget.displayName)})
@@ -560,12 +556,12 @@ struct \${widget.name}: Widget {
 }
 
 // 7. Patch generated Swift widgets in target directory
-function patchSwiftTargetFile(filePath, bgSwiftGradient) {
+function patchSwiftTargetFile(filePath, bgSwiftGradient, widgetDeepLink) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('containerBackground(for: .widget)')) {
-    log(`Swift widget source already has containerBackground: ${filePath}`);
+  if (content.includes('containerBackground(for: .widget)') && content.includes('.widgetURL')) {
+    log(`Swift widget source already has containerBackground and widgetURL: ${filePath}`);
     return;
   }
 
@@ -574,11 +570,13 @@ function patchSwiftTargetFile(filePath, bgSwiftGradient) {
   const replacement = `StaticConfiguration(kind: name, provider: WidgetsTimelineProvider(name: name)) { entry in
       if #available(iOS 17.0, *) {
         WidgetsEntryView(entry: entry)
+          .widgetURL(URL(string: "${widgetDeepLink}"))
           .containerBackground(for: .widget) {
             ${bgSwiftGradient}
           }
       } else {
         WidgetsEntryView(entry: entry)
+          .widgetURL(URL(string: "${widgetDeepLink}"))
       }
     }`;
 
@@ -614,11 +612,13 @@ function run() {
   const targetDir = path.join(rootDir, 'ios/ExpoWidgetsTarget');
   patchSwiftTargetFile(
     path.join(targetDir, 'QuestionWidget.swift'),
-    'LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)'
+    'LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)',
+    'nousdeuxapp://daylink'
   );
   patchSwiftTargetFile(
     path.join(targetDir, 'StreakWidget.swift'),
-    'LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)'
+    'LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)',
+    'nousdeuxapp://dashboard'
   );
 
   // 4. ios/Pods/ExpoWidgets/ (if pod install has run)

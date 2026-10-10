@@ -13,25 +13,29 @@ try {
  * Patches a Swift widget source file to wrap WidgetsEntryView with .containerBackground(for: .widget)
  * to satisfy iOS 17+ WidgetKit containerBackground requirement without warnings.
  */
-function patchSourceFileIfPresent(filePath, bgSwiftColor) {
+function patchSourceFileIfPresent(filePath, bgSwiftColor, widgetDeepLink) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // If already contains containerBackground, don't patch again
-  if (content.includes('.containerBackground')) return;
+  // If already contains containerBackground and widgetURL, don't patch again
+  if (content.includes('.containerBackground') && content.includes('.widgetURL')) return;
 
-  const targetPattern = /WidgetsEntryView\(entry:\s*entry\)/g;
-  if (targetPattern.test(content)) {
+  const blockPattern = /StaticConfiguration\(kind: name, provider: WidgetsTimelineProvider\(name: name\)\)\s*\{[\s\S]*?WidgetsEntryView\(entry: entry\)[\s\S]*?\}/g;
+  if (blockPattern.test(content)) {
     content = content.replace(
-      targetPattern,
-      `if #available(iOS 17.0, *) {
+      blockPattern,
+      `StaticConfiguration(kind: name, provider: WidgetsTimelineProvider(name: name)) { entry in
+      if #available(iOS 17.0, *) {
         WidgetsEntryView(entry: entry)
+          .widgetURL(URL(string: "${widgetDeepLink}"))
           .containerBackground(for: .widget) {
             ${bgSwiftColor}
           }
       } else {
         WidgetsEntryView(entry: entry)
-      }`
+          .widgetURL(URL(string: "${widgetDeepLink}"))
+      }
+    }`
     );
     fs.writeFileSync(filePath, content, 'utf8');
   }
@@ -55,13 +59,15 @@ const withIosWidgets = (config) => {
       // Coral/Rose gradient for QuestionWidget
       patchSourceFileIfPresent(
         questionWidgetSwift,
-        'LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)'
+        'LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)',
+        'nousdeuxapp://daylink'
       );
 
       // Fire orange/red gradient for StreakWidget
       patchSourceFileIfPresent(
         streakWidgetSwift,
-        'LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)'
+        'LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)',
+        'nousdeuxapp://dashboard'
       );
 
       try {

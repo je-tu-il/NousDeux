@@ -69,9 +69,10 @@ class QuestionWidgetProvider : AppWidgetProvider() {
 
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                data = android.net.Uri.parse("nousdeuxapp://daylink")
             }
             val pendingIntent = PendingIntent.getActivity(
-                context, 0, intent,
+                context, 101, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_container, pendingIntent)
@@ -138,9 +139,10 @@ class StreakWidgetProvider : AppWidgetProvider() {
 
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                data = android.net.Uri.parse("nousdeuxapp://dashboard")
             }
             val pendingIntent = PendingIntent.getActivity(
-                context, 0, intent,
+                context, 102, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_container, pendingIntent)

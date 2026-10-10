@@ -5,6 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { ensureUserPairingCode } from '@/lib/pairing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import FloatingToast from '@/components/FloatingToast';
@@ -58,6 +59,32 @@ export default function RootLayout() {
         .catch((err) => console.warn('[App] Initial widget sync error:', err));
     }
   }, []);
+
+  useEffect(() => {
+    const handleUrl = (event: { url: string }) => {
+      try {
+        const raw = (event.url || '').toLowerCase();
+        const parsed = Linking.parse(event.url);
+        const path = (parsed.path || parsed.hostname || '').toLowerCase();
+        if (path.includes('daylink') || raw.includes('daylink')) {
+          router.push('/daylink');
+        } else if (path.includes('dashboard') || raw.includes('dashboard')) {
+          router.push('/dashboard');
+        }
+      } catch (e) {
+        console.warn('[Linking] Error handling url:', e);
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl({ url });
+    }).catch(() => {});
+
+    const subscription = Linking.addEventListener('url', handleUrl);
+    return () => {
+      subscription.remove();
+    };
+  }, [router]);
 
   useEffect(() => {
     const clearDeletedSession = async () => {
