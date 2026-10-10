@@ -1,5 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from './firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 
 export const NOTIFICATION_KEYS = [
@@ -14,9 +16,9 @@ export const NOTIFICATION_KEYS = [
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowBanner: false,
-    shouldShowList: false,
-    shouldPlaySound: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
     shouldSetBadge: false,
   }),
 });
@@ -29,6 +31,98 @@ async function configureAndroidChannel() {
     vibrationPattern: [0, 200],
     lightColor: '#FF9A8B',
   });
+  await Notifications.setNotificationChannelAsync('partner-alerts', {
+    name: 'Réponses Partenaire',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#FF4B2B',
+    sound: 'default',
+  });
+}
+
+/**
+ * Enregistre et persiste le token de notification push Expo pour l'utilisateur
+ */
+export async function registerPushTokenForUser(userId: string): Promise<string | null> {
+  if (Platform.OS === 'web' || !userId) return null;
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    let granted = current.granted;
+    if (!granted) {
+      const requested = await Notifications.requestPermissionsAsync();
+      granted = requested.granted;
+    }
+    if (!granted) return null;
+
+    await configureAndroidChannel();
+
+    const tokenResponse = await Notifications.getExpoPushTokenAsync({
+      projectId: 'eb65fdb1-87cc-4806-bcf1-7eddb1372f3b',
+    });
+    const token = tokenResponse.data;
+    if (token) {
+      await updateDoc(doc(db, 'users', userId), {
+        expoPushToken: token,
+      }).catch(() => {});
+      return token;
+    }
+  } catch (err) {
+    console.warn('[Notifications] registerPushToken error:', err);
+  }
+  return null;
+}
+
+/**
+ * Envoie une notification push au partenaire quand l'utilisateur répond à la question du jour
+ */
+export async function sendPartnerAnswerPush(partnerUid: string, userPseudo: string): Promise<void> {
+  if (!partnerUid) return;
+  try {
+    const partnerDoc = await getDoc(doc(db, 'users', partnerUid));
+    if (!partnerDoc.exists()) return;
+    const token = partnerDoc.data()?.expoPushToken as string | undefined;
+    if (!token) return;
+
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: token,
+        sound: 'default',
+        title: '💌 Ton amour a répondu !',
+        body: `${userPseudo || 'Ton partenaire'} vient de répondre à la question du jour ! Découvre sa réponse ✨`,
+        channelId: 'partner-alerts',
+        data: { url: '/dashboard' },
+      }),
+    });
+  } catch (err) {
+    console.warn('[Notifications] sendPartnerAnswerPush error:', err);
+  }
+}
+
+/**
+ * Déclenche une notification locale immédiate quand la réponse du partenaire est détectée
+ */
+export async function triggerPartnerAnsweredNotification(partnerPseudo: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    await configureAndroidChannel();
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '💌 Ton amour a répondu !',
+        body: `${partnerPseudo || 'Ton partenaire'} vient de répondre à la question du jour ! Découvre sa réponse ✨`,
+        data: { url: '/dashboard' },
+        sound: 'default',
+        channelId: 'partner-alerts',
+      },
+      trigger: null,
+    });
+  } catch (err) {
+    console.warn('[Notifications] triggerPartnerAnsweredNotification error:', err);
+  }
 }
 
 export async function scheduleDailyReminders(): Promise<void> {

@@ -34,6 +34,8 @@ import { checkQuests, updateWalletStreak } from '../lib/economy';
 import { auth, db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { syncWidgetData } from '../lib/widgets';
+import { sendPartnerAnswerPush, triggerPartnerAnsweredNotification } from '../lib/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -312,9 +314,19 @@ export default function Daylink() {
       if (snap.exists()) {
         const decrypted = await safeDecrypt(snap.data(), cId);
         if (decrypted && decrypted.length > 0) {
+          const wasAnswered = partnerHasAnswered;
           setPartnerHasAnswered(true);
           if (isSubmittedRef.current) {
             setPartnerAnswer(decrypted);
+          }
+          if (!wasAnswered && Platform.OS !== 'web') {
+            const notifKey = `nousdeux_notified_ans_${todayKey()}`;
+            AsyncStorage.getItem(notifKey).then((already) => {
+              if (!already) {
+                AsyncStorage.setItem(notifKey, '1');
+                void triggerPartnerAnsweredNotification(partnerPseudo);
+              }
+            }).catch(() => {});
           }
           if (Platform.OS !== 'web') {
             void syncWidgetData({
@@ -333,7 +345,7 @@ export default function Daylink() {
       }
     });
     return () => unsub();
-  }, [myUid, partnerUid, cId]);
+  }, [myUid, partnerUid, cId, partnerPseudo, partnerHasAnswered]);
 
   // ── Soumettre ma réponse — stockage chiffré temporaire ───────────────────
   const handleSubmit = async () => {
@@ -367,6 +379,10 @@ export default function Daylink() {
           userAnswered: true,
           bothAnswered: Boolean(partnerHasAnswered),
         });
+      }
+
+      if (partnerUid) {
+        void sendPartnerAnswerPush(partnerUid, store.pseudo || 'Ton partenaire');
       }
 
       if (partnerHasAnswered) {

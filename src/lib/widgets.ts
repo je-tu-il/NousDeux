@@ -177,6 +177,13 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
       } catch (iosErr) {
         console.warn('[Widgets] iOS widget update error:', iosErr);
       }
+      try {
+        const { requireNativeModule } = require('expo');
+        const ExpoWidgets = requireNativeModule('ExpoWidgets');
+        if (ExpoWidgets?.reloadAllWidgets) {
+          ExpoWidgets.reloadAllWidgets();
+        }
+      } catch {}
     }
   } catch (err) {
     console.warn('[Widgets] syncWidgetData error:', err);

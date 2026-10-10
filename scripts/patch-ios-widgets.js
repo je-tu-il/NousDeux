@@ -1,14 +1,15 @@
 /**
  * scripts/patch-ios-widgets.js
  *
- * Comprehensive patch for iOS 17+ WidgetKit containerBackground support in expo-widgets.
+ * Comprehensive patch for iOS 17+ WidgetKit containerBackground and native widget data sync in expo-widgets.
  * Ensures:
- * 1. TimelineProvider never returns an empty timeline (which causes iOS to fail/drop widget state).
- * 2. EntryView.swift provides containerBackground(for: .widget) and a native fallback card.
+ * 1. TimelineProvider periodically reloads every 15 min and falls back to stored props instead of empty timeline.
+ * 2. EntryView.swift renders real dynamic data (Streak, Question of the day, Partner answer status) natively in SwiftUI.
  * 3. DynamicView.swift never collapses RedBox to EmptyView in release builds.
- * 4. withWidgetSourceFiles.js generates QuestionWidget and StreakWidget with .containerBackground(for: .widget).
- * 5. Generated targets in ios/ExpoWidgetsTarget are patched with containerBackground and correct gradients.
- * 6. Pods/ExpoWidgets source files are patched if present.
+ * 4. WidgetObject.swift never throws UpdatedTimelineWithoutLayout and reliably stores props and triggers reload.
+ * 5. WidgetsStorage.swift provides resilient dual-layer persistence (UserDefaults + App Group shared container file).
+ * 6. withWidgetSourceFiles.js generates QuestionWidget and StreakWidget with .containerBackground(for: .widget).
+ * 7. Generated targets in ios/ExpoWidgetsTarget and CocoaPods sources are updated.
  */
 
 const fs = require('fs');
@@ -25,15 +26,68 @@ function patchTimelineProvider(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // Fix empty timeline causing WidgetKit failure
-  if (!content.includes('safeEntries')) {
-    content = content.replace(
-      /let timeline = Timeline<WidgetsTimelineEntry>\(entries: entries, policy: \.atEnd\)/g,
-      `let safeEntries = entries.isEmpty ? [WidgetsTimelineEntry(date: Date(), name: name, props: nil, entryIndex: nil)] : entries\n    let timeline = Timeline<WidgetsTimelineEntry>(entries: safeEntries, policy: .atEnd)`
-    );
-    fs.writeFileSync(filePath, content, 'utf8');
-    log(`Patched TimelineProvider with safeEntries in: ${filePath}`);
+  if (content.includes('storedProps') && content.includes('nextUpdate')) {
+    log(`TimelineProvider already patched: ${filePath}`);
+    return;
   }
+
+  const newTimelineProvider = `import WidgetKit
+
+public struct WidgetsTimelineProvider: TimelineProvider {
+  public func placeholder(in context: Context) -> WidgetsTimelineEntry {
+    let storedProps = WidgetsStorage.getDictionary(forKey: "__expo_widgets_\\(name)_props")
+      ?? WidgetsStorage.getDictionary(forKey: "__expo_widgets_latest_props")
+    return WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil)
+  }
+
+  public func getSnapshot(
+    in context: Context, completion: @escaping @Sendable (WidgetsTimelineEntry) -> Void
+  ) {
+    let groupIdentifier =
+      Bundle.main.object(forInfoDictionaryKey: "ExpoWidgetsAppGroupIdentifier") as? String
+    let storedProps = WidgetsStorage.getDictionary(forKey: "__expo_widgets_\\(name)_props")
+      ?? WidgetsStorage.getDictionary(forKey: "__expo_widgets_latest_props")
+    guard let groupIdentifier else {
+      completion(WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil))
+      return
+    }
+
+    let entries = parseTimeline(identifier: groupIdentifier, name: name, family: context.family)
+    completion(entries.first ?? WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil))
+  }
+
+  public func getTimeline(
+    in context: Context,
+    completion: @escaping @Sendable (Timeline<WidgetsTimelineEntry>) -> Void
+  ) {
+    let groupIdentifier =
+      Bundle.main.object(forInfoDictionaryKey: "ExpoWidgetsAppGroupIdentifier") as? String
+    guard let groupIdentifier else {
+      fatalError("Could not get the app group identifier from Info.plist")
+    }
+
+    let entries = parseTimeline(identifier: groupIdentifier, name: name, family: context.family)
+    let storedProps = WidgetsStorage.getDictionary(forKey: "__expo_widgets_\\(name)_props")
+      ?? WidgetsStorage.getDictionary(forKey: "__expo_widgets_latest_props")
+
+    let finalEntries = entries.isEmpty ? [WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil)] : entries
+    let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
+    let timeline = Timeline<WidgetsTimelineEntry>(entries: finalEntries, policy: .after(nextUpdate))
+    completion(timeline)
+  }
+
+  public typealias Entry = WidgetsTimelineEntry
+
+  let name: String
+
+  public init(name: String) {
+    self.name = name
+  }
+}
+`;
+
+  fs.writeFileSync(filePath, newTimelineProvider, 'utf8');
+  log(`Patched TimelineProvider with 15-min background policy & storedProps fallback in: ${filePath}`);
 }
 
 // 2. Patch EntryView.swift
@@ -41,8 +95,8 @@ function patchEntryView(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('WidgetContainerBackgroundModifier')) {
-    log(`EntryView already has WidgetContainerBackgroundModifier: ${filePath}`);
+  if (content.includes('effectiveProps') && content.includes('streakView')) {
+    log(`EntryView already has dynamic native widgets: ${filePath}`);
     return;
   }
 
@@ -58,50 +112,162 @@ public struct WidgetsEntryView: View {
     self.entry = entry
   }
 
-  private var widgetEnvironment: [String: Any] {
-    var env: [String: Any] = getWidgetEnvironment(environment: environment)
-    env["timestamp"] = Int(entry.date.timeIntervalSince1970 * 1000)
-    return env
-  }
-
-  private var widgetEnvironmentString: String? {
-    guard let data = try? JSONSerialization.data(withJSONObject: widgetEnvironment),
-          let jsonString = String(data: data, encoding: .utf8) else {
-        return nil
+  private var effectiveProps: [String: Any]? {
+    if let p = entry.props, !p.isEmpty {
+      return p
     }
-    return jsonString
+    if let stored = WidgetsStorage.getDictionary(forKey: "__expo_widgets_\\(entry.name)_props"), !stored.isEmpty {
+      return stored
+    }
+    if let latest = WidgetsStorage.getDictionary(forKey: "__expo_widgets_latest_props"), !latest.isEmpty {
+      return latest
+    }
+    return nil
   }
 
   public var body: some View {
     Group {
-      if let layout = WidgetsStorage.getString(forKey: "__expo_widgets_\\(entry.name)_layout"),
-         !layout.isEmpty {
-        let node = evaluateLayout(layout: layout, props: entry.props ?? [:], environment: widgetEnvironment)
-        WidgetsDynamicView(name: entry.name, kind: .widget, node: node, entryIndex: entry.entryIndex, environmentString: widgetEnvironmentString)
-      } else {
-        VStack(alignment: .leading, spacing: 6) {
-          HStack {
-            Text("NousDeux")
-              .font(.system(size: 13, weight: .bold))
-              .foregroundColor(.white)
-            Spacer()
-            Text(entry.name == "StreakWidget" ? "🔥 SÉRIE" : "💬 QUESTION")
-              .font(.system(size: 10, weight: .bold))
-              .foregroundColor(Color.white.opacity(0.85))
-          }
-          Spacer()
-          Text(entry.name == "StreakWidget" ? "Votre série de couple" : "Question du Jour")
-            .font(.system(size: 15, weight: .heavy))
-            .foregroundColor(.white)
-          Text("Ouvrez NousDeux pour synchroniser ✨")
-            .font(.system(size: 11, weight: .medium))
-            .foregroundColor(Color.white.opacity(0.9))
-          Spacer()
+      if let props = effectiveProps {
+        if entry.name == "StreakWidget" {
+          streakView(props: props)
+        } else {
+          questionView(props: props)
         }
-        .padding(12)
+      } else {
+        emptyFallbackView
       }
     }
     .modifier(WidgetContainerBackgroundModifier(name: entry.name))
+  }
+
+  private func streakView(props: [String: Any]) -> some View {
+    let streakInt: Int = {
+      if let i = props["streak"] as? Int { return i }
+      if let d = props["streak"] as? Double { return Int(d) }
+      if let s = props["streak"] as? String, let parsed = Int(s) { return parsed }
+      return 1
+    }()
+    let partnerPseudo = props["partnerPseudo"] as? String ?? "Partenaire"
+    let userAnswered = props["userAnswered"] as? Bool ?? false
+    let partnerAnswered = props["partnerAnswered"] as? Bool ?? false
+    let bothAnswered = props["bothAnswered"] as? Bool ?? (userAnswered && partnerAnswered)
+
+    let streakLabel = streakInt > 1 ? "\\(streakInt) JOURS ENSEMBLE" : "\\(streakInt) JOUR ENSEMBLE"
+    let statusText: String
+    if bothAnswered {
+      statusText = "🎉 Défi du jour relevé !"
+    } else if partnerAnswered {
+      statusText = "💌 \\(partnerPseudo) a répondu !"
+    } else if userAnswered {
+      statusText = "⏳ En attente de \\(partnerPseudo)"
+    } else {
+      statusText = "Touche pour ouvrir ➔"
+    }
+
+    return VStack(alignment: .leading, spacing: 3) {
+      HStack {
+        Text("NousDeux")
+          .font(.system(size: 13, weight: .bold))
+          .foregroundColor(.white)
+        Spacer()
+        Text("🔥 DUO")
+          .font(.system(size: 10, weight: .bold))
+          .padding(.horizontal, 6)
+          .padding(.vertical, 2)
+          .background(Color.white.opacity(0.2))
+          .cornerRadius(5)
+          .foregroundColor(.white)
+      }
+      Spacer()
+      Text("🔥 \\(streakInt)")
+        .font(.system(size: 30, weight: .heavy))
+        .foregroundColor(.white)
+      Text(streakLabel)
+        .font(.system(size: 11, weight: .bold))
+        .foregroundColor(Color.white.opacity(0.9))
+      Text(statusText)
+        .font(.system(size: 10, weight: .medium))
+        .foregroundColor(Color.white.opacity(0.95))
+        .lineLimit(1)
+      Spacer()
+    }
+    .padding(12)
+  }
+
+  private func questionView(props: [String: Any]) -> some View {
+    let question = props["todayQuestion"] as? String ?? "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?"
+    let partnerPseudo = props["partnerPseudo"] as? String ?? "Partenaire"
+    let userAnswered = props["userAnswered"] as? Bool ?? false
+    let partnerAnswered = props["partnerAnswered"] as? Bool ?? false
+    let bothAnswered = props["bothAnswered"] as? Bool ?? (userAnswered && partnerAnswered)
+
+    let badgeText: String
+    let ctaText: String
+
+    if bothAnswered {
+      badgeText = "✨ DÉCOUVERT"
+      ctaText = "Vous avez tous les deux répondu 🎉"
+    } else if partnerAnswered {
+      badgeText = "💌 À TOI DE JOUER"
+      ctaText = "\\(partnerPseudo) a répondu ! Touche pour voir ✨"
+    } else if userAnswered {
+      badgeText = "⏳ EN ATTENTE"
+      ctaText = "En attente de \\(partnerPseudo)... 💕"
+    } else {
+      badgeText = "💬 QUESTION DU JOUR"
+      ctaText = "Touche pour répondre ✨"
+    }
+
+    return VStack(alignment: .leading, spacing: 4) {
+      HStack {
+        Text("NousDeux")
+          .font(.system(size: 12, weight: .bold))
+          .foregroundColor(.white)
+        Spacer()
+        Text(badgeText)
+          .font(.system(size: 9, weight: .bold))
+          .padding(.horizontal, 6)
+          .padding(.vertical, 2)
+          .background(Color.white.opacity(0.2))
+          .cornerRadius(5)
+          .foregroundColor(.white)
+      }
+      Spacer()
+      Text(question)
+        .font(.system(size: 12, weight: .bold))
+        .foregroundColor(.white)
+        .lineLimit(3)
+        .fixedSize(horizontal: false, vertical: true)
+      Spacer()
+      Text(ctaText)
+        .font(.system(size: 10, weight: .medium))
+        .foregroundColor(Color.white.opacity(0.9))
+        .lineLimit(1)
+    }
+    .padding(12)
+  }
+
+  private var emptyFallbackView: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text("NousDeux")
+          .font(.system(size: 13, weight: .bold))
+          .foregroundColor(.white)
+        Spacer()
+        Text(entry.name == "StreakWidget" ? "🔥 SÉRIE" : "💬 QUESTION")
+          .font(.system(size: 10, weight: .bold))
+          .foregroundColor(Color.white.opacity(0.85))
+      }
+      Spacer()
+      Text(entry.name == "StreakWidget" ? "Votre série de couple" : "Question du Jour")
+        .font(.system(size: 15, weight: .heavy))
+        .foregroundColor(.white)
+      Text("Ouvrez NousDeux pour synchroniser ✨")
+        .font(.system(size: 11, weight: .medium))
+        .foregroundColor(Color.white.opacity(0.9))
+      Spacer()
+    }
+    .padding(12)
   }
 }
 
@@ -131,7 +297,7 @@ private struct WidgetContainerBackgroundModifier: ViewModifier {
 `;
 
   fs.writeFileSync(filePath, newEntryViewCode, 'utf8');
-  log(`Patched EntryView.swift with native fallback + containerBackground in: ${filePath}`);
+  log(`Patched EntryView.swift with native dynamic widgets + containerBackground in: ${filePath}`);
 }
 
 // 3. Patch DynamicView.swift
@@ -153,7 +319,185 @@ function patchDynamicView(filePath) {
   }
 }
 
-// 4. Patch withWidgetSourceFiles.js generator
+// 4. Patch WidgetObject.swift
+function patchWidgetObject(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  let content = fs.readFileSync(filePath, 'utf8');
+
+  if (content.includes('__expo_widgets_latest_props')) {
+    log(`WidgetObject already patched: ${filePath}`);
+    return;
+  }
+
+  const newWidgetObject = `import ExpoModulesCore
+import WidgetKit
+
+final class WidgetObject: SharedObject {
+  let name: String
+  init(name: String, layout: String) {
+    self.name = name
+    WidgetsStorage.set(layout, forKey: "__expo_widgets_\\(name)_layout")
+  }
+
+  func reload() {
+    WidgetCenter.shared.reloadTimelines(ofKind: name)
+    WidgetCenter.shared.reloadAllTimelines()
+  }
+
+  func updateTimeline(entries: [WidgetsJSTimelineEntry]) throws {
+    if WidgetsStorage.getString(forKey: "__expo_widgets_\\(name)_layout") == nil {
+      WidgetsStorage.set("() => null", forKey: "__expo_widgets_\\(name)_layout")
+    }
+    WidgetsStorage.set(entries.map { $0.toDictionary() }, forKey: "__expo_widgets_\\(name)_timeline")
+    if let first = entries.first {
+      WidgetsStorage.set(first.props, forKey: "__expo_widgets_\\(name)_props")
+      WidgetsStorage.set(first.props, forKey: "__expo_widgets_latest_props")
+    }
+    self.reload()
+  }
+
+  func getTimeline() throws -> [WidgetsJSTimelineEntry] {
+    guard let entries = WidgetsStorage.getArray(forKey: "__expo_widgets_\\(name)_timeline") as? [[String: Any]],
+          let appContext else {
+      return []
+    }
+    return try entries.map { try WidgetsJSTimelineEntry(from: $0, appContext: appContext) }
+  }
+}
+`;
+  fs.writeFileSync(filePath, newWidgetObject, 'utf8');
+  log(`Patched WidgetObject.swift in: ${filePath}`);
+}
+
+// 5. Patch WidgetsStorage.swift
+function patchWidgetsStorage(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  let content = fs.readFileSync(filePath, 'utf8');
+
+  if (content.includes('sharedContainerURL')) {
+    log(`WidgetsStorage already patched: ${filePath}`);
+    return;
+  }
+
+  const newWidgetsStorage = `import Foundation
+
+public enum WidgetsStorage {
+  public static var appGroupIdentifier: String? = Bundle.main.object(forInfoDictionaryKey: "ExpoWidgetsAppGroupIdentifier") as? String
+  static let defaults = UserDefaults(suiteName: appGroupIdentifier)
+
+  static var sharedContainerURL: URL? {
+    guard let appGroupIdentifier else { return nil }
+    return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
+  }
+
+  static func set(_ value: [String: Any], forKey key: String) {
+    defaults?.set(value, forKey: key)
+    if let containerURL = sharedContainerURL {
+      let file = containerURL.appendingPathComponent("\\(key).json")
+      if let data = try? JSONSerialization.data(withJSONObject: value, options: []) {
+        try? data.write(to: file)
+      }
+    }
+  }
+
+  static func set(_ value: [[String: Any]], forKey key: String) {
+    defaults?.set(value, forKey: key)
+    if let containerURL = sharedContainerURL {
+      let file = containerURL.appendingPathComponent("\\(key).json")
+      if let data = try? JSONSerialization.data(withJSONObject: value, options: []) {
+        try? data.write(to: file)
+      }
+    }
+  }
+
+  static func set(_ value: String, forKey key: String) {
+    defaults?.set(value, forKey: key)
+    if let containerURL = sharedContainerURL {
+      let file = containerURL.appendingPathComponent("\\(key).txt")
+      try? value.write(to: file, atomically: true, encoding: .utf8)
+    }
+  }
+
+  static func set(_ value: Data, forKey key: String) {
+    defaults?.set(value, forKey: key)
+    if let containerURL = sharedContainerURL {
+      let file = containerURL.appendingPathComponent("\\(key).bin")
+      try? value.write(to: file)
+    }
+  }
+
+  public static func getDictionary(forKey key: String) -> [String: Any]? {
+    if let dict = defaults?.dictionary(forKey: key) {
+      return dict
+    }
+    if let containerURL = sharedContainerURL {
+      let file = containerURL.appendingPathComponent("\\(key).json")
+      if let data = try? Data(contentsOf: file),
+         let dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+        return dict
+      }
+    }
+    return nil
+  }
+
+  public static func getArray(forKey key: String) -> [Any]? {
+    if let arr = defaults?.array(forKey: key) {
+      return arr
+    }
+    if let containerURL = sharedContainerURL {
+      let file = containerURL.appendingPathComponent("\\(key).json")
+      if let data = try? Data(contentsOf: file),
+         let arr = try? JSONSerialization.jsonObject(with: data, options: []) as? [Any] {
+        return arr
+      }
+    }
+    return nil
+  }
+
+  public static func getData(forKey key: String) -> Data? {
+    if let data = defaults?.data(forKey: key) {
+      return data
+    }
+    if let containerURL = sharedContainerURL {
+      let file = containerURL.appendingPathComponent("\\(key).bin")
+      if let data = try? Data(contentsOf: file) {
+        return data
+      }
+    }
+    return nil
+  }
+
+  public static func getString(forKey key: String) -> String? {
+    if let str = defaults?.string(forKey: key) {
+      return str
+    }
+    if let containerURL = sharedContainerURL {
+      let file = containerURL.appendingPathComponent("\\(key).txt")
+      if let str = try? String(contentsOf: file, encoding: .utf8) {
+        return str
+      }
+    }
+    return nil
+  }
+
+  static func removeObject(forKey key: String) {
+    defaults?.removeObject(forKey: key)
+    if let containerURL = sharedContainerURL {
+      let f1 = containerURL.appendingPathComponent("\\(key).json")
+      let f2 = containerURL.appendingPathComponent("\\(key).txt")
+      let f3 = containerURL.appendingPathComponent("\\(key).bin")
+      try? FileManager.default.removeItem(at: f1)
+      try? FileManager.default.removeItem(at: f2)
+      try? FileManager.default.removeItem(at: f3)
+    }
+  }
+}
+`;
+  fs.writeFileSync(filePath, newWidgetsStorage, 'utf8');
+  log(`Patched WidgetsStorage.swift in: ${filePath}`);
+}
+
+// 6. Patch withWidgetSourceFiles.js generator
 function patchWithWidgetSourceFiles(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
@@ -215,7 +559,7 @@ struct \${widget.name}: Widget {
   }
 }
 
-// 5. Patch generated Swift widgets in target directory
+// 7. Patch generated Swift widgets in target directory
 function patchSwiftTargetFile(filePath, bgSwiftGradient) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
@@ -256,6 +600,8 @@ function run() {
   patchTimelineProvider(path.join(expoWidgetsIos, 'Widgets/TimelineProvider.swift'));
   patchEntryView(path.join(expoWidgetsIos, 'Widgets/EntryView.swift'));
   patchDynamicView(path.join(expoWidgetsIos, 'Widgets/DynamicView.swift'));
+  patchWidgetObject(path.join(expoWidgetsIos, 'WidgetObject.swift'));
+  patchWidgetsStorage(path.join(expoWidgetsIos, 'WidgetsStorage.swift'));
 
   // 2. node_modules/expo-widgets/plugin/build/ios/withWidgetSourceFiles.js
   const withWidgetSourceFilesPath = path.join(
@@ -280,6 +626,8 @@ function run() {
   patchTimelineProvider(path.join(podsExpoWidgets, 'Widgets/TimelineProvider.swift'));
   patchEntryView(path.join(podsExpoWidgets, 'Widgets/EntryView.swift'));
   patchDynamicView(path.join(podsExpoWidgets, 'Widgets/DynamicView.swift'));
+  patchWidgetObject(path.join(podsExpoWidgets, 'WidgetObject.swift'));
+  patchWidgetsStorage(path.join(podsExpoWidgets, 'WidgetsStorage.swift'));
 
   log('iOS widgets patch completed successfully.');
 }

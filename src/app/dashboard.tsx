@@ -25,6 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { useTopInset } from '@/hooks/useTopInset';
 import { syncWidgetData } from '@/lib/widgets';
+import { registerPushTokenForUser, triggerPartnerAnsweredNotification } from '@/lib/notifications';
 import { getById } from '@/data/questions';
 
 type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string; coupleId?: string };
@@ -252,6 +253,7 @@ export default function DashboardScreen() {
           store.setSelectedCosmetics(p.selectedBackground, p.selectedBorder, p.selectedTag);
         }
       });
+      registerPushTokenForUser(store.uid).catch(() => {});
     }
     if (partner?.coupleId && store.uid) {
       const partnerId = partner.coupleId.replace(store.uid, '').replace('_', '');
@@ -300,9 +302,21 @@ export default function DashboardScreen() {
       }));
       setPartnerAnsweredCategories(answeredCategories);
 
+      if (hasPartnerAnsweredToday) {
+        const notifKey = `nousdeux_notified_ans_${tKey}`;
+        AsyncStorage.getItem(notifKey).then((already) => {
+          if (!already) {
+            AsyncStorage.setItem(notifKey, '1');
+            void triggerPartnerAnsweredNotification(partner?.pseudo || 'Ton amour');
+          }
+        }).catch(() => {});
+      }
+
+      const activeStreak = await computeStreakCached(coupleId, true).catch(() => wallet?.streak ?? 1);
+
       if (Platform.OS !== 'web') {
         void syncWidgetData({
-          streak: wallet?.streak ?? 1,
+          streak: activeStreak ?? 1,
           todayQuestion: todayQuestionText || undefined,
           categoryName: todayCategory || undefined,
           userAnswered: hasUserAnsweredToday,
