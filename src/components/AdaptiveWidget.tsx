@@ -94,6 +94,16 @@ function StreakWidgetContent({
               <CheckCircle2 color="#4ADE80" size={11} />
               <Text style={[styles.statusTextSmall, { color: '#E2FBE8' }]}>Validé</Text>
             </>
+          ) : data.partnerAnswered && !data.userAnswered ? (
+            <>
+              <Heart color="#FF4B72" size={11} fill="#FF4B72" />
+              <Text style={[styles.statusTextSmall, { color: '#FFD2CC' }]}>💌 À toi !</Text>
+            </>
+          ) : data.userAnswered ? (
+            <>
+              <Clock color="#FDE047" size={11} />
+              <Text style={[styles.statusTextSmall, { color: '#FEF9C3' }]}>⏳ Partenaire</Text>
+            </>
           ) : (
             <>
               <Clock color="#FDE047" size={11} />
@@ -127,6 +137,14 @@ function StreakWidgetContent({
             {todayDone ? (
               <Text style={[styles.statusChipText, { color: '#86EFAC' }]}>
                 ✅ Flamme entretenue
+              </Text>
+            ) : data.partnerAnswered && !data.userAnswered ? (
+              <Text style={[styles.statusChipText, { color: '#FFD2CC', fontWeight: '800' }]}>
+                💌 {data.partnerPseudo || 'Partenaire'} a répondu !
+              </Text>
+            ) : data.userAnswered ? (
+              <Text style={[styles.statusChipText, { color: '#FEF08A' }]}>
+                ⏳ En attente de {data.partnerPseudo || 'ton partenaire'}
               </Text>
             ) : (
               <Text style={[styles.statusChipText, { color: '#FEF08A' }]}>
@@ -223,12 +241,22 @@ function StreakWidgetContent({
           </Text>
           <Text
             style={{
-              color: todayDone ? '#86EFAC' : '#FDE047',
+              color: todayDone
+                ? '#86EFAC'
+                : data.partnerAnswered && !data.userAnswered
+                ? '#FFD2CC'
+                : '#FDE047',
               fontWeight: '700',
               fontSize: 13,
             }}
           >
-            {todayDone ? '✅ Validé par les deux' : '⏳ En attente de réponse'}
+            {todayDone
+              ? '✅ Validé par les deux'
+              : data.partnerAnswered && !data.userAnswered
+              ? `💌 ${data.partnerPseudo || 'Partenaire'} a répondu ! À toi de jouer ✨`
+              : data.userAnswered
+              ? `⏳ En attente de ${data.partnerPseudo || 'ton partenaire'}`
+              : '⏳ En attente de vos réponses'}
           </Text>
         </View>
 
@@ -275,6 +303,10 @@ function QuestionWidgetContent({
         <View style={[styles.statusPillSmall, { backgroundColor: theme.cardBg }]}>
           {isDone ? (
             <Text style={[styles.statusTextSmall, { color: '#86EFAC' }]}>✅ Répondu</Text>
+          ) : data.partnerAnswered && !data.userAnswered ? (
+            <Text style={[styles.statusTextSmall, { color: '#FFD2CC', fontWeight: '800' }]}>
+              💌 {data.partnerPseudo || 'Partenaire'} a répondu !
+            </Text>
           ) : data.userAnswered ? (
             <Text style={[styles.statusTextSmall, { color: '#FDE047' }]}>⏳ Partenaire</Text>
           ) : (
@@ -321,7 +353,13 @@ function QuestionWidgetContent({
             </View>
 
             <Text style={[styles.qStatSub, { color: theme.accentColor }]}>
-              {isDone ? 'Complété' : data.userAnswered ? 'En attente' : 'À remplir'}
+              {isDone
+                ? 'Complété'
+                : data.partnerAnswered && !data.userAnswered
+                ? '💌 À toi !'
+                : data.userAnswered
+                ? 'En attente'
+                : 'À remplir'}
             </Text>
           </View>
         </View>
@@ -337,7 +375,13 @@ function QuestionWidgetContent({
 
           <View style={[styles.actionPromptMed, { backgroundColor: theme.cardBg }]}>
             <Text style={[styles.actionPromptText, { color: theme.textColor }]}>
-              {isDone ? 'Voir les réponses ›' : 'Répondre maintenant ›'}
+              {isDone
+                ? 'Voir les réponses ›'
+                : data.partnerAnswered && !data.userAnswered
+                ? `💌 ${data.partnerPseudo || 'Partenaire'} a répondu ! Répondre ›`
+                : data.userAnswered
+                ? `En attente de ${data.partnerPseudo || 'ton partenaire'} ›`
+                : 'Répondre maintenant ›'}
             </Text>
           </View>
         </View>
@@ -381,7 +425,7 @@ function QuestionWidgetContent({
             {data.partnerPseudo}
           </Text>
           <Text style={{ fontSize: 12, fontWeight: '700', color: data.partnerAnswered ? '#86EFAC' : '#FDE047' }}>
-            {data.partnerAnswered ? '✅ Répondu' : '⏳ En attente'}
+            {data.partnerAnswered ? '💌 A répondu !' : '⏳ En attente'}
           </Text>
         </View>
       </View>
@@ -391,6 +435,10 @@ function QuestionWidgetContent({
         <Text style={[styles.footerHintLarge, { color: theme.textColor, textAlign: 'center' }]}>
           {isDone
             ? '🎉 Vos deux réponses sont débloquées ! Ouvrez l’app pour les lire.'
+            : data.partnerAnswered && !data.userAnswered
+            ? `💌 ${data.partnerPseudo || 'Ton partenaire'} a répondu ! Touche ici pour répondre et voir sa réponse ✨`
+            : data.userAnswered
+            ? `⏳ Tu as répondu ! En attente de la réponse de ${data.partnerPseudo || 'ton partenaire'} 💕`
             : 'Touchez le widget pour répondre et garder votre flamme active.'}
         </Text>
       </View>

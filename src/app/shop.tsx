@@ -414,7 +414,10 @@ export default function ShopScreen() {
 
         {/* Onglets */}
         <View style={[styles.tabs, { marginTop: 4 }]}>
-          {(['backgrounds', 'borders', 'tags', 'widgets'] as TabType[]).map(tab => (
+          {((Platform.OS === 'web'
+            ? ['backgrounds', 'borders', 'tags']
+            : ['backgrounds', 'borders', 'tags', 'widgets']
+          ) as TabType[]).map(tab => (
             <Pressable
               key={tab}
               style={[styles.tab, activeTab === tab && styles.tabActive]}
@@ -430,7 +433,7 @@ export default function ShopScreen() {
           ))}
         </View>
 
-        {activeTab === 'widgets' && (
+        {Platform.OS !== 'web' && activeTab === 'widgets' && (
           <Pressable
             onPress={() => {
               sound.tap();

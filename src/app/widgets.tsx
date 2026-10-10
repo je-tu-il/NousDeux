@@ -63,6 +63,10 @@ export default function WidgetsScreen() {
         }
       }
     }
+    if (Platform.OS === 'web') {
+      router.replace('/dashboard');
+      return;
+    }
     loadData();
   }, [store.uid, store.partnerUid, store.selectedWidget]);
 

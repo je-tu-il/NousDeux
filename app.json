@@ -3,6 +3,11 @@
     "name": "nousdeux",
     "slug": "nousdeux",
     "version": "1.0.0",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "sdkVersion": "56.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

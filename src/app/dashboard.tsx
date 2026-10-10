@@ -24,6 +24,8 @@ import { ActivityIndicator, Image, ImageBackground, Modal, Platform, Pressable, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { useTopInset } from '@/hooks/useTopInset';
+import { syncWidgetData } from '@/lib/widgets';
+import { getById } from '@/data/questions';
 
 type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string; coupleId?: string };
 
@@ -265,15 +267,53 @@ export default function DashboardScreen() {
       const partnerId = coupleId.replace(currentUid, '').replace('_', '');
       const dailySnap = await getDocs(collection(db, 'couples', coupleId, 'daily'));
       const answeredCategories = new Set<string>();
+      let hasPartnerAnsweredToday = false;
+      let hasUserAnsweredToday = false;
+      let todayQuestionText = '';
+      let todayCategory = '';
+
+      const d = new Date();
+      const tKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
       await Promise.all(dailySnap.docs.map(async (dailyDoc) => {
         const category = dailyDoc.data().category as string | undefined;
-        if (!category || category === 'all') return;
         const answerSnap = await getDocs(collection(db, 'couples', coupleId, 'daily', dailyDoc.id, 'answers'));
         const partnerAnswered = answerSnap.docs.some(answer => answer.id === partnerId);
         const myAnswered = answerSnap.docs.some(answer => answer.id === store.uid);
-        if (partnerAnswered && !myAnswered) answeredCategories.add(category);
+
+        if (category && category !== 'all') {
+          if (partnerAnswered && !myAnswered) answeredCategories.add(category);
+        }
+
+        if (dailyDoc.id === tKey) {
+          hasPartnerAnsweredToday = partnerAnswered;
+          hasUserAnsweredToday = myAnswered;
+          const qId = dailyDoc.data().questionId;
+          if (qId) {
+            const q = getById(qId);
+            if (q) {
+              todayQuestionText = q.text;
+              todayCategory = q.category;
+            }
+          }
+        }
       }));
       setPartnerAnsweredCategories(answeredCategories);
+
+      if (Platform.OS !== 'web') {
+        void syncWidgetData({
+          streak: wallet?.streak ?? 1,
+          todayQuestion: todayQuestionText || undefined,
+          categoryName: todayCategory || undefined,
+          userAnswered: hasUserAnsweredToday,
+          partnerAnswered: hasPartnerAnsweredToday,
+          bothAnswered: hasUserAnsweredToday && hasPartnerAnsweredToday,
+          userPseudo: store.pseudo || 'Moi',
+          partnerPseudo: partner?.pseudo || 'Mon Amour',
+          userAvatar: store.avatar || null,
+          partnerAvatar: partner?.avatarUrl || null,
+        });
+      }
     };
     const dailyQuery = collection(db, 'couples', coupleId, 'daily');
     const unsubscribeDaily = onSnapshot(dailyQuery, () => {
@@ -547,31 +587,9 @@ export default function DashboardScreen() {
               </View>
             </Pressable>
 
-            {/* Widgets + Wallet */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Pressable
-                onPress={() => {
-                  sound.tap();
-                  triggerHaptic('light');
-                  router.push('/widgets');
-                }}
-                style={{
-                  backgroundColor: 'rgba(255,255,255,0.22)',
-                  paddingHorizontal: 10,
-                  paddingVertical: 7,
-                  borderRadius: 18,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 5,
-                }}
-              >
-                <Text style={{ fontSize: 13 }}>📱</Text>
-                <Text style={{ color: 'white', fontSize: 12, fontWeight: '800' }}>Widgets</Text>
-              </Pressable>
-
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 20 }}>
-                <CoinWallet petals={wallet?.petals ?? 0} size="small" theme="white" />
-              </View>
+            {/* Wallet */}
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 20 }}>
+              <CoinWallet petals={wallet?.petals ?? 0} size="small" theme="white" />
             </View>
           </View>
         </LinearGradient>

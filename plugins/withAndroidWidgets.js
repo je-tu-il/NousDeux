@@ -17,6 +17,10 @@ class QuestionWidgetProvider : AppWidgetProvider() {
         val prefs = context.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
         val payloadStr = prefs.getString("widget_payload", null)
         var questionText = "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?"
+        var partnerAnswered = false
+        var userAnswered = false
+        var bothAnswered = false
+        var partnerPseudo = "Partenaire"
 
         if (payloadStr != null) {
             try {
@@ -25,14 +29,43 @@ class QuestionWidgetProvider : AppWidgetProvider() {
                     val q = json.getString("todayQuestion")
                     if (q.isNotBlank()) questionText = q
                 }
+                if (json.has("partnerAnswered")) {
+                    partnerAnswered = json.getBoolean("partnerAnswered")
+                }
+                if (json.has("userAnswered")) {
+                    userAnswered = json.getBoolean("userAnswered")
+                }
+                if (json.has("bothAnswered")) {
+                    bothAnswered = json.getBoolean("bothAnswered")
+                }
+                if (json.has("partnerPseudo")) {
+                    val p = json.getString("partnerPseudo")
+                    if (p.isNotBlank()) partnerPseudo = p
+                }
             } catch (e: Exception) {
                 // fallback
             }
         }
 
+        var badgeText = "💬 QUESTION"
+        var ctaText = "Touche pour répondre ✨"
+
+        if (bothAnswered || (userAnswered && partnerAnswered)) {
+            badgeText = "✨ DÉCOUVERT"
+            ctaText = "Vous avez tous les deux répondu 🎉"
+        } else if (partnerAnswered && !userAnswered) {
+            badgeText = "💌 À TOI DE JOUER"
+            ctaText = "$partnerPseudo a répondu ! Touche pour voir ✨"
+        } else if (userAnswered && !partnerAnswered) {
+            badgeText = "⏳ EN ATTENTE"
+            ctaText = "En attente de $partnerPseudo... 💕"
+        }
+
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_question)
             views.setTextViewText(R.id.widget_question_text, questionText)
+            views.setTextViewText(R.id.widget_badge, badgeText)
+            views.setTextViewText(R.id.widget_cta, ctaText)
 
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -65,6 +98,10 @@ class StreakWidgetProvider : AppWidgetProvider() {
         val payloadStr = prefs.getString("widget_payload", null)
         var streakNumber = "🔥 1"
         var streakLabel = "JOUR ENSEMBLE"
+        var partnerAnswered = false
+        var userAnswered = false
+        var bothAnswered = false
+        var partnerPseudo = "Partenaire"
 
         if (payloadStr != null) {
             try {
@@ -72,15 +109,32 @@ class StreakWidgetProvider : AppWidgetProvider() {
                 val streak = if (json.has("streak")) json.getInt("streak") else 1
                 streakNumber = "🔥 $streak"
                 streakLabel = if (streak > 1) "JOURS ENSEMBLE" else "JOUR ENSEMBLE"
+                if (json.has("partnerAnswered")) partnerAnswered = json.getBoolean("partnerAnswered")
+                if (json.has("userAnswered")) userAnswered = json.getBoolean("userAnswered")
+                if (json.has("bothAnswered")) bothAnswered = json.getBoolean("bothAnswered")
+                if (json.has("partnerPseudo")) {
+                    val p = json.getString("partnerPseudo")
+                    if (p.isNotBlank()) partnerPseudo = p
+                }
             } catch (e: Exception) {
                 // fallback
             }
+        }
+
+        var statusText = "Touche pour voir ➔"
+        if (bothAnswered || (userAnswered && partnerAnswered)) {
+            statusText = "🎉 Défi du jour relevé !"
+        } else if (partnerAnswered && !userAnswered) {
+            statusText = "💌 $partnerPseudo a répondu !"
+        } else if (userAnswered && !partnerAnswered) {
+            statusText = "⏳ En attente de $partnerPseudo"
         }
 
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_streak)
             views.setTextViewText(R.id.streak_number, streakNumber)
             views.setTextViewText(R.id.streak_label, streakLabel)
+            views.setTextViewText(R.id.streak_status, statusText)
 
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -210,7 +264,7 @@ class WidgetBridgePackage : ReactPackage {
 
 const QUESTION_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="140dp"
+    android:minWidth="110dp"
     android:minHeight="110dp"
     android:targetCellWidth="2"
     android:targetCellHeight="2"
@@ -218,6 +272,7 @@ const QUESTION_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:maxResizeHeight="360dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_question"
+    android:previewImage="@mipmap/ic_launcher"
     android:previewLayout="@layout/widget_question"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
@@ -226,7 +281,7 @@ const QUESTION_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
 
 const STREAK_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="140dp"
+    android:minWidth="110dp"
     android:minHeight="110dp"
     android:targetCellWidth="2"
     android:targetCellHeight="2"
@@ -234,6 +289,7 @@ const STREAK_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:maxResizeHeight="360dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_streak"
+    android:previewImage="@mipmap/ic_launcher"
     android:previewLayout="@layout/widget_streak"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
@@ -436,6 +492,22 @@ const withAndroidWidgets = (config) => {
 
     const receivers = mainApplication.receiver;
 
+    // Nettoyer les anciens attributs invalides (ex: android:description n'existe pas sur <receiver>)
+    receivers.forEach((r) => {
+      if (r.$ && (r.$['android:name'] === '.QuestionWidgetProvider' || r.$['android:name'] === 'com.pixelthings.nousdeux.QuestionWidgetProvider')) {
+        delete r.$['android:description'];
+        r.$['android:icon'] = '@mipmap/ic_launcher';
+        r.$['android:label'] = '@string/widget_question_title';
+        r.$['android:exported'] = 'true';
+      }
+      if (r.$ && (r.$['android:name'] === '.StreakWidgetProvider' || r.$['android:name'] === 'com.pixelthings.nousdeux.StreakWidgetProvider')) {
+        delete r.$['android:description'];
+        r.$['android:icon'] = '@mipmap/ic_launcher';
+        r.$['android:label'] = '@string/widget_streak_title';
+        r.$['android:exported'] = 'true';
+      }
+    });
+
     const questionReceiverExists = receivers.some(
       (r) => r.$ && (r.$['android:name'] === '.QuestionWidgetProvider' || r.$['android:name'] === 'com.pixelthings.nousdeux.QuestionWidgetProvider')
     );
@@ -444,7 +516,7 @@ const withAndroidWidgets = (config) => {
         $: {
           'android:name': 'com.pixelthings.nousdeux.QuestionWidgetProvider',
           'android:label': '@string/widget_question_title',
-          'android:description': '@string/widget_question_desc',
+          'android:icon': '@mipmap/ic_launcher',
           'android:exported': 'true',
         },
         'intent-filter': [
@@ -477,7 +549,7 @@ const withAndroidWidgets = (config) => {
         $: {
           'android:name': 'com.pixelthings.nousdeux.StreakWidgetProvider',
           'android:label': '@string/widget_streak_title',
-          'android:description': '@string/widget_streak_desc',
+          'android:icon': '@mipmap/ic_launcher',
           'android:exported': 'true',
         },
         'intent-filter': [
@@ -536,10 +608,17 @@ const withAndroidWidgets = (config) => {
       if (fs.existsSync(mainAppPath)) {
         let mainAppContent = fs.readFileSync(mainAppPath, 'utf8');
         if (!mainAppContent.includes('WidgetBridgePackage')) {
-          mainAppContent = mainAppContent.replace(
-            /PackageList\(this\)\.packages\.apply\s*\{/,
-            'PackageList(this).packages.apply {\n          add(WidgetBridgePackage())'
-          );
+          if (mainAppContent.includes('PackageList(this).packages.apply')) {
+            mainAppContent = mainAppContent.replace(
+              /PackageList\(this\)\.packages\.apply\s*\{/,
+              'PackageList(this).packages.apply {\n          add(WidgetBridgePackage())'
+            );
+          } else if (/PackageList\(this\)\.packages/.test(mainAppContent)) {
+            mainAppContent = mainAppContent.replace(
+              /PackageList\(this\)\.packages/,
+              'PackageList(this).packages.apply {\n          add(WidgetBridgePackage())\n        }'
+            );
+          }
           fs.writeFileSync(mainAppPath, mainAppContent, 'utf8');
         }
       }

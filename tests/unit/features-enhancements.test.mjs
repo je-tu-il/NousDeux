@@ -67,13 +67,16 @@ test('admin.tsx provides global cleanup for orphan pairing codes and user profil
   assert.match(adminSrc, /🧹 Nettoyer Firebase/, 'admin.tsx must provide Nettoyer Firebase button');
 });
 
-test('Widgets are prominently accessible from dashboard header and settings section', async () => {
+test('Widgets are cleanly accessible via settings on mobile, removed from crowded profile header, and hidden on web', async () => {
   const dashboardSrc = await read('src/app/dashboard.tsx');
   const settingsSrc = await read('src/app/settings.tsx');
+  const shopSrc = await read('src/app/shop.tsx');
 
-  assert.match(dashboardSrc, /router\.push\('\/widgets'\)/, 'dashboard.tsx must have a direct button to /widgets');
-  assert.match(dashboardSrc, /Widgets/, 'dashboard.tsx header must display Widgets shortcut badge');
+  // Le bouton widget qui cachait le profil a bien été retiré du header du dashboard
+  assert.ok(!dashboardSrc.includes("router.push('/widgets')"), 'dashboard.tsx header must not crowd profile area with widgets button');
 
+  // Accessible via Réglages sur mobile mais masqué sur le web
   assert.match(settingsSrc, /Widgets Écran d’accueil/, 'settings.tsx must have dedicated Widgets section');
-  assert.match(settingsSrc, /NOUVEAU/, 'settings.tsx must highlight Widgets with NOUVEAU pill');
+  assert.match(settingsSrc, /Platform\.OS !== 'web'/, 'settings.tsx must hide widgets proposal on web');
+  assert.match(shopSrc, /Platform\.OS === 'web'/, 'shop.tsx must exclude widgets tab on web');
 });

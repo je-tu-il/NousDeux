@@ -624,38 +624,40 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* Widgets Écran d’accueil */}
-          <View style={styles.section}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Widgets Écran d’accueil</Text>
-              <View style={{ backgroundColor: theme.tint, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                <Text style={{ color: 'white', fontSize: 11, fontWeight: '800' }}>NOUVEAU</Text>
+          {/* Widgets Écran d’accueil (masqué sur le web) */}
+          {Platform.OS !== 'web' && (
+            <View style={styles.section}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Widgets Écran d’accueil</Text>
+                <View style={{ backgroundColor: theme.tint, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                  <Text style={{ color: 'white', fontSize: 11, fontWeight: '800' }}>NOUVEAU</Text>
+                </View>
+              </View>
+              <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
+                <Link href="/widgets" asChild>
+                  <Pressable
+                    onPress={() => sound.tap()}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                      <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,154,139,0.22)', width: 44, height: 44, borderRadius: 22 }]}>
+                        <Text style={{ fontSize: 22 }}>📱</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>
+                          Configurer mes Widgets
+                        </Text>
+                        <Text style={{ fontSize: 12, color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', marginTop: 2 }}>
+                          Question du jour & Flamme d’amour en direct sur iPhone (iOS) et Samsung (Android)
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ color: theme.tint, fontSize: 24, fontWeight: 'bold' }}>›</Text>
+                  </Pressable>
+                </Link>
               </View>
             </View>
-            <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
-              <Link href="/widgets" asChild>
-                <Pressable
-                  onPress={() => sound.tap()}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                    <View style={[styles.supportIcon, { backgroundColor: 'rgba(255,154,139,0.22)', width: 44, height: 44, borderRadius: 22 }]}>
-                      <Text style={{ fontSize: 22 }}>📱</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>
-                        Configurer mes Widgets
-                      </Text>
-                      <Text style={{ fontSize: 12, color: store.isDarkMode ? '#D4B8B4' : '#6B5B59', marginTop: 2 }}>
-                        Question du jour & Flamme d’amour en direct sur iPhone (iOS) et Samsung (Android)
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={{ color: theme.tint, fontSize: 24, fontWeight: 'bold' }}>›</Text>
-                </Pressable>
-              </Link>
-            </View>
-          </View>
+          )}
 
           {/* Contact & Support */}
           <View style={styles.section}>

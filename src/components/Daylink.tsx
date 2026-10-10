@@ -33,6 +33,7 @@ import { decryptText, encryptText } from '../lib/crypto';
 import { checkQuests, updateWalletStreak } from '../lib/economy';
 import { auth, db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
+import { syncWidgetData } from '../lib/widgets';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -260,6 +261,17 @@ export default function Daylink() {
             }
           }
         }
+
+        const currentQ = getById(questionId) ?? null;
+        if (Platform.OS !== 'web' && currentQ) {
+          void syncWidgetData({
+            todayQuestion: currentQ.text,
+            categoryName: currentQ.category,
+            userAnswered: Boolean(myAns.exists()),
+            partnerAnswered: Boolean(pAns.exists()),
+            bothAnswered: Boolean(myAns.exists() && pAns.exists()),
+          });
+        }
       } catch (error) {
         if (!(error instanceof Error && error.message === 'TIMEOUT')) {
           console.warn('Daylink load failed:', error);
@@ -304,6 +316,12 @@ export default function Daylink() {
           if (isSubmittedRef.current) {
             setPartnerAnswer(decrypted);
           }
+          if (Platform.OS !== 'web') {
+            void syncWidgetData({
+              partnerAnswered: true,
+              bothAnswered: Boolean(isSubmittedRef.current),
+            });
+          }
         }
       } else {
         setPartnerHasAnswered(false);
@@ -343,6 +361,13 @@ export default function Daylink() {
       setMyAnswer(cleanAnswer);
       setIsSubmitted(true);
       isSubmittedRef.current = true;
+
+      if (Platform.OS !== 'web') {
+        void syncWidgetData({
+          userAnswered: true,
+          bothAnswered: Boolean(partnerHasAnswered),
+        });
+      }
 
       if (partnerHasAnswered) {
         const pAns = await getDoc(doc(db, 'couples', cId, 'daily', slotKey, 'answers', partnerUid));
