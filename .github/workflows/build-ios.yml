@@ -32,17 +32,27 @@ jobs:
       - name: Prebuild native iOS project
         run: npx expo prebuild --platform ios --clean --no-install
 
-      - name: Cache CocoaPods
+      - name: Cache CocoaPods download cache
         uses: actions/cache@v4
         with:
-          path: ios/Pods
-          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          path: ~/.cocoapods/cache
+          key: ${{ runner.os }}-cocoapods-cache-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-pods-
+            ${{ runner.os }}-cocoapods-cache-
 
       - name: Install CocoaPods
         working-directory: ios
-        run: pod install
+        run: |
+          pod install --repo-update
+
+          # Verify xcconfig files exist
+          if [ ! -f "Pods/Target Support Files/Pods-NousDeux/Pods-NousDeux.release.xcconfig" ]; then
+            echo "Searching for generated xcconfig files:"
+            find Pods -name "*.xcconfig" || true
+            echo "ERROR: Pods configuration files not generated for Pods-NousDeux"
+            exit 1
+          fi
+          echo "Successfully validated Pods-NousDeux.release.xcconfig"
 
       - name: Build Xcode Archive
         run: |
