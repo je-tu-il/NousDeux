@@ -17,6 +17,11 @@
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.pixelthings.nousdeuxapp",
       "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.pixelthings.nousdeuxapp"
+        ]
+      },
       "supportsTablet": true,
       "usesAppleSignIn": true
     },

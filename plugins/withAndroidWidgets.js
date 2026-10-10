@@ -61,8 +61,19 @@ class QuestionWidgetProvider : AppWidgetProvider() {
             ctaText = "En attente de $partnerPseudo... 💕"
         }
 
+        val themeId = if (payloadStr != null) {
+            try {
+                val json = JSONObject(payloadStr)
+                if (json.has("themeId")) json.getString("themeId") else "widget_default"
+            } catch (e: Exception) { "widget_default" }
+        } else "widget_default"
+        val bgRes = context.resources.getIdentifier("widget_bg_" + themeId, "drawable", context.packageName)
+
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_question)
+            if (bgRes != 0) {
+                views.setInt(R.id.widget_container, "setBackgroundResource", bgRes)
+            }
             views.setTextViewText(R.id.widget_question_text, questionText)
             views.setTextViewText(R.id.widget_badge, badgeText)
             views.setTextViewText(R.id.widget_cta, ctaText)
@@ -131,8 +142,19 @@ class StreakWidgetProvider : AppWidgetProvider() {
             statusText = "⏳ En attente de $partnerPseudo"
         }
 
+        val themeId = if (payloadStr != null) {
+            try {
+                val json = JSONObject(payloadStr)
+                if (json.has("themeId")) json.getString("themeId") else "widget_default"
+            } catch (e: Exception) { "widget_default" }
+        } else "widget_default"
+        val bgRes = context.resources.getIdentifier("widget_bg_" + themeId, "drawable", context.packageName)
+
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_streak)
+            if (bgRes != 0) {
+                views.setInt(R.id.widget_container, "setBackgroundResource", bgRes)
+            }
             views.setTextViewText(R.id.streak_number, streakNumber)
             views.setTextViewText(R.id.streak_label, streakLabel)
             views.setTextViewText(R.id.streak_status, statusText)
@@ -220,6 +242,7 @@ class WidgetBridgeModule(reactContext: ReactApplicationContext) : ReactContextBa
 
             val questionIds = appWidgetManager.getAppWidgetIds(ComponentName(reactApplicationContext, QuestionWidgetProvider::class.java))
             if (questionIds.isNotEmpty()) {
+                QuestionWidgetProvider().onUpdate(reactApplicationContext, appWidgetManager, questionIds)
                 val intent = Intent(reactApplicationContext, QuestionWidgetProvider::class.java).apply {
                     action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
                     putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, questionIds)
@@ -229,6 +252,7 @@ class WidgetBridgeModule(reactContext: ReactApplicationContext) : ReactContextBa
 
             val streakIds = appWidgetManager.getAppWidgetIds(ComponentName(reactApplicationContext, StreakWidgetProvider::class.java))
             if (streakIds.isNotEmpty()) {
+                StreakWidgetProvider().onUpdate(reactApplicationContext, appWidgetManager, streakIds)
                 val intent = Intent(reactApplicationContext, StreakWidgetProvider::class.java).apply {
                     action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
                     putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, streakIds)
@@ -663,6 +687,32 @@ const withAndroidWidgets = (config) => {
       // Drawables
       fs.writeFileSync(path.join(drawableDir, 'widget_background.xml'), WIDGET_BACKGROUND_XML, 'utf8');
       fs.writeFileSync(path.join(drawableDir, 'widget_card_bg.xml'), WIDGET_CARD_BG_XML, 'utf8');
+
+      const themeGradients = {
+        widget_bg_widget_default: ['#FF9A8B', '#FF6A88'],
+        widget_bg_widget_streak_7: ['#FF416C', '#FF4B2B'],
+        widget_bg_widget_streak_14: ['#0f2027', '#203a43'],
+        widget_bg_widget_streak_30: ['#11998e', '#38ef7d'],
+        widget_bg_widget_shop_1: ['#8A2387', '#E94057'],
+        widget_bg_widget_shop_2: ['#43e97b', '#38f9d7'],
+        widget_bg_widget_shop_3: ['#fa709a', '#fee140'],
+        widget_bg_widget_shop_4: ['#232526', '#414345'],
+        widget_bg_widget_shop_5: ['#654ea3', '#eaafc8'],
+      };
+      for (const [bgName, colors] of Object.entries(themeGradients)) {
+        const bgXml = `<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="315"
+        android:startColor="${colors[0]}"
+        android:endColor="${colors[1]}"
+        android:type="linear" />
+    <corners android:radius="22dp" />
+</shape>
+`;
+        fs.writeFileSync(path.join(drawableDir, `${bgName}.xml`), bgXml, 'utf8');
+      }
 
       // Layouts
       fs.writeFileSync(path.join(layoutDir, 'widget_question.xml'), WIDGET_QUESTION_LAYOUT_XML, 'utf8');

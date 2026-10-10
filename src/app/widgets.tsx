@@ -76,8 +76,8 @@ export default function WidgetsScreen() {
     if (widgetData) {
       const updated = { ...widgetData, themeId };
       setWidgetData(updated);
-      await syncWidgetData({ themeId });
     }
+    void syncWidgetData({ themeId });
     if (store.uid) {
       await saveUserProfile(store.uid, { selectedWidget: themeId });
     }
@@ -137,7 +137,7 @@ export default function WidgetsScreen() {
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={[styles.title, { color: theme.text }]}>Widgets Écran d’accueil</Text>
             <Text style={[styles.subtitle, { color: store.isDarkMode ? '#D4B8B4' : '#6B5B59' }]}>
-              iPhone & Samsung • Personnalisables
+              {Platform.OS === 'ios' ? 'iPhone • Personnalisable' : Platform.OS === 'android' ? 'Samsung & Android • Personnalisable' : 'iPhone & Samsung • Personnalisables'}
             </Text>
           </View>
 
@@ -305,36 +305,40 @@ export default function WidgetsScreen() {
           </View>
 
           {/* Guide iPhone */}
-          <View style={styles.tutorialBox}>
-            <Text style={[styles.tutorialTitle, { color: theme.text }]}>
-              🍏 Sur iPhone (iOS) :
-            </Text>
-            <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-              1. Reste appuyé sur un espace vide de ton écran d'accueil jusqu'à ce que les icônes tremblent.
-            </Text>
-            <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-              2. Touche le bouton « + » tout en haut à gauche.
-            </Text>
-            <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-              3. Recherche « NousDeux », choisis ton format (1 case, rectangle ou 4 cases) et touche « Ajouter le widget ».
-            </Text>
-          </View>
+          {(Platform.OS === 'ios' || Platform.OS === 'web') && (
+            <View style={styles.tutorialBox}>
+              <Text style={[styles.tutorialTitle, { color: theme.text }]}>
+                🍏 Sur iPhone (iOS) :
+              </Text>
+              <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
+                1. Reste appuyé sur un espace vide de ton écran d'accueil jusqu'à ce que les icônes tremblent.
+              </Text>
+              <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
+                2. Touche le bouton « + » tout en haut à gauche.
+              </Text>
+              <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
+                3. Recherche « NousDeux », choisis ton format (1 case, rectangle ou 4 cases) et touche « Ajouter le widget ».
+              </Text>
+            </View>
+          )}
 
           {/* Guide Samsung / Android */}
-          <View style={[styles.tutorialBox, { marginTop: 10 }]}>
-            <Text style={[styles.tutorialTitle, { color: theme.text }]}>
-              🤖 Sur Samsung & Android :
-            </Text>
-            <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-              1. Reste appuyé sur ton écran d'accueil et sélectionne « Widgets ».
-            </Text>
-            <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-              2. Fais défiler jusqu'à « NousDeux ».
-            </Text>
-            <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-              3. Maintiens ton doigt sur le widget et glisse-le sur ton écran. Tu peux ensuite le redimensionner à n'importe quelle taille !
-            </Text>
-          </View>
+          {(Platform.OS === 'android' || Platform.OS === 'web') && (
+            <View style={[styles.tutorialBox, Platform.OS === 'web' ? { marginTop: 10 } : null]}>
+              <Text style={[styles.tutorialTitle, { color: theme.text }]}>
+                🤖 Sur Samsung & Android :
+              </Text>
+              <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
+                1. Reste appuyé sur ton écran d'accueil et sélectionne « Widgets ».
+              </Text>
+              <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
+                2. Fais défiler jusqu'à « NousDeux ».
+              </Text>
+              <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
+                3. Maintiens ton doigt sur le widget et glisse-le sur ton écran. Tu peux ensuite le redimensionner à n'importe quelle taille !
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </ImageBackground>

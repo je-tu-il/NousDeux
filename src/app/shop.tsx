@@ -411,20 +411,8 @@ export default function ShopScreen() {
 
       {/* Wrapper global pour centrer sur grand écran */}
       <View style={{ flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' }}>
-        {/* Bouton Publicité Récompensée (+15 Pétales) */}
-        <View style={{ marginBottom: 14 }}>
-          <RewardedAdButton
-            coupleId={coupleId}
-            onRewardEarned={() => {
-              if (coupleId) {
-                getWallet(coupleId).then(setWallet).catch(() => {});
-              }
-            }}
-          />
-        </View>
-
-        {/* Onglets */}
-        <View style={[styles.tabs, { marginTop: 4 }]}>
+        {/* Onglets (barre de choix) */}
+        <View style={styles.tabs}>
           {((Platform.OS === 'web'
             ? ['backgrounds', 'borders', 'tags']
             : ['backgrounds', 'borders', 'tags', 'widgets']
@@ -444,6 +432,18 @@ export default function ShopScreen() {
           ))}
         </View>
 
+        {/* Bouton Publicité Récompensée (+15 Pétales) sous la barre d'onglets */}
+        <View style={{ marginTop: 14, marginBottom: 12 }}>
+          <RewardedAdButton
+            coupleId={coupleId}
+            onRewardEarned={() => {
+              if (coupleId) {
+                getWallet(coupleId).then(setWallet).catch(() => {});
+              }
+            }}
+          />
+        </View>
+
         {Platform.OS !== 'web' && activeTab === 'widgets' && (
           <Pressable
             onPress={() => {
@@ -456,9 +456,10 @@ export default function ShopScreen() {
               justifyContent: 'space-between',
               backgroundColor: theme.tint,
               paddingHorizontal: 16,
-              paddingVertical: 10,
+              paddingVertical: 12,
               borderRadius: 16,
-              marginBottom: 10,
+              marginTop: 2,
+              marginBottom: 14,
               marginHorizontal: 12,
             }}
           >
@@ -542,7 +543,7 @@ export default function ShopScreen() {
             )}
 
               {selectedItem && selectedItem.unlock.type === 'quest' ? (
-                <View>
+                <View style={{ width: '100%', alignItems: 'center' }}>
                   <Text style={styles.modalDesc}>
                     Cet objet ({selectedItem.emoji && selectedItem.emoji + ' '}<Text style={{ fontWeight: '800' }}>{selectedItem.name}</Text>) est une récompense exclusive !{'\n\n'}
                     Condition : <Text style={{ color: '#FF9A8B', fontWeight: '800' }}>
@@ -557,7 +558,15 @@ export default function ShopScreen() {
                   </Text>
                   
                   <Pressable 
-                    style={[styles.btnConfirm, { backgroundColor: '#8B5CF6', marginTop: 15 }]} 
+                    style={{
+                      backgroundColor: '#8B5CF6',
+                      marginTop: 18,
+                      paddingVertical: 12,
+                      paddingHorizontal: 36,
+                      borderRadius: 14,
+                      minWidth: 160,
+                      alignItems: 'center',
+                    }} 
                     onPress={() => {
                       setSelectedItem(null);
                       router.push({ pathname: '/quests', params: { highlight: (selectedItem.unlock as any).questId } });
@@ -567,7 +576,7 @@ export default function ShopScreen() {
                   </Pressable>
                 </View>
               ) : selectedItem && selectedItem.unlock.type === 'streak' ? (
-                <View>
+                <View style={{ width: '100%', alignItems: 'center' }}>
                   <Text style={styles.modalDesc}>
                     Cet objet ({selectedItem.emoji && selectedItem.emoji + ' '}<Text style={{ fontWeight: '800' }}>{selectedItem.name}</Text>) est une récompense de fidélité !{'\n\n'}
                     Condition : <Text style={{ color: '#FF9A8B', fontWeight: '800' }}>
@@ -576,7 +585,15 @@ export default function ShopScreen() {
                   </Text>
                   
                   <Pressable 
-                    style={[styles.btnConfirm, { backgroundColor: '#FF9A8B', marginTop: 15 }]} 
+                    style={{
+                      backgroundColor: '#FF9A8B',
+                      marginTop: 18,
+                      paddingVertical: 12,
+                      paddingHorizontal: 36,
+                      borderRadius: 14,
+                      minWidth: 160,
+                      alignItems: 'center',
+                    }} 
                     onPress={() => setSelectedItem(null)}
                   >
                     <Text style={styles.btnConfirmText}>Compris</Text>

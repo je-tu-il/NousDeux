@@ -1,6 +1,8 @@
 import { Platform, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COSMETICS, Cosmetic } from '../data/cosmetics';
+import { getScheduledQuestionId } from '../data/scheduledQuestions';
+import { getById } from '../data/questions';
 
 export type WidgetType = 'question' | 'streak';
 export type WidgetSize = 'small' | 'medium' | 'large';
@@ -121,11 +123,19 @@ export function getWidgetTheme(themeId: string = 'widget_default') {
 export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<void> {
   try {
     const existingRaw = await AsyncStorage.getItem(WIDGET_STORAGE_KEY);
+    const d = new Date();
+    const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const scheduledId = getScheduledQuestionId(todayKey);
+    const scheduledQ = scheduledId ? getById(scheduledId) : null;
+
+    const defaultQuestion = scheduledQ?.text || "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?";
+    const defaultCategory = scheduledQ?.category || "Quotidien";
+
     const existing: WidgetPayload = existingRaw ? JSON.parse(existingRaw) : {
       streak: 1,
       daysTogether: 1,
-      todayQuestion: "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?",
-      categoryName: "Quotidien",
+      todayQuestion: defaultQuestion,
+      categoryName: defaultCategory,
       userAnswered: false,
       partnerAnswered: false,
       bothAnswered: false,
@@ -138,6 +148,14 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
       gradientColors: ["#FF9A8B", "#FF6A88"],
       updatedAt: new Date().toISOString(),
     };
+
+    // Auto-update to today's scheduled question if existing only had fallback
+    if (!payload.todayQuestion && (!existing.todayQuestion || existing.todayQuestion.startsWith('Quelle est la plus belle'))) {
+      if (scheduledQ) {
+        existing.todayQuestion = scheduledQ.text;
+        existing.categoryName = scheduledQ.category;
+      }
+    }
 
     const merged: WidgetPayload = {
       ...existing,
@@ -168,6 +186,19 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
       }
     } else if (Platform.OS === 'ios') {
       try {
+        const { requireNativeModule } = require('expo');
+        const ExpoWidgets = requireNativeModule('ExpoWidgets');
+        if (ExpoWidgets?.updateWidgetProps) {
+          ExpoWidgets.updateWidgetProps('QuestionWidget', merged);
+          ExpoWidgets.updateWidgetProps('StreakWidget', merged);
+        }
+        if (ExpoWidgets?.reloadAllWidgets) {
+          ExpoWidgets.reloadAllWidgets();
+        }
+      } catch (nativeErr) {
+        console.warn('[Widgets] ExpoWidgets native module update error:', nativeErr);
+      }
+      try {
         const { QuestionWidget } = require('../widgets/QuestionWidget');
         const { StreakWidget } = require('../widgets/StreakWidget');
         QuestionWidget.updateSnapshot(merged);
@@ -175,15 +206,8 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
         QuestionWidget.reload();
         StreakWidget.reload();
       } catch (iosErr) {
-        console.warn('[Widgets] iOS widget update error:', iosErr);
+        // Handled by direct ExpoWidgets.updateWidgetProps
       }
-      try {
-        const { requireNativeModule } = require('expo');
-        const ExpoWidgets = requireNativeModule('ExpoWidgets');
-        if (ExpoWidgets?.reloadAllWidgets) {
-          ExpoWidgets.reloadAllWidgets();
-        }
-      } catch {}
     }
   } catch (err) {
     console.warn('[Widgets] syncWidgetData error:', err);
@@ -223,17 +247,29 @@ export async function requestPinWidget(type: 'question' | 'streak' = 'streak'): 
  * Récupère les données préparées pour le widget
  */
 export async function getWidgetData(): Promise<WidgetPayload> {
+  const d = new Date();
+  const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const scheduledId = getScheduledQuestionId(todayKey);
+  const scheduledQ = scheduledId ? getById(scheduledId) : null;
+
   try {
     const raw = await AsyncStorage.getItem(WIDGET_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if ((!parsed.todayQuestion || parsed.todayQuestion.startsWith('Quelle est la plus belle') || parsed.todayQuestion.startsWith('Quel est ton plus')) && scheduledQ) {
+        parsed.todayQuestion = scheduledQ.text;
+        parsed.categoryName = scheduledQ.category;
+      }
+      return parsed;
+    }
   } catch {}
 
   const defaultTheme = getWidgetTheme('widget_default');
   return {
     streak: 1,
     daysTogether: 1,
-    todayQuestion: "Quel est ton plus beau souvenir avec ton partenaire ?",
-    categoryName: "Amour & Romance",
+    todayQuestion: scheduledQ?.text || "Quel est ton plus beau souvenir avec ton partenaire ?",
+    categoryName: scheduledQ?.category || "Amour & Romance",
     userAnswered: false,
     partnerAnswered: false,
     bothAnswered: false,

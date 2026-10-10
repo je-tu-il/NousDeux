@@ -95,8 +95,8 @@ function patchEntryView(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('effectiveProps') && content.includes('streakView') && content.includes('widgetURL')) {
-    log(`EntryView already has dynamic native widgets with widgetURL: ${filePath}`);
+  if (content.includes('hex: String') && content.includes('effectiveProps') && content.includes('gradientColors')) {
+    log(`EntryView already has dynamic native widgets with theme colors: ${filePath}`);
     return;
   }
 
@@ -135,7 +135,7 @@ public struct WidgetsEntryView: View {
           .widgetURL(URL(string: "nousdeuxapp://daylink"))
       }
     }
-    .modifier(WidgetContainerBackgroundModifier(name: entry.name))
+    .modifier(WidgetContainerBackgroundModifier(name: entry.name, props: effectiveProps))
   }
 
   private func streakView(props: [String: Any]?) -> some View {
@@ -246,8 +246,35 @@ public struct WidgetsEntryView: View {
   }
 }
 
+extension Color {
+  init(hex: String) {
+    let cleanHex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+    var int: UInt64 = 0
+    Scanner(string: cleanHex).scanHexInt64(&int)
+    let a, r, g, b: UInt64
+    switch cleanHex.count {
+    case 3:
+      (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+    case 6:
+      (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+    case 8:
+      (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+    default:
+      (a, r, g, b) = (255, 255, 154, 139)
+    }
+    self.init(
+      .sRGB,
+      red: Double(r) / 255,
+      green: Double(g) / 255,
+      blue: Double(b) / 255,
+      opacity: Double(a) / 255
+    )
+  }
+}
+
 private struct WidgetContainerBackgroundModifier: ViewModifier {
   let name: String
+  let props: [String: Any]?
 
   func body(content: Content) -> some View {
     if #available(iOS 17.0, *) {
@@ -260,10 +287,17 @@ private struct WidgetContainerBackgroundModifier: ViewModifier {
   }
 
   private var gradientBackground: some View {
-    LinearGradient(
+    if let hexList = props?["gradientColors"] as? [String], hexList.count >= 2 {
+      return LinearGradient(
+        colors: [Color(hex: hexList[0]), Color(hex: hexList[1])],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+    }
+    return LinearGradient(
       colors: name == "StreakWidget"
-        ? [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)]
-        : [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)],
+        ? [Color(hex: "#FF416C"), Color(hex: "#FF4B2B")]
+        : [Color(hex: "#FF9A8B"), Color(hex: "#FF6A88")],
       startPoint: .topLeading,
       endPoint: .bottomTrailing
     )
@@ -272,7 +306,7 @@ private struct WidgetContainerBackgroundModifier: ViewModifier {
 `;
 
   fs.writeFileSync(filePath, newEntryViewCode, 'utf8');
-  log(`Patched EntryView.swift with native dynamic widgets + widgetURL + containerBackground in: ${filePath}`);
+  log(`Patched EntryView.swift with native dynamic widgets + theme colors in: ${filePath}`);
 }
 
 // 3. Patch DynamicView.swift
@@ -589,6 +623,39 @@ function patchSwiftTargetFile(filePath, bgSwiftGradient, widgetDeepLink) {
   }
 }
 
+// 8. Patch withAppGroupEntitlements.js
+function patchWithAppGroupEntitlements(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  let content = fs.readFileSync(filePath, 'utf8');
+  if (content.includes('config.modResults = _addApplicationGroupsEntitlement')) {
+    log(`withAppGroupEntitlements.js already patched: ${filePath}`);
+    return;
+  }
+  content = content.replace(
+    /config\.ios = \{/g,
+    `config.modResults = _addApplicationGroupsEntitlement(config.modResults ?? {}, props.groupIdentifier);\n    config.ios = {`
+  );
+  fs.writeFileSync(filePath, content, 'utf8');
+  log(`Patched withAppGroupEntitlements.js in: ${filePath}`);
+}
+
+// 9. Patch WidgetsModule.swift
+function patchWidgetsModule(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  let content = fs.readFileSync(filePath, 'utf8');
+  if (content.includes('Function("updateWidgetProps")')) {
+    log(`WidgetsModule.swift already has updateWidgetProps: ${filePath}`);
+    return;
+  }
+  const target = 'Function("reloadAllWidgets") {\n      WidgetCenter.shared.reloadAllTimelines()\n    }';
+  const replacement = `${target}\n\n    Function("updateWidgetProps") { (name: String, props: [String: Any]) in\n      WidgetsStorage.set(props, forKey: "__expo_widgets_\\(name)_props")\n      WidgetsStorage.set(props, forKey: "__expo_widgets_latest_props")\n      WidgetCenter.shared.reloadTimelines(ofKind: name)\n      WidgetCenter.shared.reloadAllTimelines()\n    }`;
+  if (content.includes(target)) {
+    content = content.replace(target, replacement);
+    fs.writeFileSync(filePath, content, 'utf8');
+    log(`Patched WidgetsModule.swift with updateWidgetProps in: ${filePath}`);
+  }
+}
+
 // Execute all patches
 function run() {
   log('Starting iOS widgets patch...');
@@ -600,13 +667,20 @@ function run() {
   patchDynamicView(path.join(expoWidgetsIos, 'Widgets/DynamicView.swift'));
   patchWidgetObject(path.join(expoWidgetsIos, 'WidgetObject.swift'));
   patchWidgetsStorage(path.join(expoWidgetsIos, 'WidgetsStorage.swift'));
+  patchWidgetsModule(path.join(expoWidgetsIos, 'WidgetsModule.swift'));
 
-  // 2. node_modules/expo-widgets/plugin/build/ios/withWidgetSourceFiles.js
+  // 2. node_modules/expo-widgets/plugin/build/ios/
   const withWidgetSourceFilesPath = path.join(
     rootDir,
     'node_modules/expo-widgets/plugin/build/ios/withWidgetSourceFiles.js'
   );
   patchWithWidgetSourceFiles(withWidgetSourceFilesPath);
+
+  const withAppGroupEntitlementsPath = path.join(
+    rootDir,
+    'node_modules/expo-widgets/plugin/build/ios/withAppGroupEntitlements.js'
+  );
+  patchWithAppGroupEntitlements(withAppGroupEntitlementsPath);
 
   // 3. ios/ExpoWidgetsTarget (if prebuild has run)
   const targetDir = path.join(rootDir, 'ios/ExpoWidgetsTarget');
@@ -628,6 +702,7 @@ function run() {
   patchDynamicView(path.join(podsExpoWidgets, 'Widgets/DynamicView.swift'));
   patchWidgetObject(path.join(podsExpoWidgets, 'WidgetObject.swift'));
   patchWidgetsStorage(path.join(podsExpoWidgets, 'WidgetsStorage.swift'));
+  patchWidgetsModule(path.join(podsExpoWidgets, 'WidgetsModule.swift'));
 
   log('iOS widgets patch completed successfully.');
 }

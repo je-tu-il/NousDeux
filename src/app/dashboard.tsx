@@ -27,6 +27,7 @@ import { useTopInset } from '@/hooks/useTopInset';
 import { syncWidgetData } from '@/lib/widgets';
 import { registerPushTokenForUser, triggerPartnerAnsweredNotification } from '@/lib/notifications';
 import { getById } from '@/data/questions';
+import { getScheduledQuestionId } from '@/data/scheduledQuestions';
 
 type PartnerData = { pseudo: string; avatarUrl?: string; coupleDate?: string; age?: string; coupleId?: string };
 
@@ -302,6 +303,17 @@ export default function DashboardScreen() {
       }));
       setPartnerAnsweredCategories(answeredCategories);
 
+      if (!todayQuestionText) {
+        const scheduledId = getScheduledQuestionId(tKey);
+        if (scheduledId) {
+          const q = getById(scheduledId);
+          if (q) {
+            todayQuestionText = q.text;
+            todayCategory = q.category;
+          }
+        }
+      }
+
       if (hasPartnerAnsweredToday) {
         const notifKey = `nousdeux_notified_ans_${tKey}`;
         AsyncStorage.getItem(notifKey).then((already) => {
@@ -316,7 +328,7 @@ export default function DashboardScreen() {
 
       if (Platform.OS !== 'web') {
         void syncWidgetData({
-          streak: activeStreak ?? 1,
+          streak: typeof activeStreak === 'number' && activeStreak >= 0 ? activeStreak : (wallet?.streak ?? 1),
           todayQuestion: todayQuestionText || undefined,
           categoryName: todayCategory || undefined,
           userAnswered: hasUserAnsweredToday,
@@ -326,6 +338,7 @@ export default function DashboardScreen() {
           partnerPseudo: partner?.pseudo || 'Mon Amour',
           userAvatar: store.avatar || null,
           partnerAvatar: partner?.avatarUrl || null,
+          themeId: store.selectedWidget || 'widget_default',
         });
       }
     };
@@ -431,6 +444,9 @@ export default function DashboardScreen() {
         AsyncStorage.setItem(`wallet_${coupleId}`, JSON.stringify(nextWallet)).catch(() => {});
         setWallet(nextWallet);
         if (data.streak !== calculatedStreak) updateWalletStreak(coupleId).catch(console.error);
+        if (Platform.OS !== 'web') {
+          void syncWidgetData({ streak: calculatedStreak });
+        }
       } else {
         const sharedWallet = await getWallet(coupleId);
         cacheWallet(coupleId, sharedWallet);
