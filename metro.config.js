@@ -17,6 +17,20 @@ config.resolver.unstable_enablePackageExports = false;
 // Canonical resolution for @firebase/app and @firebase/auth on native platforms
 // This eliminates the dual module hazard where auth registers on one copy and initializeApp runs on another.
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (typeof moduleName === 'string' && moduleName.endsWith('.png') && (
+    moduleName.includes('expo-router') ||
+    moduleName.includes('react-navigation') ||
+    moduleName.includes('unmatched') ||
+    moduleName.includes('back-icon') ||
+    moduleName.includes('close-icon') ||
+    moduleName.includes('clear-icon') ||
+    moduleName.includes('search-icon')
+  )) {
+    return {
+      filePath: path.resolve(__dirname, 'assets/images/icon.png'),
+      type: 'sourceFile',
+    };
+  }
   if (platform === 'web') {
     if (moduleName === 'react-native-google-mobile-ads') {
       return {

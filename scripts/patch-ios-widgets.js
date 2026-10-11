@@ -634,24 +634,19 @@ function patchWithWidgetSourceFiles(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  const bgCount = (content.match(/const bgGradient =/g) || []).length;
-  if (bgCount === 1 && content.includes('.containerBackground(for: .widget)') && content.includes('.widgetURL')) {
-    log(`withWidgetSourceFiles.js already patched with widgetURL: ${filePath}`);
+  if (content.includes('// __NOUSDEUX_WIDGETS_PATCHED__')) {
+    log(`withWidgetSourceFiles.js already patched: ${filePath}`);
     return;
   }
 
-  if (bgCount > 1) {
-    while ((content.match(/const bgGradient =/g) || []).length > 1) {
-      content = content.replace(/const bgGradient = widget\.name === "StreakWidget"[\s\S]*?;\s*(?=const bgGradient =)/, '');
-    }
-    fs.writeFileSync(filePath, content, 'utf8');
-    log(`Cleaned up duplicate bgGradient declarations in: ${filePath}`);
-    if (content.includes('.widgetURL')) return;
-  }
+  // Remove any previously injected bgGradient or widgetDeepLink declarations to ensure zero duplicate syntax errors
+  content = content.replace(/const bgGradient = widget\.name === "StreakWidget"[\s\S]*?;\s*/g, '');
+  content = content.replace(/const widgetDeepLink = widget\.name === "StreakWidget"[\s\S]*?;\s*/g, '');
 
   const configBlockPattern = /if \(!configuration\)\s*return `import WidgetKit[\s\S]*?supportedFamilies[\s\S]*?`\s*;/;
 
-  const newSnippet = `const bgGradient = widget.name === "StreakWidget"
+  const newSnippet = `// __NOUSDEUX_WIDGETS_PATCHED__
+    const bgGradient = widget.name === "StreakWidget"
       ? "LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)"
       : "LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)";
     const widgetDeepLink = widget.name === "StreakWidget" ? "nousdeuxapp://dashboard" : "nousdeuxapp://daylink";
@@ -961,9 +956,34 @@ function run() {
     'nousdeuxapp://dashboard'
   );
 
-  // 4. Android node_modules/expo-widgets/android/
-  const expoWidgetsAndroid = path.join(rootDir, 'node_modules/expo-widgets/android/src/main/java/expo/modules/widgets');
-  patchAndroidWidgetsModule(path.join(expoWidgetsAndroid, 'WidgetsModule.kt'));
+  // 5. Ensure missing expo-router assets exist to prevent web bundler crashes
+  const expoRouterAssets = path.join(rootDir, 'node_modules/expo-router/assets');
+  if (fs.existsSync(expoRouterAssets)) {
+    const iconPath = path.join(rootDir, 'assets/images/icon.png');
+    if (fs.existsSync(iconPath)) {
+      const assetNames = ['unmatched.png', 'file.png', 'pkg.png', 'forward.png', 'sitemap.png', 'arrow_down.png'];
+      for (const name of assetNames) {
+        const dest = path.join(expoRouterAssets, name);
+        if (!fs.existsSync(dest)) {
+          try {
+            fs.copyFileSync(iconPath, dest);
+          } catch {}
+        }
+      }
+      const navElements = path.join(expoRouterAssets, 'react-navigation/elements');
+      fs.mkdirSync(navElements, { recursive: true });
+      const navNames = ['back-icon-mask.png', 'back-icon.png', 'clear-icon.png', 'close-icon.png', 'search-icon.png'];
+      for (const name of navNames) {
+        const dest = path.join(navElements, name);
+        if (!fs.existsSync(dest)) {
+          try {
+            fs.copyFileSync(iconPath, dest);
+          } catch {}
+        }
+      }
+      log('Created missing expo-router/assets/*.png fallbacks');
+    }
+  }
 
   log('Native widgets patch (iOS & Android) completed successfully.');
 }
