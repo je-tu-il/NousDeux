@@ -197,6 +197,9 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
       try {
         const { requireNativeModule } = require('expo');
         const ExpoWidgets = requireNativeModule('ExpoWidgets');
+        if (ExpoWidgets?.updateWidgetData) {
+          ExpoWidgets.updateWidgetData(JSON.stringify(merged));
+        }
         if (ExpoWidgets?.updateWidgetProps) {
           ExpoWidgets.updateWidgetProps('QuestionWidget', merged);
           ExpoWidgets.updateWidgetProps('StreakWidget', merged);
@@ -215,7 +218,7 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
         QuestionWidget.reload();
         StreakWidget.reload();
       } catch (iosErr) {
-        // Handled by direct ExpoWidgets.updateWidgetProps
+        // Handled by direct ExpoWidgets.updateWidgetData/updateWidgetProps
       }
     }
   } catch (err) {

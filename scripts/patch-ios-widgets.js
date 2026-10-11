@@ -1,15 +1,14 @@
 /**
  * scripts/patch-ios-widgets.js
  *
- * Comprehensive patch for iOS 17+ WidgetKit containerBackground and native widget data sync in expo-widgets.
- * Ensures:
- * 1. TimelineProvider periodically reloads every 15 min and falls back to stored props instead of empty timeline.
- * 2. EntryView.swift renders real dynamic data (Streak, Question of the day, Partner answer status) natively in SwiftUI.
- * 3. DynamicView.swift never collapses RedBox to EmptyView in release builds.
- * 4. WidgetObject.swift never throws UpdatedTimelineWithoutLayout and reliably stores props and triggers reload.
- * 5. WidgetsStorage.swift provides resilient dual-layer persistence (UserDefaults + App Group shared container file).
- * 6. withWidgetSourceFiles.js generates QuestionWidget and StreakWidget with .containerBackground(for: .widget).
- * 7. Generated targets in ios/ExpoWidgetsTarget and CocoaPods sources are updated.
+ * Comprehensive patch for iOS 17+ WidgetKit and native widget data sync in expo-widgets.
+ * Aligned with TelDump instantaneous refresh & resilient App Group architecture:
+ * 1. Dynamic App Group resolver with mobileprovision check, Info.plist check, and containerURL verification.
+ * 2. Synchronous dual-layer persistence (UserDefaults.synchronize() + Atomic JSON snapshots on shared disk container).
+ * 3. WidgetsTimelineProvider returns fresh storedProps with policy: .atEnd for immediate WidgetKit invalidation.
+ * 4. WidgetsModule exposes updateWidgetData(jsonPayload), updateWidgetProps(name, props), and reloads specific timelines immediately.
+ * 5. EntryView.swift renders real dynamic data (Streak, Question of the day, Partner answer status) and deep links.
+ * 6. DynamicView.swift never collapses RedBox to EmptyView in release builds.
  */
 
 const fs = require('fs');
@@ -26,8 +25,8 @@ function patchTimelineProvider(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('storedProps') && content.includes('nextUpdate')) {
-    log(`TimelineProvider already patched: ${filePath}`);
+  if (content.includes('WidgetsStorage.getProps(forWidget: name)') && content.includes('policy: .atEnd')) {
+    log(`TimelineProvider already up to date: ${filePath}`);
     return;
   }
 
@@ -35,44 +34,24 @@ function patchTimelineProvider(filePath) {
 
 public struct WidgetsTimelineProvider: TimelineProvider {
   public func placeholder(in context: Context) -> WidgetsTimelineEntry {
-    let storedProps = WidgetsStorage.getDictionary(forKey: "__expo_widgets_\\(name)_props")
-      ?? WidgetsStorage.getDictionary(forKey: "__expo_widgets_latest_props")
+    let storedProps = WidgetsStorage.getProps(forWidget: name)
     return WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil)
   }
 
   public func getSnapshot(
     in context: Context, completion: @escaping @Sendable (WidgetsTimelineEntry) -> Void
   ) {
-    let groupIdentifier =
-      Bundle.main.object(forInfoDictionaryKey: "ExpoWidgetsAppGroupIdentifier") as? String
-    let storedProps = WidgetsStorage.getDictionary(forKey: "__expo_widgets_\\(name)_props")
-      ?? WidgetsStorage.getDictionary(forKey: "__expo_widgets_latest_props")
-    guard let groupIdentifier else {
-      completion(WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil))
-      return
-    }
-
-    let entries = parseTimeline(identifier: groupIdentifier, name: name, family: context.family)
-    completion(entries.first ?? WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil))
+    let storedProps = WidgetsStorage.getProps(forWidget: name)
+    completion(WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil))
   }
 
   public func getTimeline(
     in context: Context,
     completion: @escaping @Sendable (Timeline<WidgetsTimelineEntry>) -> Void
   ) {
-    let groupIdentifier =
-      Bundle.main.object(forInfoDictionaryKey: "ExpoWidgetsAppGroupIdentifier") as? String
-    guard let groupIdentifier else {
-      fatalError("Could not get the app group identifier from Info.plist")
-    }
-
-    let entries = parseTimeline(identifier: groupIdentifier, name: name, family: context.family)
-    let storedProps = WidgetsStorage.getDictionary(forKey: "__expo_widgets_\\(name)_props")
-      ?? WidgetsStorage.getDictionary(forKey: "__expo_widgets_latest_props")
-
-    let finalEntries = entries.isEmpty ? [WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil)] : entries
-    let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
-    let timeline = Timeline<WidgetsTimelineEntry>(entries: finalEntries, policy: .after(nextUpdate))
+    let storedProps = WidgetsStorage.getProps(forWidget: name)
+    let entry = WidgetsTimelineEntry(date: Date(), name: name, props: storedProps, entryIndex: nil)
+    let timeline = Timeline<WidgetsTimelineEntry>(entries: [entry], policy: .atEnd)
     completion(timeline)
   }
 
@@ -87,7 +66,7 @@ public struct WidgetsTimelineProvider: TimelineProvider {
 `;
 
   fs.writeFileSync(filePath, newTimelineProvider, 'utf8');
-  log(`Patched TimelineProvider with 15-min background policy & storedProps fallback in: ${filePath}`);
+  log(`Patched TimelineProvider with getProps & instant .atEnd policy in: ${filePath}`);
 }
 
 // 2. Patch EntryView.swift
@@ -95,8 +74,8 @@ function patchEntryView(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('hex: String') && content.includes('effectiveProps') && content.includes('gradientColors')) {
-    log(`EntryView already has dynamic native widgets with theme colors: ${filePath}`);
+  if (content.includes('WidgetsStorage.getProps(forWidget: entry.name)') && content.includes('compactMap')) {
+    log(`EntryView already up to date: ${filePath}`);
     return;
   }
 
@@ -116,13 +95,7 @@ public struct WidgetsEntryView: View {
     if let p = entry.props, !p.isEmpty {
       return p
     }
-    if let stored = WidgetsStorage.getDictionary(forKey: "__expo_widgets_\\(entry.name)_props"), !stored.isEmpty {
-      return stored
-    }
-    if let latest = WidgetsStorage.getDictionary(forKey: "__expo_widgets_latest_props"), !latest.isEmpty {
-      return latest
-    }
-    return nil
+    return WidgetsStorage.getProps(forWidget: entry.name)
   }
 
   public var body: some View {
@@ -287,7 +260,12 @@ private struct WidgetContainerBackgroundModifier: ViewModifier {
   }
 
   private var gradientBackground: some View {
-    if let hexList = props?["gradientColors"] as? [String], hexList.count >= 2 {
+    let hexList: [String] = {
+      if let list = props?["gradientColors"] as? [String] { return list }
+      if let list = props?["gradientColors"] as? [Any] { return list.compactMap { $0 as? String } }
+      return []
+    }()
+    if hexList.count >= 2 {
       return LinearGradient(
         colors: [Color(hex: hexList[0]), Color(hex: hexList[1])],
         startPoint: .topLeading,
@@ -306,7 +284,7 @@ private struct WidgetContainerBackgroundModifier: ViewModifier {
 `;
 
   fs.writeFileSync(filePath, newEntryViewCode, 'utf8');
-  log(`Patched EntryView.swift with native dynamic widgets + theme colors in: ${filePath}`);
+  log(`Patched EntryView.swift with getProps & safe theme color casting in: ${filePath}`);
 }
 
 // 3. Patch DynamicView.swift
@@ -333,8 +311,8 @@ function patchWidgetObject(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('__expo_widgets_latest_props')) {
-    log(`WidgetObject already patched: ${filePath}`);
+  if (content.includes('WidgetsStorage.save(props: first.props, forWidget: name)')) {
+    log(`WidgetObject already up to date: ${filePath}`);
     return;
   }
 
@@ -359,8 +337,7 @@ final class WidgetObject: SharedObject {
     }
     WidgetsStorage.set(entries.map { $0.toDictionary() }, forKey: "__expo_widgets_\\(name)_timeline")
     if let first = entries.first {
-      WidgetsStorage.set(first.props, forKey: "__expo_widgets_\\(name)_props")
-      WidgetsStorage.set(first.props, forKey: "__expo_widgets_latest_props")
+      WidgetsStorage.save(props: first.props, forWidget: name)
     }
     self.reload()
   }
@@ -378,106 +355,230 @@ final class WidgetObject: SharedObject {
   log(`Patched WidgetObject.swift in: ${filePath}`);
 }
 
-// 5. Patch WidgetsStorage.swift
+// 5. Patch WidgetsStorage.swift (TelDump App Group architecture)
 function patchWidgetsStorage(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('UserDefaults.standard') && content.includes('group.com.pixelthings.nousdeuxapp')) {
-    log(`WidgetsStorage already patched: ${filePath}`);
+  if (content.includes('AppGroupHelper') && content.includes('getProps(forWidget')) {
+    log(`WidgetsStorage already up to date: ${filePath}`);
     return;
   }
 
   const newWidgetsStorage = `import Foundation
 
+// MARK: - Résolveur dynamique d'App Group (Identique à TelDump)
+public enum AppGroupHelper {
+  public static let fallbackIdentifier = "group.com.pixelthings.nousdeuxapp"
+  public static let alternativeIdentifier = "group.com.pixelthings.nousdeux"
+
+  public static var activeIdentifier: String {
+    if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: fallbackIdentifier) != nil {
+      return fallbackIdentifier
+    }
+    if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: alternativeIdentifier) != nil {
+      return alternativeIdentifier
+    }
+    if let provisionURL = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+       let content = try? String(contentsOf: provisionURL, encoding: .isoLatin1) {
+      let pattern = #"<string>(group\\.[^<]+)</string>"#
+      if let regex = try? NSRegularExpression(pattern: pattern) {
+        let matches = regex.matches(in: content, range: NSRange(content.startIndex..., in: content))
+        for match in matches {
+          if let range = Range(match.range(at: 1), in: content) {
+            let candidate = String(content[range])
+            if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: candidate) != nil {
+              return candidate
+            }
+          }
+        }
+      }
+    }
+    if let infoPlistId = Bundle.main.object(forInfoDictionaryKey: "ExpoWidgetsAppGroupIdentifier") as? String,
+       !infoPlistId.isEmpty,
+       FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: infoPlistId) != nil {
+      return infoPlistId
+    }
+    return fallbackIdentifier
+  }
+
+  public static var containerURL: URL? {
+    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: activeIdentifier)
+  }
+
+  public static var sharedDefaults: UserDefaults? {
+    UserDefaults(suiteName: activeIdentifier)
+  }
+}
+
 public enum WidgetsStorage {
-  public static var appGroupIdentifier: String? = (Bundle.main.object(forInfoDictionaryKey: "ExpoWidgetsAppGroupIdentifier") as? String) ?? "group.com.pixelthings.nousdeuxapp"
-  static let defaults = UserDefaults(suiteName: appGroupIdentifier)
-
-  static var sharedContainerURL: URL? {
-    guard let appGroupIdentifier else { return nil }
-    return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
+  public static var appGroupIdentifier: String? {
+    AppGroupHelper.activeIdentifier
   }
 
-  static func set(_ value: [String: Any], forKey key: String) {
-    defaults?.set(value, forKey: key)
+  public static var sharedDefaults: UserDefaults? {
+    AppGroupHelper.sharedDefaults
+  }
+
+  public static var sharedContainerURL: URL? {
+    AppGroupHelper.containerURL
+  }
+
+  public static func save(props: [String: Any], forWidget widgetName: String?) {
+    let name = widgetName ?? "QuestionWidget"
+
+    // 1. Sauvegarde UserDefaults App Group
+    if let defaults = sharedDefaults {
+      defaults.set(props, forKey: "__expo_widgets_\\(name)_props")
+      defaults.set(props, forKey: "__expo_widgets_latest_props")
+      let timelineEntry: [String: Any] = [
+        "timestamp": Int(Date().timeIntervalSince1970 * 1000),
+        "props": props
+      ]
+      defaults.set([timelineEntry], forKey: "__expo_widgets_\\(name)_timeline")
+      defaults.synchronize()
+    }
+
+    // 2. Sauvegarde atomique dans le fichier JSON partagé sur disque (comme TelDump)
+    if let containerURL = sharedContainerURL {
+      let fileURL = containerURL.appendingPathComponent("nousdeux_widget_\\(name).json")
+      let latestURL = containerURL.appendingPathComponent("nousdeux_widget_latest.json")
+      let genericURL = containerURL.appendingPathComponent("__expo_widgets_\\(name)_props.json")
+      if let data = try? JSONSerialization.data(withJSONObject: props, options: []) {
+        try? data.write(to: fileURL, options: .atomic)
+        try? data.write(to: latestURL, options: .atomic)
+        try? data.write(to: genericURL, options: .atomic)
+      }
+    }
+
+    // 3. Sauvegarde secours standard
+    UserDefaults.standard.set(props, forKey: "__expo_widgets_\\(name)_props")
+    UserDefaults.standard.set(props, forKey: "__expo_widgets_latest_props")
+    UserDefaults.standard.synchronize()
+  }
+
+  public static func getProps(forWidget name: String) -> [String: Any]? {
+    // 1. Essai depuis App Group UserDefaults
+    if let defaults = sharedDefaults {
+      if let dict = defaults.dictionary(forKey: "__expo_widgets_\\(name)_props"), !dict.isEmpty {
+        return dict
+      }
+      if let dict = defaults.dictionary(forKey: "__expo_widgets_latest_props"), !dict.isEmpty {
+        return dict
+      }
+    }
+
+    // 2. Essai de secours: Fichier JSON partagé sur disque
+    if let containerURL = sharedContainerURL {
+      let fileURL = containerURL.appendingPathComponent("nousdeux_widget_\\(name).json")
+      let latestURL = containerURL.appendingPathComponent("nousdeux_widget_latest.json")
+      let genericURL = containerURL.appendingPathComponent("__expo_widgets_\\(name)_props.json")
+      for url in [fileURL, latestURL, genericURL] {
+        if let data = try? Data(contentsOf: url),
+           let dict = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any],
+           !dict.isEmpty {
+          return dict
+        }
+      }
+    }
+
+    // 3. Essai de secours: UserDefaults standard
+    if let dict = UserDefaults.standard.dictionary(forKey: "__expo_widgets_\\(name)_props"), !dict.isEmpty {
+      return dict
+    }
+    if let dict = UserDefaults.standard.dictionary(forKey: "__expo_widgets_latest_props"), !dict.isEmpty {
+      return dict
+    }
+
+    return nil
+  }
+
+  public static func set(_ value: [String: Any], forKey key: String) {
+    sharedDefaults?.set(value, forKey: key)
+    sharedDefaults?.synchronize()
     UserDefaults.standard.set(value, forKey: key)
+    UserDefaults.standard.synchronize()
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).json")
       if let data = try? JSONSerialization.data(withJSONObject: value, options: []) {
-        try? data.write(to: file)
+        try? data.write(to: file, options: .atomic)
       }
     }
   }
 
-  static func set(_ value: [[String: Any]], forKey key: String) {
-    defaults?.set(value, forKey: key)
+  public static func set(_ value: [[String: Any]], forKey key: String) {
+    sharedDefaults?.set(value, forKey: key)
+    sharedDefaults?.synchronize()
     UserDefaults.standard.set(value, forKey: key)
+    UserDefaults.standard.synchronize()
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).json")
       if let data = try? JSONSerialization.data(withJSONObject: value, options: []) {
-        try? data.write(to: file)
+        try? data.write(to: file, options: .atomic)
       }
     }
   }
 
-  static func set(_ value: String, forKey key: String) {
-    defaults?.set(value, forKey: key)
+  public static func set(_ value: String, forKey key: String) {
+    sharedDefaults?.set(value, forKey: key)
+    sharedDefaults?.synchronize()
     UserDefaults.standard.set(value, forKey: key)
+    UserDefaults.standard.synchronize()
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).txt")
       try? value.write(to: file, atomically: true, encoding: .utf8)
     }
   }
 
-  static func set(_ value: Data, forKey key: String) {
-    defaults?.set(value, forKey: key)
+  public static func set(_ value: Data, forKey key: String) {
+    sharedDefaults?.set(value, forKey: key)
+    sharedDefaults?.synchronize()
     UserDefaults.standard.set(value, forKey: key)
+    UserDefaults.standard.synchronize()
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).bin")
-      try? value.write(to: file)
+      try? value.write(to: file, options: .atomic)
     }
   }
 
   public static func getDictionary(forKey key: String) -> [String: Any]? {
-    if let dict = defaults?.dictionary(forKey: key) {
-      return dict
-    }
-    if let dict = UserDefaults.standard.dictionary(forKey: key) {
+    if let dict = sharedDefaults?.dictionary(forKey: key), !dict.isEmpty {
       return dict
     }
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).json")
       if let data = try? Data(contentsOf: file),
-         let dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+         let dict = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any],
+         !dict.isEmpty {
         return dict
       }
+    }
+    if let dict = UserDefaults.standard.dictionary(forKey: key), !dict.isEmpty {
+      return dict
     }
     return nil
   }
 
   public static func getArray(forKey key: String) -> [Any]? {
-    if let arr = defaults?.array(forKey: key) {
-      return arr
-    }
-    if let arr = UserDefaults.standard.array(forKey: key) {
+    if let arr = sharedDefaults?.array(forKey: key), !arr.isEmpty {
       return arr
     }
     if let containerURL = sharedContainerURL {
       let file = containerURL.appendingPathComponent("\\(key).json")
       if let data = try? Data(contentsOf: file),
-         let arr = try? JSONSerialization.jsonObject(with: data, options: []) as? [Any] {
+         let arr = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [Any],
+         !arr.isEmpty {
         return arr
       }
+    }
+    if let arr = UserDefaults.standard.array(forKey: key), !arr.isEmpty {
+      return arr
     }
     return nil
   }
 
   public static func getData(forKey key: String) -> Data? {
-    if let data = defaults?.data(forKey: key) {
-      return data
-    }
-    if let data = UserDefaults.standard.data(forKey: key) {
+    if let data = sharedDefaults?.data(forKey: key) {
       return data
     }
     if let containerURL = sharedContainerURL {
@@ -486,14 +587,14 @@ public enum WidgetsStorage {
         return data
       }
     }
+    if let data = UserDefaults.standard.data(forKey: key) {
+      return data
+    }
     return nil
   }
 
   public static func getString(forKey key: String) -> String? {
-    if let str = defaults?.string(forKey: key) {
-      return str
-    }
-    if let str = UserDefaults.standard.string(forKey: key) {
+    if let str = sharedDefaults?.string(forKey: key) {
       return str
     }
     if let containerURL = sharedContainerURL {
@@ -502,12 +603,17 @@ public enum WidgetsStorage {
         return str
       }
     }
+    if let str = UserDefaults.standard.string(forKey: key) {
+      return str
+    }
     return nil
   }
 
-  static func removeObject(forKey key: String) {
-    defaults?.removeObject(forKey: key)
+  public static func removeObject(forKey key: String) {
+    sharedDefaults?.removeObject(forKey: key)
+    sharedDefaults?.synchronize()
     UserDefaults.standard.removeObject(forKey: key)
+    UserDefaults.standard.synchronize()
     if let containerURL = sharedContainerURL {
       let f1 = containerURL.appendingPathComponent("\\(key).json")
       let f2 = containerURL.appendingPathComponent("\\(key).txt")
@@ -520,7 +626,7 @@ public enum WidgetsStorage {
 }
 `;
   fs.writeFileSync(filePath, newWidgetsStorage, 'utf8');
-  log(`Patched WidgetsStorage.swift in: ${filePath}`);
+  log(`Patched WidgetsStorage.swift with TelDump App Group & atomic JSON storage in: ${filePath}`);
 }
 
 // 6. Patch withWidgetSourceFiles.js generator
@@ -528,14 +634,12 @@ function patchWithWidgetSourceFiles(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // Idempotency check: if already patched with widgetURL and no duplicates, do not patch again
   const bgCount = (content.match(/const bgGradient =/g) || []).length;
   if (bgCount === 1 && content.includes('.containerBackground(for: .widget)') && content.includes('.widgetURL')) {
     log(`withWidgetSourceFiles.js already patched with widgetURL: ${filePath}`);
     return;
   }
 
-  // Clean up any duplicated bgGradient declarations if previously corrupted
   if (bgCount > 1) {
     while ((content.match(/const bgGradient =/g) || []).length > 1) {
       content = content.replace(/const bgGradient = widget\.name === "StreakWidget"[\s\S]*?;\s*(?=const bgGradient =)/, '');
@@ -545,7 +649,6 @@ function patchWithWidgetSourceFiles(filePath) {
     if (content.includes('.widgetURL')) return;
   }
 
-  // Match the if (!configuration) block inside widgetSwift
   const configBlockPattern = /if \(!configuration\)\s*return `import WidgetKit[\s\S]*?supportedFamilies[\s\S]*?`\s*;/;
 
   const newSnippet = `const bgGradient = widget.name === "StreakWidget"
@@ -599,7 +702,6 @@ function patchSwiftTargetFile(filePath, bgSwiftGradient, widgetDeepLink) {
     return;
   }
 
-  // Replace any existing WidgetsEntryView(entry: entry) or partial containerBackground
   const blockPattern = /StaticConfiguration\(kind: name, provider: WidgetsTimelineProvider\(name: name\)\)\s*\{[\s\S]*?WidgetsEntryView\(entry: entry\)[\s\S]*?\}/g;
   const replacement = `StaticConfiguration(kind: name, provider: WidgetsTimelineProvider(name: name)) { entry in
       if #available(iOS 17.0, *) {
@@ -643,65 +745,48 @@ function patchWithAppGroupEntitlements(filePath) {
 function patchWidgetsModule(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
-  if (content.includes('Function("updateWidgetProps")')) {
-    log(`WidgetsModule.swift already has updateWidgetProps: ${filePath}`);
+
+  if (content.includes('Function("updateWidgetData")') && content.includes('WidgetsStorage.save')) {
+    log(`WidgetsModule.swift already up to date: ${filePath}`);
     return;
   }
-  const target = 'Function("reloadAllWidgets") {\n      WidgetCenter.shared.reloadAllTimelines()\n    }';
-  const replacement = `${target}\n\n    Function("updateWidgetProps") { (name: String, props: [String: Any]) in\n      WidgetsStorage.set(props, forKey: "__expo_widgets_\\(name)_props")\n      WidgetsStorage.set(props, forKey: "__expo_widgets_latest_props")\n      WidgetCenter.shared.reloadTimelines(ofKind: name)\n      WidgetCenter.shared.reloadAllTimelines()\n    }`;
-  if (content.includes(target)) {
-    content = content.replace(target, replacement);
+
+  // Rewrite reloadAllWidgets and inject updateWidgetProps & updateWidgetData
+  const reloadPattern = /Function\("reloadAllWidgets"\)\s*\{[\s\S]*?WidgetCenter\.shared\.reloadAllTimelines\(\)[\s\S]*?\}/;
+  const newFunctions = `Function("reloadAllWidgets") {
+      WidgetCenter.shared.reloadAllTimelines()
+      WidgetCenter.shared.reloadTimelines(ofKind: "QuestionWidget")
+      WidgetCenter.shared.reloadTimelines(ofKind: "StreakWidget")
+    }
+
+    Function("updateWidgetProps") { (name: String, props: [String: Any]) in
+      WidgetsStorage.save(props: props, forWidget: name)
+      WidgetCenter.shared.reloadTimelines(ofKind: name)
+      WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    Function("updateWidgetData") { (jsonPayload: String) -> Bool in
+      if let data = jsonPayload.data(using: .utf8),
+         let dict = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any] {
+        WidgetsStorage.save(props: dict, forWidget: "QuestionWidget")
+        WidgetsStorage.save(props: dict, forWidget: "StreakWidget")
+        WidgetCenter.shared.reloadTimelines(ofKind: "QuestionWidget")
+        WidgetCenter.shared.reloadTimelines(ofKind: "StreakWidget")
+        WidgetCenter.shared.reloadAllTimelines()
+        return true
+      }
+      return false
+    }`;
+
+  if (reloadPattern.test(content)) {
+    content = content.replace(reloadPattern, newFunctions);
+    // Clean up any previously appended updateWidgetProps if present outside reloadAllWidgets
+    content = content.replace(/\n\s*Function\("updateWidgetProps"\)\s*\{\s*\(name:\s*String,\s*props:\s*\[String:\s*Any\]\)[\s\S]*?WidgetCenter\.shared\.reloadAllTimelines\(\)\s*\}/g, '');
     fs.writeFileSync(filePath, content, 'utf8');
-    log(`Patched WidgetsModule.swift with updateWidgetProps in: ${filePath}`);
+    log(`Patched WidgetsModule.swift with updateWidgetProps & updateWidgetData: ${filePath}`);
+  } else {
+    log(`Could not find Function("reloadAllWidgets") in WidgetsModule.swift`);
   }
-}
-
-// Execute all patches
-function run() {
-  log('Starting iOS widgets patch...');
-
-  // 1. node_modules/expo-widgets/ios/
-  const expoWidgetsIos = path.join(rootDir, 'node_modules/expo-widgets/ios');
-  patchTimelineProvider(path.join(expoWidgetsIos, 'Widgets/TimelineProvider.swift'));
-  patchEntryView(path.join(expoWidgetsIos, 'Widgets/EntryView.swift'));
-  patchDynamicView(path.join(expoWidgetsIos, 'Widgets/DynamicView.swift'));
-  patchWidgetObject(path.join(expoWidgetsIos, 'WidgetObject.swift'));
-  patchWidgetsStorage(path.join(expoWidgetsIos, 'WidgetsStorage.swift'));
-  patchWidgetsModule(path.join(expoWidgetsIos, 'WidgetsModule.swift'));
-
-  // 2. node_modules/expo-widgets/plugin/build/ios/
-  const withWidgetSourceFilesPath = path.join(
-    rootDir,
-    'node_modules/expo-widgets/plugin/build/ios/withWidgetSourceFiles.js'
-  );
-  patchWithWidgetSourceFiles(withWidgetSourceFilesPath);
-
-  const withAppGroupEntitlementsPath = path.join(
-    rootDir,
-    'node_modules/expo-widgets/plugin/build/ios/withAppGroupEntitlements.js'
-  );
-  patchWithAppGroupEntitlements(withAppGroupEntitlementsPath);
-
-  // 3. ios/ExpoWidgetsTarget (if prebuild has run)
-  const targetDir = path.join(rootDir, 'ios/ExpoWidgetsTarget');
-  patchSwiftTargetFile(
-    path.join(targetDir, 'QuestionWidget.swift'),
-    'LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)',
-    'nousdeuxapp://daylink'
-  );
-  patchSwiftTargetFile(
-    path.join(targetDir, 'StreakWidget.swift'),
-    'LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)',
-    'nousdeuxapp://dashboard'
-  );
-
-  // 4. ios/Pods/ExpoWidgets/ (if pod install has run)
-  const podsExpoWidgets = path.join(rootDir, 'ios/Pods/ExpoWidgets');
-  // 5. Android node_modules/expo-widgets/android/
-  const expoWidgetsAndroid = path.join(rootDir, 'node_modules/expo-widgets/android/src/main/java/expo/modules/widgets');
-  patchAndroidWidgetsModule(path.join(expoWidgetsAndroid, 'WidgetsModule.kt'));
-
-  log('Native widgets patch (iOS & Android) completed successfully.');
 }
 
 function patchAndroidWidgetsModule(filePath) {
@@ -735,7 +820,7 @@ class WidgetsModule : Module() {
       val jsonStr = json.toString()
       prefs.edit()
         .putString("widget_payload", jsonStr)
-        .putString("widget_payload_\$widgetName", jsonStr)
+        .putString("widget_payload_$widgetName", jsonStr)
         .apply()
 
       updateAllNativeWidgets(context)
@@ -837,5 +922,50 @@ class WidgetsModule : Module() {
   log(`Patched Android WidgetsModule.kt: ${filePath}`);
 }
 
-run();
+// Execute all patches
+function run() {
+  log('Starting iOS & Android widgets patch...');
 
+  // 1. node_modules/expo-widgets/ios/
+  const expoWidgetsIos = path.join(rootDir, 'node_modules/expo-widgets/ios');
+  patchTimelineProvider(path.join(expoWidgetsIos, 'Widgets/TimelineProvider.swift'));
+  patchEntryView(path.join(expoWidgetsIos, 'Widgets/EntryView.swift'));
+  patchDynamicView(path.join(expoWidgetsIos, 'Widgets/DynamicView.swift'));
+  patchWidgetObject(path.join(expoWidgetsIos, 'WidgetObject.swift'));
+  patchWidgetsStorage(path.join(expoWidgetsIos, 'WidgetsStorage.swift'));
+  patchWidgetsModule(path.join(expoWidgetsIos, 'WidgetsModule.swift'));
+
+  // 2. node_modules/expo-widgets/plugin/build/ios/
+  const withWidgetSourceFilesPath = path.join(
+    rootDir,
+    'node_modules/expo-widgets/plugin/build/ios/withWidgetSourceFiles.js'
+  );
+  patchWithWidgetSourceFiles(withWidgetSourceFilesPath);
+
+  const withAppGroupEntitlementsPath = path.join(
+    rootDir,
+    'node_modules/expo-widgets/plugin/build/ios/withAppGroupEntitlements.js'
+  );
+  patchWithAppGroupEntitlements(withAppGroupEntitlementsPath);
+
+  // 3. ios/ExpoWidgetsTarget (if prebuild has run)
+  const targetDir = path.join(rootDir, 'ios/ExpoWidgetsTarget');
+  patchSwiftTargetFile(
+    path.join(targetDir, 'QuestionWidget.swift'),
+    'LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)',
+    'nousdeuxapp://daylink'
+  );
+  patchSwiftTargetFile(
+    path.join(targetDir, 'StreakWidget.swift'),
+    'LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)',
+    'nousdeuxapp://dashboard'
+  );
+
+  // 4. Android node_modules/expo-widgets/android/
+  const expoWidgetsAndroid = path.join(rootDir, 'node_modules/expo-widgets/android/src/main/java/expo/modules/widgets');
+  patchAndroidWidgetsModule(path.join(expoWidgetsAndroid, 'WidgetsModule.kt'));
+
+  log('Native widgets patch (iOS & Android) completed successfully.');
+}
+
+run();

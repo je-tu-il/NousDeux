@@ -293,10 +293,12 @@ export default function RootLayout() {
         router.replace('/onboarding/age');
         return;
       }
-      if (pendingDeepLinkRef.current && (currentRoute === 'dashboard' || currentRoute === 'index')) {
+      if (pendingDeepLinkRef.current) {
         const next = pendingDeepLinkRef.current;
         pendingDeepLinkRef.current = null;
-        if (next !== '/dashboard') {
+        if (next === '/dashboard') {
+          router.replace('/dashboard');
+        } else {
           router.push(next as any);
         }
       }
