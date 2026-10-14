@@ -2,7 +2,7 @@
 
 |A faire|BUGS|Verif|A Reflechir|
 |-|-|-|-|
-|Screen Ipad<br />Referencer le site|Pub web Debut bas petale <br />Icone + version glass ?<br />Pb vercel<br />Remet en privé|Notif<br />|Score de corda<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Mascotte ?<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Retention ?<br />Backup<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Pose de questions sur lui-même pas si fou ?<br />Son<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Domaine<br />Verif Firebase<br />Parler de la version web<br />LIMITE BUG|
+|Screen Ipad<br />Referencer le site|Pub web Debut bas petale <br />Icone + version glass ?<br />Remet en privé|Notif<br />|Score de corda<br />Ajouter un test est ce que tu connais vraiment l'autre<br />Ajouter des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche<br />C'est une 10 mais<br />Mascotte ?<br />Avatar<br />Autre langue ?<br />Demande 5 etoiles<br />Connect avec apple<br />Retention ?<br />Backup<br />Un bilan de couple tout les mois Noter comment ce passe la relation sur différent critère et les points sur lequels chacun peu s’ameimiorer<br />Détail game changer nousdeux<br />Pose de questions sur lui-même pas si fou ?<br />Son<br />Le jeu repose sur le fait de repondre a des questions sur sois meme pour que l'autre apprenne a nous connaitre, c'est bien mais bateau et pas entoushiaste, que pourrais t'ont ajouter qui nous demarquerais et qui donnerais envie au joueur de revenir, je compte ajouter un test de connaissance de l'autre (chacun repond sur la couleur preferer d'un et on compare) ou bien des échelles, sortir avec un mec tout seul et tu deplaces un curseur faut etre le plus proche ou autre jeu<br />Domaine<br />Verif Firebase<br />Parler de la version web<br />LIMITE BUG|
 
 
 
@@ -57,6 +57,10 @@ Toujours afifchage moche sur apk voir
 Parler de la version web
 
 
+
+Categorie widget pas visible
+
+Si on clic plusieurs fois sur le widget ca nous met sur la question du jour plusieurs fois donc cliquer sur la fleche nous laisse sur le meme ecran ou alors il faut papuyer plusieurs fois
 
 
 

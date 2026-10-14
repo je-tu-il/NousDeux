@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import FloatingToast from '@/components/FloatingToast';
 import ForceUpdateModal from '@/components/ForceUpdateModal';
 import { useEffect, useRef, useState } from 'react';
-import { ImageBackground, LogBox, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, ImageBackground, LogBox, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -75,10 +75,14 @@ export default function RootLayout() {
         }
 
         if (target) {
+          const currentPath = `/${segments.join('/')}`;
+          if (currentPath === target || (target === '/daylink' && currentPath.includes('daylink'))) {
+            return;
+          }
           if (!authReady || !uid) {
             pendingDeepLinkRef.current = target;
           } else {
-            router.push(target as any);
+            router.replace(target as any);
           }
         }
       } catch (e) {
@@ -219,8 +223,27 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (uid && Platform.OS !== 'web') {
-      import('@/lib/notifications').then(({ scheduleDailyReminders }) => scheduleDailyReminders()).catch(() => {});
+    if (Platform.OS !== 'web') {
+      import('@/lib/notifications').then(({ initBackgroundSync, scheduleDailyReminders, checkPartnerAnswerAndSync }) => {
+        initBackgroundSync().catch(() => {});
+        if (uid) {
+          scheduleDailyReminders().catch(() => {});
+          checkPartnerAnswerAndSync().catch(() => {});
+        }
+      }).catch(() => {});
+
+      const subscription = AppState.addEventListener('change', (nextAppState) => {
+        if (nextAppState === 'active') {
+          import('@/lib/notifications').then(({ checkPartnerAnswerAndSync, scheduleDailyReminders }) => {
+            checkPartnerAnswerAndSync().catch(() => {});
+            scheduleDailyReminders().catch(() => {});
+          }).catch(() => {});
+        }
+      });
+
+      return () => {
+        subscription.remove();
+      };
     }
   }, [uid]);
 

@@ -47,6 +47,11 @@ const QuestionWidgetLayout = (props: QuestionWidgetProps, _environment: WidgetEn
         </Text>
       </HStack>
       <VStack modifiers={[padding({ all: 10 })]}>
+        {props.categoryName ? (
+          <Text modifiers={[font({ size: 9, weight: 'bold' }), foregroundStyle('#FFE5E0')]}>
+            {props.categoryName.toUpperCase()}
+          </Text>
+        ) : null}
         <Text modifiers={[font({ size: 13, weight: 'bold' }), foregroundStyle('#FFFFFF')]}>
           {question}
         </Text>

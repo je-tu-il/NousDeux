@@ -153,4 +153,31 @@ test('iOS and Android widget plugins configure native containerBackground and de
   assert.equal(matches.length, 1, 'strings.xml must declare app_name exactly once');
 });
 
+test('dynamic daily notifications, background sync, and sideloaded iOS widget entitlements', async () => {
+  const notifSrc = await read('src/lib/notifications.ts');
+  const buildIosSrc = await read('.github/workflows/build-ios.yml');
+  const patchSrc = await read('scripts/patch-ios-widgets.js');
+  const layoutSrc = await read('src/app/_layout.tsx');
+
+  // 1. Dynamic notification reminders
+  assert.match(notifSrc, /isRouletteClaimedToday/, 'notifications.ts must check if roulette was claimed today');
+  assert.match(notifSrc, /cancelRouletteReminder/, 'notifications.ts must allow cancelling roulette reminder');
+  assert.match(notifSrc, /cancelDailyQuestionReminder/, 'notifications.ts must allow cancelling daily question reminder');
+  assert.match(notifSrc, /cancelStreakReminder/, 'notifications.ts must allow cancelling streak reminder');
+
+  // 2. Background sync & AppState resume
+  assert.match(notifSrc, /BACKGROUND_PARTNER_SYNC_TASK/, 'notifications.ts must define background partner sync task');
+  assert.match(notifSrc, /checkPartnerAnswerAndSync/, 'notifications.ts must export checkPartnerAnswerAndSync');
+  assert.match(layoutSrc, /AppState\.addEventListener/, '_layout.tsx must listen to AppState active transitions');
+
+  // 3. Sideloaded iOS widget ad-hoc entitlements
+  assert.match(buildIosSrc, /codesign --force --sign - --entitlements/, 'build-ios.yml must ad-hoc sign entitlements like TelDump');
+  assert.match(buildIosSrc, /ExpoWidgetsTarget\.entitlements/, 'build-ios.yml must sign ExpoWidgetsTarget entitlements');
+
+  // 4. Widget category visibility & deep link deduplication
+  assert.match(patchSrc, /categoryName/, 'patch-ios-widgets.js must display categoryName in question widget');
+  assert.match(layoutSrc, /currentPath\.includes\('daylink'\)/, '_layout.tsx must deduplicate repeated widget deep-links');
+});
+
+
 

@@ -10,6 +10,7 @@ import { calculateDailyPetals, claimDaily, WalletData } from '../lib/economy';
 import { db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { sound } from '../lib/sound';
+import { markRouletteClaimedToday, cancelRouletteReminder } from '../lib/notifications';
 
 interface Segment { multiplier: number; color: string; label: string; isJackpot?: boolean; isRespin?: boolean; }
 
@@ -154,7 +155,12 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
       const timeout = setTimeout(() => setPhase('locked'), 3000);
       return () => clearTimeout(timeout);
     }
-    if (alreadyClaimed) { setPhase('done'); return; }
+    if (alreadyClaimed) {
+      setPhase('done');
+      markRouletteClaimedToday(myUid).catch(() => {});
+      cancelRouletteReminder().catch(() => {});
+      return;
+    }
     if (!coupleId || !myUid) return;
 
     const partnerUid = coupleId.split('_').find(id => id !== myUid);
@@ -236,6 +242,8 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
       return;
     }
     const claim = await claimDaily(coupleId, myUid, amount);
+    markRouletteClaimedToday(myUid).catch(() => {});
+    cancelRouletteReminder().catch(() => {});
     if (claim.alreadyClaimed) {
       setShowModal(false);
       setPhase('done');
@@ -257,6 +265,8 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
     sound.coin();
     setShowModal(false);
     setPhase('done');
+    markRouletteClaimedToday(myUid).catch(() => {});
+    cancelRouletteReminder().catch(() => {});
     const nextBalance = claimedBalance ?? ((wallet?.petals ?? 0) + wonAmount);
     onClaimed({ 
       petals: nextBalance,

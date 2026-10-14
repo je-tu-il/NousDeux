@@ -92,10 +92,43 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Package Unsigned IPA
+      - name: Embed Entitlements and Package into IPA
         run: |
+          APP_PATH=$(ls -d ios/build/nousdeux.xcarchive/Products/Applications/*.app | head -n 1)
+          WIDGET_PATH="$APP_PATH/PlugIns/ExpoWidgetsTarget.appex"
+          
+          echo "Injection des entitlements App Group via signature ad-hoc (comme TelDump)..."
+          if [ -d "$WIDGET_PATH" ]; then
+            WIDGET_ENT="ios/ExpoWidgetsTarget/ExpoWidgetsTarget.entitlements"
+            if [ ! -f "$WIDGET_ENT" ]; then
+              WIDGET_ENT=$(find ios -name "*Widgets*.entitlements" | head -n 1)
+            fi
+            if [ -n "$WIDGET_ENT" ] && [ -f "$WIDGET_ENT" ]; then
+              echo "Codesigning widget: $WIDGET_PATH avec $WIDGET_ENT"
+              codesign --force --sign - --entitlements "$WIDGET_ENT" "$WIDGET_PATH"
+            else
+              echo "Avertissement: Aucun fichier d'entitlements trouvé pour le widget"
+            fi
+          fi
+          
+          APP_ENT="ios/NousDeux/NousDeux.entitlements"
+          if [ ! -f "$APP_ENT" ]; then
+            APP_ENT=$(find ios -name "*.entitlements" ! -path "*/ExpoWidgetsTarget/*" | head -n 1)
+          fi
+          if [ -n "$APP_ENT" ] && [ -f "$APP_ENT" ]; then
+            echo "Codesigning app: $APP_PATH avec $APP_ENT"
+            codesign --force --sign - --entitlements "$APP_ENT" "$APP_PATH"
+          fi
+
+          echo "=== Entitlements intégrés dans l'App principale ==="
+          codesign -d --entitlements :- "$APP_PATH" || true
+          if [ -d "$WIDGET_PATH" ]; then
+            echo "=== Entitlements intégrés dans l'extension Widget ==="
+            codesign -d --entitlements :- "$WIDGET_PATH" || true
+          fi
+          
           mkdir -p Payload
-          cp -r ios/build/nousdeux.xcarchive/Products/Applications/*.app Payload/
+          cp -r "$APP_PATH" Payload/
           echo "Embedded PlugIns directory contents:"
           ls -la Payload/*.app/PlugIns || echo "No PlugIns directory found"
           zip -r NousDeux.ipa Payload

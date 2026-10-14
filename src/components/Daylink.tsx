@@ -34,7 +34,15 @@ import { checkQuests, updateWalletStreak } from '../lib/economy';
 import { auth, db } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { syncWidgetData } from '../lib/widgets';
-import { sendPartnerAnswerPush, triggerPartnerAnsweredNotification } from '../lib/notifications';
+import {
+  sendPartnerAnswerPush,
+  triggerPartnerAnsweredNotification,
+  markQuestionAnsweredToday,
+  cancelDailyQuestionReminder,
+  markBothAnsweredToday,
+  cancelStreakReminder,
+  KEY_PARTNER_NOTIFIED_DATE,
+} from '../lib/notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -231,6 +239,8 @@ export default function Daylink() {
             setIsSubmitted(true);
             isSubmittedRef.current = true;
             void checkQuests(coupleKey, 'question_answered', 1);
+            markQuestionAnsweredToday(firebaseUid, slotKey).catch(() => {});
+            cancelDailyQuestionReminder().catch(() => {});
           }
         }
 
@@ -240,6 +250,8 @@ export default function Daylink() {
             setPartnerHasAnswered(true);
             if (isSubmittedRef.current) {
               setPartnerAnswer(decryptedPartner);
+              markBothAnsweredToday(slotKey).catch(() => {});
+              cancelStreakReminder().catch(() => {});
             }
           }
         }
@@ -298,12 +310,14 @@ export default function Daylink() {
           setPartnerHasAnswered(true);
           if (isSubmittedRef.current) {
             setPartnerAnswer(decrypted);
+            markBothAnsweredToday(slotKey).catch(() => {});
+            cancelStreakReminder().catch(() => {});
           }
           if (!wasAnswered && Platform.OS !== 'web') {
-            const notifKey = `nousdeux_notified_ans_${todayKey()}`;
-            AsyncStorage.getItem(notifKey).then((already) => {
-              if (!already) {
-                AsyncStorage.setItem(notifKey, '1');
+            const currentToday = todayKey();
+            AsyncStorage.getItem(KEY_PARTNER_NOTIFIED_DATE).then((already) => {
+              if (already !== currentToday) {
+                AsyncStorage.setItem(KEY_PARTNER_NOTIFIED_DATE, currentToday);
                 void triggerPartnerAnsweredNotification(partnerPseudo);
               }
             }).catch(() => {});
@@ -353,6 +367,12 @@ export default function Daylink() {
       setMyAnswer(cleanAnswer);
       setIsSubmitted(true);
       isSubmittedRef.current = true;
+      markQuestionAnsweredToday(myUid, slotKey).catch(() => {});
+      cancelDailyQuestionReminder().catch(() => {});
+      if (partnerHasAnswered) {
+        markBothAnsweredToday(slotKey).catch(() => {});
+        cancelStreakReminder().catch(() => {});
+      }
 
       if (Platform.OS !== 'web') {
         void syncWidgetData({

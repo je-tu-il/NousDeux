@@ -74,12 +74,13 @@ function patchEntryView(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('WidgetsStorage.getProps(forWidget: entry.name)') && content.includes('compactMap')) {
+  if (content.includes('// __NOUSDEUX_ENTRY_VIEW_V2__')) {
     log(`EntryView already up to date: ${filePath}`);
     return;
   }
 
-  const newEntryViewCode = `import SwiftUI
+  const newEntryViewCode = `// __NOUSDEUX_ENTRY_VIEW_V2__
+import SwiftUI
 import ExpoModulesCore
 import WidgetKit
 
@@ -167,6 +168,7 @@ public struct WidgetsEntryView: View {
 
   private func questionView(props: [String: Any]?) -> some View {
     let question = (props?["todayQuestion"] as? String) ?? "Quelle est la plus belle chose que ton partenaire ait faite pour toi ?"
+    let category = (props?["categoryName"] as? String) ?? ""
     let partnerPseudo = (props?["partnerPseudo"] as? String) ?? "Partenaire"
     let userAnswered = props?["userAnswered"] as? Bool ?? false
     let partnerAnswered = props?["partnerAnswered"] as? Bool ?? false
@@ -192,8 +194,17 @@ public struct WidgetsEntryView: View {
     return VStack(alignment: .leading, spacing: 4) {
       HStack {
         Text("NousDeux")
-          .font(.system(size: 12, weight: .bold))
+          .font(.system(size: 11, weight: .bold))
           .foregroundColor(.white)
+        if !category.isEmpty {
+          Text("•")
+            .foregroundColor(.white.opacity(0.6))
+            .font(.system(size: 9))
+          Text(category)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(.white.opacity(0.95))
+            .lineLimit(1)
+        }
         Spacer()
         Text(badgeText)
           .font(.system(size: 9, weight: .bold))
@@ -360,14 +371,15 @@ function patchWidgetsStorage(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('AppGroupHelper') && content.includes('getProps(forWidget')) {
+  if (content.includes('// __NOUSDEUX_APP_GROUP_V2__')) {
     log(`WidgetsStorage already up to date: ${filePath}`);
     return;
   }
 
   const newWidgetsStorage = `import Foundation
 
-// MARK: - Résolveur dynamique d'App Group (Identique à TelDump)
+// MARK: - Résolveur dynamique d'App Group (Identique à TelDump V2)
+// __NOUSDEUX_APP_GROUP_V2__
 public enum AppGroupHelper {
   public static let fallbackIdentifier = "group.com.pixelthings.nousdeuxapp"
   public static let alternativeIdentifier = "group.com.pixelthings.nousdeux"
@@ -379,16 +391,23 @@ public enum AppGroupHelper {
     if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: alternativeIdentifier) != nil {
       return alternativeIdentifier
     }
-    if let provisionURL = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
-       let content = try? String(contentsOf: provisionURL, encoding: .isoLatin1) {
-      let pattern = #"<string>(group\\.[^<]+)</string>"#
-      if let regex = try? NSRegularExpression(pattern: pattern) {
-        let matches = regex.matches(in: content, range: NSRange(content.startIndex..., in: content))
-        for match in matches {
-          if let range = Range(match.range(at: 1), in: content) {
-            let candidate = String(content[range])
-            if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: candidate) != nil {
-              return candidate
+    let provisionURLs = [
+      Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+      Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("embedded.mobileprovision"),
+      Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("embedded.mobileprovision")
+    ].compactMap { $0 }
+
+    for provisionURL in provisionURLs {
+      if let content = try? String(contentsOf: provisionURL, encoding: .isoLatin1) {
+        let pattern = #"<string>\\s*(group\\.[^<\\s]+)\\s*</string>"#
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+          let matches = regex.matches(in: content, range: NSRange(content.startIndex..., in: content))
+          for match in matches {
+            if let range = Range(match.range(at: 1), in: content) {
+              let candidate = String(content[range])
+              if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: candidate) != nil {
+                return candidate
+              }
             }
           }
         }
@@ -427,16 +446,23 @@ public enum WidgetsStorage {
   public static func save(props: [String: Any], forWidget widgetName: String?) {
     let name = widgetName ?? "QuestionWidget"
 
-    // 1. Sauvegarde UserDefaults App Group
-    if let defaults = sharedDefaults {
-      defaults.set(props, forKey: "__expo_widgets_\\(name)_props")
-      defaults.set(props, forKey: "__expo_widgets_latest_props")
-      let timelineEntry: [String: Any] = [
-        "timestamp": Int(Date().timeIntervalSince1970 * 1000),
-        "props": props
-      ]
-      defaults.set([timelineEntry], forKey: "__expo_widgets_\\(name)_timeline")
-      defaults.synchronize()
+    // 1. Sauvegarde UserDefaults pour toutes les suites App Group candidates
+    let groupSuites = [
+      AppGroupHelper.activeIdentifier,
+      AppGroupHelper.fallbackIdentifier,
+      AppGroupHelper.alternativeIdentifier
+    ]
+    for suite in Set(groupSuites) {
+      if let defaults = UserDefaults(suiteName: suite) {
+        defaults.set(props, forKey: "__expo_widgets_\\(name)_props")
+        defaults.set(props, forKey: "__expo_widgets_latest_props")
+        let timelineEntry: [String: Any] = [
+          "timestamp": Int(Date().timeIntervalSince1970 * 1000),
+          "props": props
+        ]
+        defaults.set([timelineEntry], forKey: "__expo_widgets_\\(name)_timeline")
+        defaults.synchronize()
+      }
     }
 
     // 2. Sauvegarde atomique dans le fichier JSON partagé sur disque (comme TelDump)
@@ -458,13 +484,20 @@ public enum WidgetsStorage {
   }
 
   public static func getProps(forWidget name: String) -> [String: Any]? {
-    // 1. Essai depuis App Group UserDefaults
-    if let defaults = sharedDefaults {
-      if let dict = defaults.dictionary(forKey: "__expo_widgets_\\(name)_props"), !dict.isEmpty {
-        return dict
-      }
-      if let dict = defaults.dictionary(forKey: "__expo_widgets_latest_props"), !dict.isEmpty {
-        return dict
+    // 1. Essai depuis App Group UserDefaults (active + suites potentielles)
+    let groupSuites = [
+      AppGroupHelper.activeIdentifier,
+      AppGroupHelper.fallbackIdentifier,
+      AppGroupHelper.alternativeIdentifier
+    ]
+    for suite in Set(groupSuites) {
+      if let defaults = UserDefaults(suiteName: suite) {
+        if let dict = defaults.dictionary(forKey: "__expo_widgets_\\(name)_props"), !dict.isEmpty {
+          return dict
+        }
+        if let dict = defaults.dictionary(forKey: "__expo_widgets_latest_props"), !dict.isEmpty {
+          return dict
+        }
       }
     }
 

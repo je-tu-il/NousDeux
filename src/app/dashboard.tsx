@@ -25,7 +25,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { useTopInset } from '@/hooks/useTopInset';
 import { syncWidgetData } from '@/lib/widgets';
-import { registerPushTokenForUser, triggerPartnerAnsweredNotification } from '@/lib/notifications';
+import {
+  registerPushTokenForUser,
+  triggerPartnerAnsweredNotification,
+  markQuestionAnsweredToday,
+  cancelDailyQuestionReminder,
+  markBothAnsweredToday,
+  cancelStreakReminder,
+  KEY_PARTNER_NOTIFIED_DATE,
+} from '@/lib/notifications';
 import { getById } from '@/data/questions';
 import { getScheduledQuestionId, getDailyQuestionForDate } from '@/data/scheduledQuestions';
 
@@ -331,13 +339,22 @@ export default function DashboardScreen() {
       } catch {}
 
       if (hasPartnerAnsweredToday) {
-        const notifKey = `nousdeux_notified_ans_${tKey}`;
-        AsyncStorage.getItem(notifKey).then((already) => {
-          if (!already) {
-            AsyncStorage.setItem(notifKey, '1');
+        AsyncStorage.getItem(KEY_PARTNER_NOTIFIED_DATE).then((alreadyDate) => {
+          if (alreadyDate !== tKey) {
+            AsyncStorage.setItem(KEY_PARTNER_NOTIFIED_DATE, tKey);
             void triggerPartnerAnsweredNotification(partner?.pseudo || 'Ton amour');
           }
         }).catch(() => {});
+      }
+
+      if (hasUserAnsweredToday) {
+        markQuestionAnsweredToday(store.uid, tKey).catch(() => {});
+        cancelDailyQuestionReminder().catch(() => {});
+      }
+
+      if (hasUserAnsweredToday && hasPartnerAnsweredToday) {
+        markBothAnsweredToday(tKey).catch(() => {});
+        cancelStreakReminder().catch(() => {});
       }
 
       const activeStreak = await computeStreakCached(coupleId, true).catch(() => wallet?.streak ?? 1);
