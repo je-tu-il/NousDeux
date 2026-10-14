@@ -180,6 +180,7 @@ export default function RootLayout() {
                 if (p) {
                   if (p.selectedBackground) store.setSelectedCosmetics(p.selectedBackground, p.selectedBorder, p.selectedTag);
                   if (p.avatar) store.setAvatarConfig(p.avatar);
+                  if (p.selectedWidget) store.setSelectedWidget(p.selectedWidget);
                 }
               } catch (errProfile) {
                 console.error('Erreur chargement userProfile :', errProfile);
@@ -368,7 +369,7 @@ export default function RootLayout() {
           </ImageBackground>
         )}
         </View>
-        {FloatingChat ? <FloatingChat /> : null}
+        {FloatingChat && segments[0] !== 'onboarding' && !segments.includes('login') ? <FloatingChat /> : null}
         <FloatingToast />
         <ForceUpdateModal />
       </View>

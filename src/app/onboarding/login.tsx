@@ -286,11 +286,21 @@ export default function LoginScreen() {
         if (!isAvailable) {
           throw new Error("La connexion avec Apple n'est pas disponible sur cet appareil.");
         }
+
+        // Génération d'un nonce cryptographique requis par Firebase Auth
+        const rawNonce = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+        const Crypto = await import('expo-crypto');
+        const hashedNonce = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          rawNonce
+        );
+
         const appleCredential = await AppleAuthentication.signInAsync({
           requestedScopes: [
             AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
             AppleAuthentication.AppleAuthenticationScope.EMAIL,
           ],
+          nonce: hashedNonce,
         });
 
         const { identityToken } = appleCredential;
@@ -301,6 +311,7 @@ export default function LoginScreen() {
         const provider = new OAuthProvider('apple.com');
         const credential = provider.credential({
           idToken: identityToken,
+          rawNonce: rawNonce,
         });
         const userCredential = await signInWithCredential(auth, credential);
         const fullName = appleCredential.fullName
@@ -336,6 +347,7 @@ export default function LoginScreen() {
         error?.code === 'auth/popup-closed-by-user' ||
         error?.code === 'auth/cancelled-popup-request' ||
         error?.code === 'ERR_REQUEST_CANCELED' ||
+        error?.code === 'ERR_CANCELED' ||
         error?.message?.includes('cancelled') ||
         error?.message?.includes('canceled')
       ) {
@@ -347,6 +359,8 @@ export default function LoginScreen() {
         setLoginError("La fenêtre Apple a été bloquée par le navigateur. Veuillez autoriser les fenêtres pop-up.");
       } else if (error?.name === 'auth-popup-timeout') {
         setLoginError(error.message);
+      } else if (error?.code === '1000' || error?.message?.includes('1000') || error?.message?.includes('authorization')) {
+        setLoginError("La connexion native avec Apple en version sideloadée (sans certificat développeur payant Apple) est restreinte par Apple. Veuillez utiliser la connexion avec Google en 1 clic !");
       } else {
         setLoginError(`Erreur de connexion Apple : ${error?.message ?? 'erreur inconnue'}`);
       }

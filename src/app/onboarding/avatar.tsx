@@ -98,7 +98,7 @@ export default function AvatarScreen() {
         }, { merge: true });
         store.setAvatar(toSave);
       }
-      router.replace('/onboarding/sync');
+      router.push('/onboarding/sync');
     } catch (error: any) {
       setModalState({
         visible: true,
@@ -111,7 +111,7 @@ export default function AvatarScreen() {
   };
 
   const handleSkip = () => {
-    router.replace('/onboarding/sync');
+    router.push('/onboarding/sync');
   };
 
   return (

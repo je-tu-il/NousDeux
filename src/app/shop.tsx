@@ -435,7 +435,7 @@ export default function ShopScreen() {
         </View>
 
         {/* Bouton Publicité Récompensée (+15 Pétales) sous la barre d'onglets */}
-        <View style={{ marginTop: 18, marginBottom: 14 }}>
+        <View style={{ marginTop: 14, marginBottom: 12, marginHorizontal: 12 }}>
           <RewardedAdButton
             coupleId={coupleId}
             onRewardEarned={() => {
@@ -461,7 +461,7 @@ export default function ShopScreen() {
               paddingVertical: 14,
               borderRadius: 16,
               marginTop: 6,
-              marginBottom: 18,
+              marginBottom: 16,
               marginHorizontal: 12,
             }}
           >
@@ -494,7 +494,11 @@ export default function ShopScreen() {
         <Pressable style={styles.modalOverlay} onPress={() => setSelectedItem(null)}>
           <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
             <Text style={styles.modalTitle}>
-              {selectedItem?.unlock.type === 'quest' ? "Exclusif Quête" : "Confirmer l'achat"}
+              {selectedItem?.unlock.type === 'quest'
+                ? "Exclusif Quête"
+                : selectedItem?.unlock.type === 'streak'
+                ? "Récompense de Série"
+                : "Confirmer l'achat"}
             </Text>
             
             {/* Aperçu agrandi */}
@@ -589,16 +593,16 @@ export default function ShopScreen() {
                   <Pressable 
                     style={{
                       backgroundColor: '#FF9A8B',
-                      marginTop: 18,
-                      paddingVertical: 12,
-                      paddingHorizontal: 36,
+                      marginTop: 16,
+                      paddingVertical: 10,
+                      paddingHorizontal: 28,
                       borderRadius: 14,
-                      minWidth: 160,
+                      minWidth: 120,
                       alignItems: 'center',
                     }} 
                     onPress={() => setSelectedItem(null)}
                   >
-                    <Text style={styles.btnConfirmText}>Compris</Text>
+                    <Text style={[styles.btnConfirmText, { fontSize: 14, fontWeight: '700' }]}>Compris</Text>
                   </Pressable>
                 </View>
               ) : selectedItem ? (

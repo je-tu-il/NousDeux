@@ -5,6 +5,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import {
@@ -1572,6 +1573,40 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
     isReciprocal: boolean;
   } | null>(null);
 
+  const [currentMinVersion, setCurrentMinVersion] = useState('');
+  const [minVersionInput, setMinVersionInput] = useState('');
+  const [updateMsgInput, setUpdateMsgInput] = useState('');
+  const [loadingVersion, setLoadingVersion] = useState(false);
+
+  useEffect(() => {
+    getDoc(doc(db, 'app_config', 'global')).then((snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const v = data?.minVersion || data?.minAppVersion || '';
+        setCurrentMinVersion(v);
+        setMinVersionInput(v);
+        setUpdateMsgInput(data?.updateMessage || '');
+      }
+    }).catch(() => {});
+  }, []);
+
+  const saveMinVersion = async () => {
+    setLoadingVersion(true);
+    try {
+      await setDoc(doc(db, 'app_config', 'global'), {
+        minVersion: minVersionInput.trim(),
+        updateMessage: updateMsgInput.trim(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      setCurrentMinVersion(minVersionInput.trim());
+      Alert.alert('✅ Version enregistrée', `Version minimale requise définie à : ${minVersionInput.trim() || '0.0.0 (toutes versions)'}`);
+    } catch (e) {
+      Alert.alert('Erreur', String(e));
+    } finally {
+      setLoadingVersion(false);
+    }
+  };
+
   const runDiagnostic = async () => {
     if (!diagSearch.trim()) return Alert.alert('⚠️', 'Saisir un email, pseudo ou UID');
     setLoading(true);
@@ -1842,6 +1877,68 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 60 }}>
+      {/* Forçage de Version & MAJ */}
+      <View style={s.debugSection}>
+        <Text style={s.debugTitle}>🚀 Version Minimale & Forçage MAJ</Text>
+        <Text style={s.debugHint}>
+          Bloque les versions obsolètes avec un pop-up bloquant et un bouton vers les stores.
+        </Text>
+        <Text style={{ fontSize: 13, color: '#6B7280', marginVertical: 4 }}>
+          Version actuelle de l'app : <Text style={{ fontWeight: 'bold' }}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
+        </Text>
+        <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>
+          Version minimale en production : <Text style={{ fontWeight: 'bold', color: '#FF6A88' }}>{currentMinVersion || 'Aucune (libre)'}</Text>
+        </Text>
+
+        <Text style={[s.fieldLabel, { marginTop: 6 }]}>Version minimale requise (ex: 1.0.1) :</Text>
+        <TextInput
+          style={s.smallInput}
+          value={minVersionInput}
+          onChangeText={setMinVersionInput}
+          placeholder="ex: 1.0.1"
+          placeholderTextColor="#C4B4B2"
+          autoCapitalize="none"
+        />
+
+        <Text style={[s.fieldLabel, { marginTop: 6 }]}>Message affiché aux utilisateurs :</Text>
+        <TextInput
+          style={[s.smallInput, { height: 60, textAlignVertical: 'top' }]}
+          value={updateMsgInput}
+          onChangeText={setUpdateMsgInput}
+          placeholder="Une nouvelle version de NousDeux est requise pour continuer !"
+          placeholderTextColor="#C4B4B2"
+          multiline
+        />
+
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+          <Pressable
+            style={[s.saveBtn, { flex: 1, backgroundColor: '#FF6A88' }]}
+            onPress={saveMinVersion}
+            disabled={loadingVersion}
+          >
+            {loadingVersion ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text style={s.saveBtnTxt}>Enregistrer version</Text>
+            )}
+          </Pressable>
+          <Pressable
+            style={[s.saveBtn, { backgroundColor: '#9CA3AF', paddingHorizontal: 12 }]}
+            onPress={() => {
+              setMinVersionInput('0.0.0');
+              setDoc(doc(db, 'app_config', 'global'), { minVersion: '0.0.0' }, { merge: true })
+                .then(() => {
+                  setCurrentMinVersion('0.0.0');
+                  Alert.alert('✅ Désactivé', 'Forçage de mise à jour désactivé');
+                })
+                .catch((e) => Alert.alert('Erreur', String(e)));
+            }}
+          >
+            <Text style={s.saveBtnTxt}>Désactiver</Text>
+          </Pressable>
+        </View>
+      </View>
+
       {/* Couple cible */}
       <View style={s.debugSection}>
         <Text style={s.debugTitle}>🎯 Couple cible</Text>

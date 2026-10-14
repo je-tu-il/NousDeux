@@ -1,15 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Redirect } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { auth } from '@/lib/firebase';
 
 export default function Index() {
   const [hydrated, setHydrated] = useState(false);
+  const [initialDeepLink, setInitialDeepLink] = useState<string | null>(null);
   const isSynced = useOnboardingStore((state) => state.isSynced);
   const uid = useOnboardingStore((state) => state.uid);
   const pseudo = useOnboardingStore((state) => state.pseudo);
   const age = useOnboardingStore((state) => state.age);
+
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        const raw = url.toLowerCase();
+        if (raw.includes('daylink')) {
+          setInitialDeepLink('/daylink');
+        } else if (raw.includes('dashboard')) {
+          setInitialDeepLink('/dashboard');
+        }
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (useOnboardingStore.persist.hasHydrated()) {
@@ -44,6 +59,10 @@ export default function Index() {
   // Rediriger selon l'état réel du compte
   if (!activeUid && !activeUser) {
     return <Redirect href="/onboarding/login" />;
+  }
+
+  if (initialDeepLink && (isSynced || (pseudo && age))) {
+    return <Redirect href={initialDeepLink as any} />;
   }
 
   if (isSynced) {

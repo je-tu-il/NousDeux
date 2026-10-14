@@ -35,6 +35,7 @@ export default function WidgetsScreen() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [inventory, setInventory] = useState<any>(null);
   const [currentStreak, setCurrentStreak] = useState<number>(0);
+  const [maxSeenStreak, setMaxSeenStreak] = useState<number>(0);
 
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
   const defaultBg = store.isDarkMode
@@ -53,12 +54,26 @@ export default function WidgetsScreen() {
       data.themeId = store.selectedWidget || 'widget_default';
       setWidgetData(data);
 
+      try {
+        const lastSeenStr = await AsyncStorage.getItem('last_seen_streak_unlock');
+        if (lastSeenStr) {
+          const parsed = parseInt(lastSeenStr, 10);
+          if (parsed > 0) setMaxSeenStreak(parsed);
+        }
+      } catch {}
+
       if (store.uid) {
         const profile = await getUserProfile(store.uid);
         setUserProfile(profile);
 
-        if (store.partnerUid) {
-          const cId = [store.uid, store.partnerUid].sort().join('_');
+        let pUid = store.partnerUid;
+        if (!pUid) {
+          const userDoc = await getDoc(doc(db, 'users', store.uid)).catch(() => null);
+          pUid = userDoc?.data()?.linkedTo || null;
+        }
+
+        if (pUid) {
+          const cId = [store.uid, pUid].sort().join('_');
           const [inv, w, s] = await Promise.all([
             getInventory(cId).catch(() => null),
             getWallet(cId).catch(() => null),
@@ -73,10 +88,6 @@ export default function WidgetsScreen() {
           }
         }
       }
-    }
-    if (Platform.OS === 'web') {
-      router.replace('/dashboard');
-      return;
     }
     loadData();
   }, [store.uid, store.partnerUid, store.selectedWidget]);
@@ -225,30 +236,22 @@ export default function WidgetsScreen() {
 
         {/* CHOISIR UN STYLE DE WIDGET DÉBLOQUÉ */}
         <View style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Palette color={theme.tint} size={20} />
               <Text style={[styles.cardSectionTitle, { color: theme.text, marginBottom: 0 }]}>
                 Styles Débloqués
               </Text>
             </View>
-
-            <Pressable
-              onPress={() => {
-                sound.tap();
-                router.push({ pathname: '/shop', params: { tab: 'widgets' } });
-              }}
-              style={styles.moreShopLink}
-            >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.tint }}>
-                Boutique ›
-              </Text>
-            </Pressable>
           </View>
 
           <View style={styles.themeGrid}>
             {WIDGETS.map((item) => {
-              const owned = isOwned(inventory, item, currentStreak, {});
+              const effectiveStreak = Math.max(currentStreak, maxSeenStreak);
+              const isStreakUnlock = item.unlock.type === 'streak' && effectiveStreak >= (item.unlock.days ?? 0);
+              const isInventoryOwned = isOwned(inventory, item, effectiveStreak, {});
+              const isStoreOwned = store.selectedWidget === item.id || userProfile?.selectedWidget === item.id || (inventory as any)?.widgets?.includes(item.id);
+              const owned = isInventoryOwned || isStreakUnlock || isStoreOwned || item.id === 'widget_default';
               const isEquipped = (store.selectedWidget || 'widget_default') === item.id;
               const widgetConf = getWidgetTheme(item.id);
 

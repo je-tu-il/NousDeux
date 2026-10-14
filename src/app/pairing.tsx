@@ -85,6 +85,13 @@ export default function PairingScreen() {
                 onChangeText={(t) => setCode(t.toUpperCase())}
                 maxLength={6}
                 autoCapitalize="characters"
+                returnKeyType="done"
+                onSubmitEditing={handlePair}
+                onKeyPress={(e) => {
+                  if (e.nativeEvent.key === 'Enter') {
+                    handlePair();
+                  }
+                }}
               />
               <Pressable style={({ pressed }) => [styles.button, { backgroundColor: theme.gradientStart, opacity: pressed || code.length < 6 ? 0.7 : 1 }]} onPress={handlePair} disabled={loading || code.length < 6}>
                 {loading && code.length >= 6 ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Se Connecter</Text>}

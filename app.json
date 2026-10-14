@@ -25,6 +25,12 @@
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch"
+        ],
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait"
         ]
       },
       "supportsTablet": true,

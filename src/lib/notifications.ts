@@ -152,10 +152,15 @@ export async function isRouletteClaimedToday(uid?: string): Promise<boolean> {
     if (stored === today) return true;
 
     const userUid = uid || useOnboardingStore.getState().uid;
-    const wallet = useOnboardingStore.getState().wallet;
-    if (wallet?.dailyClaims?.[userUid] === today) {
-      await AsyncStorage.setItem(KEY_WHEEL_CLAIMED_DATE, today);
-      return true;
+    const partnerUid = useOnboardingStore.getState().partnerUid;
+    if (userUid && partnerUid) {
+      const cId = [userUid, partnerUid].sort().join('_');
+      const { getCachedWallet, getWallet } = await import('./economy');
+      const wallet = getCachedWallet(cId) || await getWallet(cId).catch(() => null);
+      if (wallet?.dailyClaims?.[userUid] === today) {
+        await AsyncStorage.setItem(KEY_WHEEL_CLAIMED_DATE, today);
+        return true;
+      }
     }
   } catch {}
   return false;
@@ -393,12 +398,12 @@ export async function scheduleDailyReminders(): Promise<void> {
 
 export async function checkPartnerAnswerAndSync(): Promise<boolean> {
   const store = useOnboardingStore.getState();
-  const coupleId = store.coupleId;
   const myUid = store.uid;
   const partnerUid = store.partnerUid;
   const partnerPseudo = store.partnerPseudo || 'Ton amour';
 
-  if (!coupleId || !myUid || !partnerUid) return false;
+  if (!myUid || !partnerUid) return false;
+  const coupleId = [myUid, partnerUid].sort().join('_');
 
   const today = getLocalDateKey();
   try {

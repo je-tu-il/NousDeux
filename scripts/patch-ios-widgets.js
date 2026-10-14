@@ -667,7 +667,7 @@ function patchWithWidgetSourceFiles(filePath) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('// __NOUSDEUX_WIDGETS_PATCHED__')) {
+  if (content.includes('// __NOUSDEUX_WIDGETS_PATCHED_V2__')) {
     log(`withWidgetSourceFiles.js already patched: ${filePath}`);
     return;
   }
@@ -678,10 +678,7 @@ function patchWithWidgetSourceFiles(filePath) {
 
   const configBlockPattern = /if \(!configuration\)\s*return `import WidgetKit[\s\S]*?supportedFamilies[\s\S]*?`\s*;/;
 
-  const newSnippet = `// __NOUSDEUX_WIDGETS_PATCHED__
-    const bgGradient = widget.name === "StreakWidget"
-      ? "LinearGradient(colors: [Color(red: 1.0, green: 0.29, blue: 0.17), Color(red: 0.95, green: 0.15, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)"
-      : "LinearGradient(colors: [Color(red: 1.0, green: 0.42, blue: 0.53), Color(red: 1.0, green: 0.29, blue: 0.17)], startPoint: .topLeading, endPoint: .bottomTrailing)";
+  const newSnippet = `// __NOUSDEUX_WIDGETS_PATCHED_V2__
     const widgetDeepLink = widget.name === "StreakWidget" ? "nousdeuxapp://dashboard" : "nousdeuxapp://daylink";
 
     if (!configuration)
@@ -694,16 +691,8 @@ struct \${widget.name}: Widget {
 
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: name, provider: WidgetsTimelineProvider(name: name)) { entry in
-      if #available(iOS 17.0, *) {
-        WidgetsEntryView(entry: entry)
-          .widgetURL(URL(string: "\${widgetDeepLink}"))
-          .containerBackground(for: .widget) {
-            \${bgGradient}
-          }
-      } else {
-        WidgetsEntryView(entry: entry)
-          .widgetURL(URL(string: "\${widgetDeepLink}"))
-      }
+      WidgetsEntryView(entry: entry)
+        .widgetURL(URL(string: "\${widgetDeepLink}"))
     }
     .configurationDisplayName(\${JSON.stringify(widget.displayName)})
     .description(\${JSON.stringify(widget.description)})
@@ -721,27 +710,19 @@ struct \${widget.name}: Widget {
 }
 
 // 7. Patch generated Swift widgets in target directory
-function patchSwiftTargetFile(filePath, bgSwiftGradient, widgetDeepLink) {
+function patchSwiftTargetFile(filePath, _bgSwiftGradient, widgetDeepLink) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  if (content.includes('containerBackground(for: .widget)') && content.includes('.widgetURL')) {
-    log(`Swift widget source already has containerBackground and widgetURL: ${filePath}`);
+  if (content.includes('.widgetURL')) {
+    log(`Swift widget source already has widgetURL: ${filePath}`);
     return;
   }
 
   const blockPattern = /StaticConfiguration\(kind: name, provider: WidgetsTimelineProvider\(name: name\)\)\s*\{[\s\S]*?WidgetsEntryView\(entry: entry\)[\s\S]*?\}/g;
   const replacement = `StaticConfiguration(kind: name, provider: WidgetsTimelineProvider(name: name)) { entry in
-      if #available(iOS 17.0, *) {
-        WidgetsEntryView(entry: entry)
-          .widgetURL(URL(string: "${widgetDeepLink}"))
-          .containerBackground(for: .widget) {
-            ${bgSwiftGradient}
-          }
-      } else {
-        WidgetsEntryView(entry: entry)
-          .widgetURL(URL(string: "${widgetDeepLink}"))
-      }
+      WidgetsEntryView(entry: entry)
+        .widgetURL(URL(string: "${widgetDeepLink}"))
     }`;
 
   if (blockPattern.test(content)) {

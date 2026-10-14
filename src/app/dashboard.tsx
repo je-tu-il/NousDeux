@@ -20,7 +20,7 @@ import { useToastStore } from '@/store/toastStore';
 import { triggerHaptic } from '@/lib/haptics';
 import { sound } from '@/lib/sound';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { useTopInset } from '@/hooks/useTopInset';
@@ -118,12 +118,25 @@ export default function DashboardScreen() {
     checkStreakUnlock();
   }, [wallet?.streak]);
 
-  const [streakRestoreOffer, setStreakRestoreOffer] = useState<{ canRestore: boolean; lostStreak: number; cost: number } | null>(null);
+  const [streakRestoreOffer, setStreakRestoreOffer] = useState<{ canRestore: boolean; lostStreak: number; cost: number; yesterdayKey?: string } | null>(null);
+  const [showStreakRestoreModal, setShowStreakRestoreModal] = useState(false);
   const [restoringStreak, setRestoringStreak] = useState(false);
 
   const [isLoading, setIsLoading] = useState(Boolean(store.uid));
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const pulseAnim = useSharedValue(1);
+
+  // Protection retour arrière Android : quitter l'app au lieu de revenir sur les écrans d'onboarding ou ancien couple
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const onBackPress = () => {
+        BackHandler.exitApp();
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }
+  }, []);
 
   useEffect(() => {
     pulseAnim.value = withRepeat(
@@ -141,6 +154,7 @@ export default function DashboardScreen() {
       store.setUid(activeUid);
     }
     let partnerUnsub: any = null;
+    let currentPartnerUid: string | null = null;
 
     const unsub = onSnapshot(doc(db, 'users', activeUid), async (docSnap) => {
       if (docSnap.exists()) {
@@ -161,11 +175,14 @@ export default function DashboardScreen() {
           }).catch(() => {});
         }
 
-        if (!data.linkedTo) {
+        const newPartnerUid = data.linkedTo || null;
+
+        if (!newPartnerUid) {
           if (partnerUnsub) {
             partnerUnsub();
             partnerUnsub = null;
           }
+          currentPartnerUid = null;
           setPartner(null);
           setPartnerProfile(null);
           setWallet(null);
@@ -175,26 +192,40 @@ export default function DashboardScreen() {
           setIsLoading(false);
           return;
         }
+
         if (data.needsDate) {
           setIsLoading(false);
           router.replace('/onboarding/date');
           return;
         }
+
+        // Si le partenaire a changé, nettoyer l'ancien listener et le cache
+        if (currentPartnerUid !== newPartnerUid) {
+          if (partnerUnsub) {
+            partnerUnsub();
+            partnerUnsub = null;
+          }
+          currentPartnerUid = newPartnerUid;
+          setPartner(null);
+          setPartnerProfile(null);
+          setWallet(null);
+        }
+
         // We set up a realtime listener for the partner document
-        if (!partnerUnsub) {
-          partnerUnsub = onSnapshot(doc(db, 'users', data.linkedTo), (pSnap) => {
+        if (!partnerUnsub && currentPartnerUid) {
+          partnerUnsub = onSnapshot(doc(db, 'users', currentPartnerUid), (pSnap) => {
             if (pSnap.exists()) {
               const pData = pSnap.data();
               // Vérification réciproque : si le partenaire a délié son compte, repasser en mode solo
               if (pData.linkedTo && pData.linkedTo === activeUid) {
                 store.setSynced(true);
-                store.setPartnerCache(data.linkedTo, pData.pseudo, pData.avatarUrl ?? null);
+                store.setPartnerCache(currentPartnerUid, pData.pseudo, pData.avatarUrl ?? null);
                 setPartner({
                   pseudo: pData.pseudo,
                   avatarUrl: pData.avatarUrl,
                   coupleDate: data.coupleDate,
                   age: pData.age,
-                  coupleId: [activeUid, data.linkedTo].sort().join('_'),
+                  coupleId: [activeUid, currentPartnerUid].sort().join('_'),
                 });
                 setPartnerLeft(false);
               } else {
@@ -391,8 +422,16 @@ export default function DashboardScreen() {
       }
     });
 
+    const d = new Date();
+    const tKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const answersQuery = collection(db, 'couples', coupleId, 'daily', tKey, 'answers');
+    const unsubscribeAnswers = onSnapshot(answersQuery, () => {
+      loadPartnerAnswers().catch(() => {});
+    }, () => {});
+
     return () => {
       unsubscribeDaily();
+      unsubscribeAnswers();
     };
   }, [partner?.coupleId, store.uid]);
 
@@ -416,12 +455,28 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     if (partner?.coupleId) {
-      checkStreakRestorable(partner.coupleId).then((res) => {
-        if (res.canRestore) setStreakRestoreOffer(res);
-        else setStreakRestoreOffer(null);
+      checkStreakRestorable(partner.coupleId).then(async (res) => {
+        if (res.canRestore) {
+          setStreakRestoreOffer(res);
+          const dismissedKey = `streak_restore_dismissed_${res.yesterdayKey}`;
+          const dismissed = await AsyncStorage.getItem(dismissedKey);
+          if (!dismissed) {
+            setShowStreakRestoreModal(true);
+          }
+        } else {
+          setStreakRestoreOffer(null);
+          setShowStreakRestoreModal(false);
+        }
       }).catch(() => {});
     }
   }, [partner?.coupleId, wallet?.streak]);
+
+  const handleDismissStreakModal = async () => {
+    setShowStreakRestoreModal(false);
+    if (streakRestoreOffer?.yesterdayKey) {
+      await AsyncStorage.setItem(`streak_restore_dismissed_${streakRestoreOffer.yesterdayKey}`, 'true');
+    }
+  };
 
   const handleRestoreStreak = async () => {
     if (!partner?.coupleId || !store.uid || restoringStreak) return;
@@ -433,6 +488,7 @@ export default function DashboardScreen() {
         triggerHaptic('success');
         useToastStore.getState().showToast(`Série restaurée avec succès ! 🔥 (${res.newStreak} jours)`);
         setStreakRestoreOffer(null);
+        setShowStreakRestoreModal(false);
         const updatedWallet = await getWallet(partner.coupleId);
         setWallet(updatedWallet);
         cacheWallet(partner.coupleId, updatedWallet);
@@ -686,6 +742,11 @@ export default function DashboardScreen() {
                 <View style={{ marginLeft: 10, flex: 1 }}>
                   <Text style={{ color: partner && !partnerLeft ? theme.text : theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>{partner && !partnerLeft ? 'En couple avec' : 'Mode solo'}</Text>
                   <Text style={{ color: partner && !partnerLeft ? '#FF6A88' : theme.tabIconDefault, fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner && !partnerLeft ? partner.pseudo : 'Partenaire indisponible'}</Text>
+                  {partner && !partnerLeft && partner.coupleDate && (
+                    <Text style={{ color: theme.tabIconDefault, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                      {getDaysSince(partner.coupleDate)} jours ensemble 💕
+                    </Text>
+                  )}
                   {(!partner || partnerLeft) && (
                     <View style={{ marginTop: 5 }}>
                       {store.myCode ? (
@@ -813,6 +874,11 @@ export default function DashboardScreen() {
                 <View style={{ marginLeft: 10, flex: 1 }}>
                   <Text style={{ color: partner && !partnerLeft ? theme.text : theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>{partner && !partnerLeft ? 'En couple avec' : 'Mode solo'}</Text>
                   <Text style={{ color: partner && !partnerLeft ? '#FF6A88' : theme.tabIconDefault, fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner && !partnerLeft ? partner.pseudo : 'Partenaire indisponible'}</Text>
+                  {partner && !partnerLeft && partner.coupleDate && (
+                    <Text style={{ color: theme.tabIconDefault, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                      {getDaysSince(partner.coupleDate)} jours ensemble 💕
+                    </Text>
+                  )}
                   {(!partner || partnerLeft) && (
                     <View style={{ marginTop: 5 }}>
                       {store.myCode ? (
@@ -1099,7 +1165,17 @@ export default function DashboardScreen() {
                 <HeartHandshake color={theme.gradientEnd} size={30} style={{ alignSelf: 'center', marginBottom: 10 }} />
                 <Text style={styles.modalPartnerText}>En couple avec <Text style={{ fontWeight: 'bold' }}>{partner.pseudo}</Text></Text>
                 <Text style={styles.modalDateText}>Depuis le {formattedDate}</Text>
+                {partner.coupleDate && (
+                  <Text style={[styles.modalDateText, { fontSize: 13, color: '#FF6A88', fontWeight: '700', marginTop: 4 }]}>
+                    {getDaysSince(partner.coupleDate)} jours ensemble 💕
+                  </Text>
+                )}
               </View>
+            )}
+            {auth?.currentUser?.metadata?.creationTime && (
+              <Text style={{ fontSize: 12, color: theme.tabIconDefault, textAlign: 'center', marginTop: 14 }}>
+                Compte créé le {new Date(auth.currentUser.metadata.creationTime).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </Text>
             )}
           </Animated.View>
         </Pressable>
@@ -1134,11 +1210,83 @@ export default function DashboardScreen() {
                   <Text style={[styles.modalDateText, { fontSize: 16, fontWeight: '700', color: theme.tint, marginTop: 4 }]}>
                     {formattedDate} {'\u2764\uFE0F'}
                   </Text>
+                  {partner.coupleDate && (
+                    <Text style={[styles.modalDateText, { fontSize: 13, color: '#FF6A88', fontWeight: '700', marginTop: 4 }]}>
+                      {getDaysSince(partner.coupleDate)} jours ensemble 💕
+                    </Text>
+                  )}
                 </View>
               </>
             )}
           </Animated.View>
         </Pressable>
+      </Modal>
+
+      {/* Modal Restauration de Série */}
+      <Modal visible={showStreakRestoreModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <Animated.View entering={FadeInDown.duration(300)} style={[styles.modalContent, { maxWidth: 340, alignItems: 'center' }]}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255, 106, 136, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+              <Flame color="#FF6A88" size={36} />
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: theme.text, textAlign: 'center', marginBottom: 8 }}>
+              Série perdue hier ! 💔
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.text, opacity: 0.8, textAlign: 'center', marginBottom: 16, lineHeight: 20 }}>
+              Vous n'avez pas validé votre question hier. Votre série de <Text style={{ fontWeight: '800', color: theme.tint }}>{streakRestoreOffer?.lostStreak || 1} jours</Text> est retombée à zéro.
+            </Text>
+            <View style={{ backgroundColor: theme.glassBackground, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: theme.cardBorder, width: '100%', marginBottom: 20, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, color: theme.text, fontWeight: '600', marginBottom: 4 }}>
+                Restaure votre série d'hier
+              </Text>
+              <Text style={{ fontSize: 18, fontWeight: '900', color: '#FF6A88' }}>
+                🌸 {streakRestoreOffer?.cost ?? 2000} pétales
+              </Text>
+              <Text style={{ fontSize: 12, color: theme.tabIconDefault, marginTop: 4 }}>
+                (Solde actuel : {wallet?.petals ?? 0} pétales)
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'column', gap: 10, width: '100%' }}>
+              <Pressable
+                onPress={handleRestoreStreak}
+                disabled={restoringStreak || ((wallet?.petals ?? 0) < (streakRestoreOffer?.cost ?? 2000))}
+                style={{
+                  backgroundColor: ((wallet?.petals ?? 0) >= (streakRestoreOffer?.cost ?? 2000)) ? '#FF6A88' : theme.tabIconDefault,
+                  paddingVertical: 14,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                  opacity: restoringStreak ? 0.7 : 1,
+                }}
+              >
+                {restoringStreak ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>
+                    {((wallet?.petals ?? 0) >= (streakRestoreOffer?.cost ?? 2000))
+                      ? `Restaurer ma série 🔥`
+                      : `Pétales insuffisants 🌸`}
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={handleDismissStreakModal}
+                disabled={restoringStreak}
+                style={{
+                  paddingVertical: 12,
+                  backgroundColor: theme.glassBackground,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: theme.text, fontWeight: '600', fontSize: 14 }}>
+                  Non merci / Continuer à 0
+                </Text>
+              </Pressable>
+            </View>
+          </Animated.View>
+        </View>
       </Modal>
       {/* Modal d'Alerte Custom */}
       <Modal visible={!!alertMessage} transparent animationType="fade">

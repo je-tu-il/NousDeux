@@ -179,6 +179,9 @@ const STREAK_UNLOCKS = [
   { id: 'bd_streak_14', type: 'borders', days: 14 },
   { id: 'bd_streak_30', type: 'borders', days: 30 },
   { id: 'bd_streak_60', type: 'borders', days: 60 },
+  { id: 'widget_streak_7', type: 'widgets', days: 7 },
+  { id: 'widget_streak_14', type: 'widgets', days: 14 },
+  { id: 'widget_streak_30', type: 'widgets', days: 30 },
 ] as const;
 
 export async function syncStreakCosmetics(cId: string, streak: number): Promise<void> {
@@ -188,12 +191,12 @@ export async function syncStreakCosmetics(cId: string, streak: number): Promise<
     const invSnap = await getDoc(invRef);
     let invData: InventoryData = invSnap.exists()
       ? (invSnap.data() as InventoryData)
-      : { backgrounds: [], borders: [], tags: [], avatarParts: [] };
+      : { backgrounds: [], borders: [], tags: [], avatarParts: [], widgets: [] };
 
     let updated = false;
     for (const item of STREAK_UNLOCKS) {
       if (streak >= item.days) {
-        const list = invData[item.type] || [];
+        const list = (invData as any)[item.type] || [];
         if (!list.includes(item.id)) {
           invData = { ...invData, [item.type]: [...list, item.id] };
           updated = true;

@@ -79,6 +79,7 @@ class QuestionWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_cta, ctaText)
 
             val intent = Intent(context, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 data = android.net.Uri.parse("nousdeuxapp://daylink")
             }
@@ -160,6 +161,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.streak_status, statusText)
 
             val intent = Intent(context, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 data = android.net.Uri.parse("nousdeuxapp://dashboard")
             }
@@ -538,6 +540,14 @@ const withAndroidWidgets = (config) => {
     config.modResults.manifest.$['android:installLocation'] = 'internalOnly';
 
     const mainApplication = AndroidConfig.Manifest.getMainApplicationOrThrow(config.modResults);
+
+    if (mainApplication.activity) {
+      mainApplication.activity.forEach((act) => {
+        if (act.$) {
+          act.$['android:screenOrientation'] = 'portrait';
+        }
+      });
+    }
 
     if (!mainApplication.receiver) {
       mainApplication.receiver = [];

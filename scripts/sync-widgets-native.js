@@ -21,17 +21,81 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
+import org.json.JSONObject
 
 class QuestionWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        val prefs = context.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
+        val payloadStr = prefs.getString("widget_payload", null) ?: prefs.getString("widget_payload_QuestionWidget", null)
+        var questionText = "Ouvrez NousDeux pour synchroniser ✨"
+        var partnerAnswered = false
+        var userAnswered = false
+        var bothAnswered = false
+        var partnerPseudo = "Partenaire"
+
+        if (payloadStr != null) {
+            try {
+                val json = JSONObject(payloadStr)
+                if (json.has("todayQuestion")) {
+                    val q = json.getString("todayQuestion")
+                    if (q.isNotBlank()) questionText = q
+                }
+                if (json.has("partnerAnswered")) {
+                    partnerAnswered = json.getBoolean("partnerAnswered")
+                }
+                if (json.has("userAnswered")) {
+                    userAnswered = json.getBoolean("userAnswered")
+                }
+                if (json.has("bothAnswered")) {
+                    bothAnswered = json.getBoolean("bothAnswered")
+                }
+                if (json.has("partnerPseudo")) {
+                    val p = json.getString("partnerPseudo")
+                    if (p.isNotBlank()) partnerPseudo = p
+                }
+            } catch (e: Exception) {
+                // fallback
+            }
+        }
+
+        var badgeText = "💬 QUESTION DU JOUR"
+        var ctaText = "Touche pour répondre ✨"
+
+        if (bothAnswered || (userAnswered && partnerAnswered)) {
+            badgeText = "✨ DÉCOUVERT"
+            ctaText = "Vous avez tous les deux répondu 🎉"
+        } else if (partnerAnswered && !userAnswered) {
+            badgeText = "💌 À TOI DE JOUER"
+            ctaText = "$partnerPseudo a répondu ! Touche pour voir ✨"
+        } else if (userAnswered && !partnerAnswered) {
+            badgeText = "⏳ EN ATTENTE"
+            ctaText = "En attente de $partnerPseudo... 💕"
+        }
+
+        val themeId = if (payloadStr != null) {
+            try {
+                val json = JSONObject(payloadStr)
+                if (json.has("themeId")) json.getString("themeId") else "widget_default"
+            } catch (e: Exception) { "widget_default" }
+        } else "widget_default"
+        val bgRes = context.resources.getIdentifier("widget_bg_" + themeId, "drawable", context.packageName)
+
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_question)
+            if (bgRes != 0) {
+                views.setInt(R.id.widget_container, "setBackgroundResource", bgRes)
+            }
+            views.setTextViewText(R.id.widget_question_text, questionText)
+            views.setTextViewText(R.id.widget_badge, badgeText)
+            views.setTextViewText(R.id.widget_cta, ctaText)
 
             val intent = Intent(context, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                data = android.net.Uri.parse("nousdeuxapp://daylink")
             }
             val pendingIntent = PendingIntent.getActivity(
-                context, 0, intent,
+                context, 101, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_container, pendingIntent)
@@ -40,9 +104,9 @@ class QuestionWidgetProvider : AppWidgetProvider() {
         }
     }
 }
-`;
+\`;
 
-const STREAK_PROVIDER_KT = `package com.pixelthings.nousdeux
+const STREAK_PROVIDER_KT = \`package com.pixelthings.nousdeux
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -50,17 +114,70 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
+import org.json.JSONObject
 
 class StreakWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        val prefs = context.getSharedPreferences("nousdeux_widgets", Context.MODE_PRIVATE)
+        val payloadStr = prefs.getString("widget_payload", null) ?: prefs.getString("widget_payload_StreakWidget", null)
+        var streakNumber = "🔥 1"
+        var streakLabel = "JOUR ENSEMBLE"
+        var partnerAnswered = false
+        var userAnswered = false
+        var bothAnswered = false
+        var partnerPseudo = "Partenaire"
+
+        if (payloadStr != null) {
+            try {
+                val json = JSONObject(payloadStr)
+                val streak = if (json.has("streak")) json.getInt("streak") else 1
+                streakNumber = "🔥 $streak"
+                streakLabel = if (streak > 1) "JOURS ENSEMBLE" else "JOUR ENSEMBLE"
+                if (json.has("partnerAnswered")) partnerAnswered = json.getBoolean("partnerAnswered")
+                if (json.has("userAnswered")) userAnswered = json.getBoolean("userAnswered")
+                if (json.has("bothAnswered")) bothAnswered = json.getBoolean("bothAnswered")
+                if (json.has("partnerPseudo")) {
+                    val p = json.getString("partnerPseudo")
+                    if (p.isNotBlank()) partnerPseudo = p
+                }
+            } catch (e: Exception) {
+                // fallback
+            }
+        }
+
+        var statusText = "Touche pour voir ➔"
+        if (bothAnswered || (userAnswered && partnerAnswered)) {
+            statusText = "🎉 Défi du jour relevé !"
+        } else if (partnerAnswered && !userAnswered) {
+            statusText = "💌 $partnerPseudo a répondu !"
+        } else if (userAnswered && !partnerAnswered) {
+            statusText = "⏳ En attente de $partnerPseudo"
+        }
+
+        val themeId = if (payloadStr != null) {
+            try {
+                val json = JSONObject(payloadStr)
+                if (json.has("themeId")) json.getString("themeId") else "widget_default"
+            } catch (e: Exception) { "widget_default" }
+        } else "widget_default"
+        val bgRes = context.resources.getIdentifier("widget_bg_" + themeId, "drawable", context.packageName)
+
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_streak)
+            if (bgRes != 0) {
+                views.setInt(R.id.widget_container, "setBackgroundResource", bgRes)
+            }
+            views.setTextViewText(R.id.streak_number, streakNumber)
+            views.setTextViewText(R.id.streak_label, streakLabel)
+            views.setTextViewText(R.id.streak_status, statusText)
 
             val intent = Intent(context, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                data = android.net.Uri.parse("nousdeuxapp://dashboard")
             }
             val pendingIntent = PendingIntent.getActivity(
-                context, 0, intent,
+                context, 102, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_container, pendingIntent)
@@ -69,7 +186,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
         }
     }
 }
-`;
+\`;
 
 const QUESTION_WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"

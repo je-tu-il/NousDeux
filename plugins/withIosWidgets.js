@@ -13,29 +13,21 @@ try {
  * Patches a Swift widget source file to wrap WidgetsEntryView with .containerBackground(for: .widget)
  * to satisfy iOS 17+ WidgetKit containerBackground requirement without warnings.
  */
-function patchSourceFileIfPresent(filePath, bgSwiftColor, widgetDeepLink) {
+function patchSourceFileIfPresent(filePath, _bgSwiftColor, widgetDeepLink) {
   if (!fs.existsSync(filePath)) return;
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // If already contains containerBackground and widgetURL, don't patch again
-  if (content.includes('.containerBackground') && content.includes('.widgetURL')) return;
+  // If already contains widgetURL, don't patch again
+  if (content.includes('.widgetURL')) return;
 
   const blockPattern = /StaticConfiguration\(kind: name, provider: WidgetsTimelineProvider\(name: name\)\)\s*\{[\s\S]*?WidgetsEntryView\(entry: entry\)[\s\S]*?\}/g;
   if (blockPattern.test(content)) {
     content = content.replace(
       blockPattern,
       `StaticConfiguration(kind: name, provider: WidgetsTimelineProvider(name: name)) { entry in
-      if #available(iOS 17.0, *) {
         WidgetsEntryView(entry: entry)
           .widgetURL(URL(string: "${widgetDeepLink}"))
-          .containerBackground(for: .widget) {
-            ${bgSwiftColor}
-          }
-      } else {
-        WidgetsEntryView(entry: entry)
-          .widgetURL(URL(string: "${widgetDeepLink}"))
-      }
-    }`
+      }`
     );
     fs.writeFileSync(filePath, content, 'utf8');
   }

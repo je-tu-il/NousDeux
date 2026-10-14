@@ -179,5 +179,36 @@ test('dynamic daily notifications, background sync, and sideloaded iOS widget en
   assert.match(layoutSrc, /currentPath\.includes\('daylink'\)/, '_layout.tsx must deduplicate repeated widget deep-links');
 });
 
+test('portrait orientation lock, ACTION_VIEW widget intents, streak restore modal, and admin version management', async () => {
+  const appJsonSrc = await read('app.json');
+  const androidPluginSrc = await read('plugins/withAndroidWidgets.js');
+  const syncWidgetsSrc = await read('scripts/sync-widgets-native.js');
+  const dashboardSrc = await read('src/app/dashboard.tsx');
+  const adminSrc = await read('src/app/admin.tsx');
+  const pairingSrc = await read('src/app/pairing.tsx');
+
+  // 1. Portrait orientation locking
+  assert.match(appJsonSrc, /UIInterfaceOrientationPortrait/, 'app.json must specify portrait for iOS and iPad');
+  assert.match(androidPluginSrc, /android:screenOrientation/, 'withAndroidWidgets must set portrait orientation for activities');
+
+  // 2. Widget ACTION_VIEW intents
+  assert.match(androidPluginSrc, /action = Intent\.ACTION_VIEW/, 'withAndroidWidgets must set Intent.ACTION_VIEW for widgets');
+  assert.match(syncWidgetsSrc, /action = Intent\.ACTION_VIEW/, 'sync-widgets-native must set Intent.ACTION_VIEW for widgets');
+  assert.match(syncWidgetsSrc, /nousdeuxapp:\/\/daylink/, 'sync-widgets-native must have daylink deep link');
+
+  // 3. Streak restoration modal & couple duration in dashboard
+  assert.match(dashboardSrc, /showStreakRestoreModal/, 'dashboard.tsx must render showStreakRestoreModal');
+  assert.match(dashboardSrc, /streakRestoreOffer\?\.cost/, 'dashboard.tsx must render streak restore cost');
+  assert.match(dashboardSrc, /getDaysSince\(partner\.coupleDate\)/, 'dashboard.tsx must show days since in partner profile modal');
+
+  // 4. Admin version management
+  assert.match(adminSrc, /minVersion/, 'admin.tsx must manage minVersion in app_config/global');
+  assert.match(adminSrc, /Constants\.expoConfig\?\.version/, 'admin.tsx must display app current version');
+
+  // 5. Pairing input Enter key submission
+  assert.match(pairingSrc, /onSubmitEditing=\{handlePair\}/, 'pairing.tsx must trigger handlePair on submit');
+});
+
+
 
 

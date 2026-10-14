@@ -450,9 +450,7 @@ export default function SyncScreen() {
           {/* Header */}
           <View style={styles.header}>
             <Pressable style={styles.backBtn} onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else if (store.pseudo && store.age) {
+              if (store.isSynced) {
                 router.replace('/dashboard');
               } else {
                 router.replace('/onboarding/avatar');

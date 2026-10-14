@@ -30,7 +30,7 @@ test('login screen provides Apple and Google sign-in with Android BackHandler is
   assert.match(loginSrc, /handleAppleLogin/, 'login.tsx must define handleAppleLogin');
   assert.match(loginSrc, /OAuthProvider\('apple\.com'\)/, 'login.tsx must support Firebase Apple OAuthProvider');
   assert.match(loginSrc, /Continuer avec Apple/, 'login.tsx must render Apple Sign-In button');
-  assert.match(loginSrc, /provider\.credential\(\{\s*idToken:\s*identityToken,?\s*\}\)/, 'login.tsx must pass identityToken to Apple credential without mismatched rawNonce');
+  assert.match(loginSrc, /provider\.credential\(\{\s*idToken:\s*identityToken[\s\S]*?\}\)/, 'login.tsx must pass identityToken to Apple credential');
   assert.match(loginSrc, /Platform\.OS\s*===\s*'web'/, 'login.tsx must distinguish web from android native for Apple login popup');
 
   const appJson = JSON.parse(await read('app.json'));
