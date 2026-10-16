@@ -82,3 +82,14 @@ test('economy cache is cleared across session resets, disconnect, and account de
   assert.match(settingsSrc, /clearEconomyCache\(\)/, 'settings.tsx disconnect must clear economy cache');
   assert.match(settingsSrc, /router\.canDismiss\(\)[\s\S]*router\.dismissAll\(\)/, 'settings.tsx must clear navigation stack on disconnect');
 });
+
+test('expo-crypto is registered in package.json and statically imported in login.tsx', async () => {
+  const pkgSrc = await read('package.json');
+  const pkg = JSON.parse(pkgSrc);
+  const loginSrc = await read('src/app/onboarding/login.tsx');
+
+  assert.ok(pkg.dependencies['expo-crypto'], 'package.json dependencies must include expo-crypto');
+  assert.match(loginSrc, /import \* as Crypto from 'expo-crypto';/, 'login.tsx must statically import expo-crypto');
+  assert.match(loginSrc, /Crypto\.digestStringAsync/, 'login.tsx must use Crypto.digestStringAsync');
+});
+

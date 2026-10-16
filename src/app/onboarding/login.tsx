@@ -11,6 +11,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import UIModal, { UIModalType } from '@/components/UIModal';
 import { ensureUserPairingCode } from '@/lib/pairing';
 import { triggerHaptic } from '@/lib/haptics';
+import * as Crypto from 'expo-crypto';
 
 export default function LoginScreen() {
   const theme = Colors.light;
@@ -289,7 +290,6 @@ export default function LoginScreen() {
 
         // Génération d'un nonce cryptographique requis par Firebase Auth
         const rawNonce = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
-        const Crypto = await import('expo-crypto');
         const hashedNonce = await Crypto.digestStringAsync(
           Crypto.CryptoDigestAlgorithm.SHA256,
           rawNonce
