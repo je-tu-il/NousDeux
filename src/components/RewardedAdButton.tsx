@@ -20,8 +20,11 @@ function getTodayKey(coupleId: string): string {
 }
 
 export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedAdButtonProps) {
-  const isDarkMode = useOnboardingStore((s) => s.isDarkMode);
+  const store = useOnboardingStore();
+  const isDarkMode = store.isDarkMode;
   const theme = isDarkMode ? Colors.dark : Colors.light;
+
+  const effectiveCoupleId = coupleId || (store.isSynced && store.partnerUid && store.uid ? [store.uid, store.partnerUid].sort().join('_') : (store.uid ? `${store.uid}_solo` : null));
 
   const [isLoading, setIsLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -30,16 +33,16 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
   const isProcessingRef = React.useRef(false);
 
   useEffect(() => {
-    if (!coupleId) return;
-    const key = getTodayKey(coupleId);
+    if (!effectiveCoupleId) return;
+    const key = getTodayKey(effectiveCoupleId);
     AsyncStorage.getItem(key)
       .then((val) => {
         setDailyWatches(val ? parseInt(val, 10) : 0);
       })
       .catch(() => {});
-  }, [coupleId]);
+  }, [effectiveCoupleId]);
 
-  if (!GOOGLE_ADS_CONFIG.enabled || !coupleId) {
+  if (!GOOGLE_ADS_CONFIG.enabled || !effectiveCoupleId) {
     return null;
   }
 
@@ -52,12 +55,12 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
     }
     const petals = GOOGLE_ADS_CONFIG.rewardPetalsAmount;
     try {
-      await awardBonusPetals(coupleId, petals);
+      await awardBonusPetals(effectiveCoupleId, petals);
       if (onRewardEarned) onRewardEarned(petals);
 
       const nextCount = dailyWatches + 1;
       setDailyWatches(nextCount);
-      await AsyncStorage.setItem(getTodayKey(coupleId), String(nextCount));
+      await AsyncStorage.setItem(getTodayKey(effectiveCoupleId), String(nextCount));
     } catch (e) {
       console.error('Error recording ad reward:', e);
     }

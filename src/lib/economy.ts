@@ -98,6 +98,9 @@ export async function computeStreakCached(cId: string, force = false): Promise<n
   if (!force && cached !== null) return cached;
   const streak = await computeStreak(cId);
   streakCache.set(cId, streak);
+  if (streak > 0) {
+    void syncStreakCosmetics(cId, streak).catch(() => {});
+  }
   return streak;
 }
 

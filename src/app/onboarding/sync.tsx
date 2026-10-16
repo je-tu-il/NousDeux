@@ -450,7 +450,9 @@ export default function SyncScreen() {
           {/* Header */}
           <View style={styles.header}>
             <Pressable style={styles.backBtn} onPress={() => {
-              if (store.isSynced) {
+              if (router.canGoBack()) {
+                router.back();
+              } else if (store.pseudo && store.age) {
                 router.replace('/dashboard');
               } else {
                 router.replace('/onboarding/avatar');
@@ -478,9 +480,9 @@ export default function SyncScreen() {
           </View>
 
           <View style={styles.content}>
-            <Animated.View entering={FadeInDown.duration(800)}>
+            <Animated.View entering={FadeInDown.duration(800)} style={[styles.titleCard, { backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.88)' : 'rgba(255, 255, 255, 0.90)', borderColor: theme.cardBorder }]}>
               <Text style={[styles.title, { color: theme.text }]}>Synchronisation</Text>
-              <Text style={[styles.subtitle, { color: theme.text }]}>
+              <Text style={[styles.subtitle, { color: store.isDarkMode ? '#E0D0CE' : '#4A3B39' }]}>
                 Donne ton code à ton partenaire ou entre le sien pour lier vos téléphones.
               </Text>
             </Animated.View>
@@ -578,8 +580,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   content: { flexGrow: 1, justifyContent: 'center', paddingBottom: 14 },
+  titleCard: {
+    borderRadius: 22,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+    alignItems: 'center',
+  },
   title: { fontSize: 28, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
-  subtitle: { fontSize: 14, opacity: 0.7, textAlign: 'center', marginBottom: 14, lineHeight: 20 },
+  subtitle: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
 
   hintText: { fontSize: 12, textAlign: 'center', marginBottom: 10, opacity: 0.8 },
   codeContainer: { alignItems: 'center', marginBottom: 12 },

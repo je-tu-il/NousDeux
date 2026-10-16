@@ -2,6 +2,7 @@ import AppLaunchAd from '@/components/AppLaunchAd';
 import CoinWallet from '@/components/CoinWallet';
 import DailyClaim from '@/components/DailyClaim';
 import GoogleAdBanner from '@/components/GoogleAdBanner';
+import RewardedAdButton from '@/components/RewardedAdButton';
 import PixelAvatar from '@/components/PixelAvatar';
 import StreakCalendar from '@/components/StreakCalendar';
 import { Colors } from '@/constants/Colors';
@@ -739,51 +740,24 @@ export default function DashboardScreen() {
                 {partner && !partnerLeft
                   ? renderAvatar(partner.avatarUrl, partner.pseudo, true, partnerProfile)
                   : <View style={[styles.partnerAvatar, { backgroundColor: 'rgba(120,110,110,0.35)', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.tabIconDefault, fontSize: 18 }}>–</Text></View>}
-                <View style={{ marginLeft: 10, flex: 1 }}>
-                  <Text style={{ color: partner && !partnerLeft ? theme.text : theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>{partner && !partnerLeft ? 'En couple avec' : 'Mode solo'}</Text>
-                  <Text style={{ color: partner && !partnerLeft ? '#FF6A88' : theme.tabIconDefault, fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner && !partnerLeft ? partner.pseudo : 'Partenaire indisponible'}</Text>
-                  {partner && !partnerLeft && partner.coupleDate && (
-                    <Text style={{ color: theme.tabIconDefault, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
-                      {getDaysSince(partner.coupleDate)} jours ensemble 💕
-                    </Text>
-                  )}
-                  {(!partner || partnerLeft) && (
-                    <View style={{ marginTop: 5 }}>
-                      {store.myCode ? (
-                        <Pressable
-                          onPress={async () => {
-                            triggerHaptic('selection');
-                            await Clipboard.setStringAsync(store.myCode);
-                            useToastStore.getState().showToast('Code copié !');
-                          }}
-                          style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
-                        >
-                          <Text style={{ color: theme.text, fontSize: 11, fontWeight: '600' }}>
-                            Mon code : <Text style={{ color: theme.tint, fontWeight: '800', letterSpacing: 1 }}>{store.myCode}</Text>
-                          </Text>
-                          <Copy size={12} color={theme.tint} style={{ marginLeft: 4 }} />
-                        </Pressable>
-                      ) : null}
-                      <Pressable 
-                        onPress={() => {
-                          triggerHaptic('light');
-                          router.push('/onboarding/sync');
-                        }} 
-                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                        style={{
-                          marginTop: 4,
-                          paddingVertical: 5,
-                          paddingHorizontal: 10,
-                          borderRadius: 10,
-                          backgroundColor: 'rgba(255, 106, 136, 0.15)',
-                          alignSelf: 'flex-start',
-                        }}
-                      >
-                        <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>
-                          {store.myCode ? 'Lier un partenaire ➔' : 'Obtenir / entrer un code ➔'}
+                <View style={{ marginLeft: 10, flex: 1, justifyContent: 'center' }}>
+                  {partner && !partnerLeft ? (
+                    <>
+                      <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>En couple avec</Text>
+                      <Text style={{ color: '#FF6A88', fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner.pseudo}</Text>
+                      {partner.coupleDate && (
+                        <Text style={{ color: theme.tabIconDefault, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                          {getDaysSince(partner.coupleDate)} jours ensemble 💕
                         </Text>
-                      </Pressable>
-                    </View>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Text style={{ color: theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>Mode solo</Text>
+                      <Text style={{ color: theme.tint, fontSize: 18, fontWeight: '800', marginTop: 2 }} numberOfLines={1}>
+                        Lier un partenaire 💕
+                      </Text>
+                    </>
                   )}
                   {partner && !partnerLeft && partnerProfile?.selectedTag && partnerProfile.selectedTag !== 'tag_free_0' && getCosmeticById(partnerProfile.selectedTag) && (
                     <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 106, 136, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 106, 136, 0.3)' }}>
@@ -847,6 +821,18 @@ export default function DashboardScreen() {
                 </Animated.View>
               </View>
             )}
+
+            {/* BOUTON PUB RÉCOMPENSÉE MOBILE */}
+            <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+              <RewardedAdButton 
+                coupleId={partner?.coupleId || (store.uid ? `${store.uid}_solo` : null)}
+                onRewardEarned={() => {
+                  if (partner?.coupleId) {
+                    getWallet(partner.coupleId).then(setWallet).catch(() => {});
+                  }
+                }}
+              />
+            </View>
           </>
         ) : (
           /* =========================================================================
@@ -871,51 +857,24 @@ export default function DashboardScreen() {
                 {partner && !partnerLeft
                   ? renderAvatar(partner.avatarUrl, partner.pseudo, true, partnerProfile)
                   : <View style={[styles.partnerAvatar, { backgroundColor: 'rgba(120,110,110,0.35)', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.tabIconDefault, fontSize: 18 }}>–</Text></View>}
-                <View style={{ marginLeft: 10, flex: 1 }}>
-                  <Text style={{ color: partner && !partnerLeft ? theme.text : theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>{partner && !partnerLeft ? 'En couple avec' : 'Mode solo'}</Text>
-                  <Text style={{ color: partner && !partnerLeft ? '#FF6A88' : theme.tabIconDefault, fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner && !partnerLeft ? partner.pseudo : 'Partenaire indisponible'}</Text>
-                  {partner && !partnerLeft && partner.coupleDate && (
-                    <Text style={{ color: theme.tabIconDefault, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
-                      {getDaysSince(partner.coupleDate)} jours ensemble 💕
-                    </Text>
-                  )}
-                  {(!partner || partnerLeft) && (
-                    <View style={{ marginTop: 5 }}>
-                      {store.myCode ? (
-                        <Pressable
-                          onPress={async () => {
-                            triggerHaptic('selection');
-                            await Clipboard.setStringAsync(store.myCode);
-                            useToastStore.getState().showToast('Code copié !');
-                          }}
-                          style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
-                        >
-                          <Text style={{ color: theme.text, fontSize: 11, fontWeight: '600' }}>
-                            Mon code : <Text style={{ color: theme.tint, fontWeight: '800', letterSpacing: 1 }}>{store.myCode}</Text>
-                          </Text>
-                          <Copy size={12} color={theme.tint} style={{ marginLeft: 4 }} />
-                        </Pressable>
-                      ) : null}
-                      <Pressable 
-                        onPress={() => {
-                          triggerHaptic('light');
-                          router.push('/onboarding/sync');
-                        }} 
-                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                        style={{
-                          marginTop: 4,
-                          paddingVertical: 5,
-                          paddingHorizontal: 10,
-                          borderRadius: 10,
-                          backgroundColor: 'rgba(255, 106, 136, 0.15)',
-                          alignSelf: 'flex-start',
-                        }}
-                      >
-                        <Text style={{ color: theme.tint, fontSize: 12, fontWeight: '800' }}>
-                          {store.myCode ? 'Lier un partenaire ➔' : 'Obtenir / entrer un code ➔'}
+                <View style={{ marginLeft: 10, flex: 1, justifyContent: 'center' }}>
+                  {partner && !partnerLeft ? (
+                    <>
+                      <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>En couple avec</Text>
+                      <Text style={{ color: '#FF6A88', fontSize: 16, fontWeight: 'bold' }} numberOfLines={1}>{partner.pseudo}</Text>
+                      {partner.coupleDate && (
+                        <Text style={{ color: theme.tabIconDefault, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                          {getDaysSince(partner.coupleDate)} jours ensemble 💕
                         </Text>
-                      </Pressable>
-                    </View>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Text style={{ color: theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>Mode solo</Text>
+                      <Text style={{ color: theme.tint, fontSize: 18, fontWeight: '800', marginTop: 2 }} numberOfLines={1}>
+                        Lier un partenaire 💕
+                      </Text>
+                    </>
                   )}
                   {partner && !partnerLeft && partnerProfile?.selectedTag && partnerProfile.selectedTag !== 'tag_free_0' && getCosmeticById(partnerProfile.selectedTag) && (
                     <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255, 106, 136, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 106, 136, 0.3)' }}>
@@ -977,6 +936,18 @@ export default function DashboardScreen() {
                 </Link>
               </Animated.View>
             )}
+
+            {/* BOUTON PUB RÉCOMPENSÉE TABLET */}
+            <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+              <RewardedAdButton 
+                coupleId={partner?.coupleId || (store.uid ? `${store.uid}_solo` : null)}
+                onRewardEarned={() => {
+                  if (partner?.coupleId) {
+                    getWallet(partner.coupleId).then(setWallet).catch(() => {});
+                  }
+                }}
+              />
+            </View>
           </>
         )}
 

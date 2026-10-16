@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  BackHandler,
   Modal,
   View,
   Text,
@@ -65,6 +66,15 @@ export default function ForceUpdateModal() {
       return undefined;
     }
   }, [currentVersion]);
+
+  useEffect(() => {
+    if (!isOutdated) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Bloquer le bouton retour Android tant que la mise à jour n'est pas faite
+      return true;
+    });
+    return () => sub.remove();
+  }, [isOutdated]);
 
   if (!isOutdated) return null;
 

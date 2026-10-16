@@ -746,16 +746,26 @@ export default function SettingsScreen() {
 
           {/* Liens légaux */}
           <View style={[styles.section, { alignItems: 'center', gap: 12 }]}>
-            <Text style={{ color: store.isDarkMode ? '#B8A4A0' : '#8A7A78', fontSize: 12, marginBottom: 4 }}>Informations légales</Text>
+            <View style={{
+              backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.90)' : 'rgba(255, 255, 255, 0.92)',
+              paddingHorizontal: 14,
+              paddingVertical: 4,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: store.isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 154, 139, 0.3)',
+              marginBottom: 2,
+            }}>
+              <Text style={{ color: store.isDarkMode ? '#EAD6D2' : '#5A4A48', fontSize: 12, fontWeight: '700' }}>Informations légales</Text>
+            </View>
             <Link href="/terms" asChild>
-              <Pressable onPress={() => sound.tap()} style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
-                <FileText color={theme.text} size={14} />
+              <Pressable onPress={() => sound.tap()} style={[styles.legalLink, { backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.94)' : 'rgba(255, 255, 255, 0.95)' }]}>
+                <FileText color={theme.text} size={15} />
                 <Text style={[styles.legalLinkText, { color: theme.text }]}>Conditions Générales d’Utilisation</Text>
               </Pressable>
             </Link>
             <Link href="/privacy" asChild>
-              <Pressable onPress={() => sound.tap()} style={[styles.legalLink, { backgroundColor: theme.glassBackground }]}>
-                <Shield color={theme.text} size={14} />
+              <Pressable onPress={() => sound.tap()} style={[styles.legalLink, { backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.94)' : 'rgba(255, 255, 255, 0.95)' }]}>
+                <Shield color={theme.text} size={15} />
                 <Text style={[styles.legalLinkText, { color: theme.text }]}>Politique de Confidentialité</Text>
               </Pressable>
             </Link>
@@ -1062,8 +1072,22 @@ const getStyles = (theme: any, windowWidth: number = 400) => StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 10, width: '100%', maxWidth: 300, alignSelf: 'center',
   },
   disconnectText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  legalLink: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
-  legalLinkText: { fontSize: 13, fontWeight: '600' },
+  legalLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: theme.cardBorder,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  legalLinkText: { fontSize: 13, fontWeight: '700' },
   supportRow: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 10 },
   supportIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   supportTitle: { fontSize: 16, fontWeight: '700', marginBottom: 2 },

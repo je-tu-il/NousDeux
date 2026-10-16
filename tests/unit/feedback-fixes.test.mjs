@@ -320,7 +320,7 @@ test('login and settings cleanly sign out GoogleSignin and prevent redirect boun
   assert.match(indexSrc, /!age/, 'index.tsx must check age before allowing dashboard');
 
   assert.match(dashSrc, /ensureUserPairingCode/, 'dashboard.tsx must ensure user pairing code for solo users');
-  assert.match(dashSrc, /Mon code :/, 'dashboard.tsx must display pairing code for solo users');
+  assert.match(dashSrc, /Mode solo/, 'dashboard.tsx must display Mode solo for solo users');
 
   assert.match(layoutSrc, /ensureUserPairingCode/, '_layout.tsx must ensure user pairing code if doc missing');
   assert.match(layoutSrc, /GoogleSignin\.signOut/, '_layout.tsx must clear GoogleSignin on session clear');

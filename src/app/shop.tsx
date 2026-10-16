@@ -93,21 +93,31 @@ export default function ShopScreen() {
     : require('../../assets/images/nousdeux_warm_background.png'));
   const myUid = useOnboardingStore(s => s.uid);
 
-  const params = useLocalSearchParams<{ tab?: string | string[] }>();
+  const params = useLocalSearchParams<{ tab?: string | string[]; from?: string | string[] }>();
   const rawTab = Array.isArray(params?.tab) ? params.tab[0] : params?.tab;
   const initialTab: TabType = (rawTab && ['backgrounds', 'borders', 'tags', 'widgets'].includes(rawTab))
     ? (rawTab as TabType)
     : 'backgrounds';
 
-  const [loading,       setLoading]       = useState(true);
+  const fallbackCoupleId = (store.isSynced && store.partnerUid && store.uid)
+    ? [store.uid, store.partnerUid].sort().join('_')
+    : (store.uid ? `${store.uid}_solo` : null);
+
+  const [loading,       setLoading]       = useState(false);
   const [activeTab,     setActiveTab]     = useState<TabType>(initialTab);
   const [wallet,        setWallet]        = useState<WalletData | null>(null);
   const [inventory,     setInventory]     = useState<InventoryData | null>(null);
   const [questProgress, setQuestProgress] = useState<QuestProgressMap>({});
-  const [coupleId,      setCoupleId]      = useState<string | null>(null);
+  const [coupleId,      setCoupleId]      = useState<string | null>(fallbackCoupleId);
   const [selectedItem,  setSelectedItem]  = useState<Cosmetic | null>(null);
   const [isPurchasing,  setIsPurchasing]  = useState(false);
-  const [userProfile,   setUserProfile]   = useState<UserProfile | null>(null);
+  const [userProfile,   setUserProfile]   = useState<UserProfile | null>({
+    selectedBackground: store.selectedBackground,
+    selectedBorder: store.selectedBorder,
+    selectedTag: store.selectedTag,
+    selectedWidget: store.selectedWidget,
+    avatar: store.avatarConfig || { body: 'body_1', skin: 'skin_1', hair: 'hair_1', hairColor: 'black', eyes: 'eyes_1', mouth: 'mouth_1', accessory: 'none', hat: 'none', outfit: 'outfit_1' },
+  });
   const [modalState, setModalState] = useState<{
     visible: boolean;
     type?: UIModalType;
@@ -213,7 +223,21 @@ export default function ShopScreen() {
 
   const renderItemCard = ({ item }: { item: Cosmetic }) => {
     const streak     = wallet?.streak ?? 0;
-    const owned      = inventory ? isOwned(inventory, item, streak, questProgress) : false;
+    const isEquipped = 
+      (item.type === 'background' && (userProfile?.selectedBackground === item.id || store.selectedBackground === item.id)) ||
+      (item.type === 'border' && (userProfile?.selectedBorder === item.id || store.selectedBorder === item.id)) ||
+      (item.type === 'tag' && (userProfile?.selectedTag === item.id || store.selectedTag === item.id)) ||
+      (item.type === 'widget' && (userProfile?.selectedWidget === item.id || store.selectedWidget === item.id));
+
+    const owned = isEquipped ||
+      item.unlock.type === 'free' ||
+      item.id === 'widget_default' ||
+      item.id === 'tag_free_0' ||
+      item.id === 'bd_none' ||
+      item.id === 'bg_free_1' ||
+      (inventory ? isOwned(inventory, item, streak, questProgress) : false) ||
+      Boolean((inventory as any)?.widgets?.includes(item.id) || (inventory as any)?.widget?.includes(item.id));
+
     const canBuy     = canShowPurchase(item, streak);
     const price      = getPrice(item.unlock);
     const isLocked   = !owned && !canBuy;
@@ -221,12 +245,6 @@ export default function ShopScreen() {
     const bgColors   = item.type === 'background' ? parseGradientColors(item.preview) : ['#F5F5F5', '#ECECEC'];
     const previewImage = item.type === 'background' ? getCosmeticImage(item, store.isDarkMode) : item.image;
     const previewColors = store.isDarkMode ? ['#241B2A', '#111827'] : bgColors;
-
-    const isEquipped = 
-      (item.type === 'background' && userProfile?.selectedBackground === item.id) ||
-      (item.type === 'border' && userProfile?.selectedBorder === item.id) ||
-      (item.type === 'tag' && userProfile?.selectedTag === item.id) ||
-      (item.type === 'widget' && (userProfile?.selectedWidget === item.id || store.selectedWidget === item.id));
 
     const onSelect = async () => {
       // Selecting the currently equipped default/free item must never open
@@ -381,17 +399,19 @@ export default function ShopScreen() {
     );
   };
 
-  // —— Chargement —————————————————————————————————————————————————————————
-  if (loading) {
-    return (
-      <ImageBackground source={backgroundSource} style={styles.root} resizeMode="cover" imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#FF9A8B" />
-          <Text style={{ marginTop: 14, color: theme.text }}>Chargement de la boutique...</Text>
-        </View>
-      </ImageBackground>
-    );
-  }
+  const handleBack = () => {
+    sound.tap();
+    const fromParam = Array.isArray(params?.from) ? params.from[0] : params?.from;
+    if (fromParam === 'widgets') {
+      router.replace('/dashboard');
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/dashboard');
+    }
+  };
 
   const currentData = TAB_DATA[activeTab];
 
@@ -404,16 +424,16 @@ export default function ShopScreen() {
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           style={[styles.header, { paddingTop: topInset + 8 }]}
         >
-          <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>
+          <Pressable onPress={handleBack} style={styles.backBtn}>
             <ArrowLeft color="white" size={24} />
           </Pressable>
           <Text style={styles.headerTitle}>Boutique</Text>
-            <CoinWallet petals={wallet?.petals ?? 0} size="small" theme="white" />
+          <CoinWallet petals={wallet?.petals ?? 0} size="small" theme="white" />
         </LinearGradient>
 
-      {/* Wrapper global pour centrer sur grand écran */}
-      <View style={{ flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center' }}>
-        {/* Onglets (barre de choix) */}
+      {/* Wrapper global pour centrer sur grand écran avec overflow: hidden */}
+      <View style={{ flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center', overflow: 'hidden' }}>
+        {/* Onglets (barre de choix) - Fixe en haut de la liste */}
         <View style={styles.tabs}>
           {((Platform.OS === 'web'
             ? ['backgrounds', 'borders', 'tags']
@@ -434,48 +454,7 @@ export default function ShopScreen() {
           ))}
         </View>
 
-        {/* Bouton Publicité Récompensée (+15 Pétales) sous la barre d'onglets */}
-        <View style={{ marginTop: 14, marginBottom: 12, marginHorizontal: 12 }}>
-          <RewardedAdButton
-            coupleId={coupleId}
-            onRewardEarned={() => {
-              if (coupleId) {
-                getWallet(coupleId).then(setWallet).catch(() => {});
-              }
-            }}
-          />
-        </View>
-
-        {Platform.OS !== 'web' && activeTab === 'widgets' && (
-          <Pressable
-            onPress={() => {
-              sound.tap();
-              router.push('/widgets');
-            }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: theme.tint,
-              paddingHorizontal: 16,
-              paddingVertical: 14,
-              borderRadius: 16,
-              marginTop: 6,
-              marginBottom: 16,
-              marginHorizontal: 12,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: 18 }}>📱</Text>
-              <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>
-                Personnaliser mes widgets en direct ›
-              </Text>
-            </View>
-            <Text style={{ color: 'white', fontWeight: '900', fontSize: 14 }}>Voir</Text>
-          </Pressable>
-        )}
-
-        {/* Grille */}
+        {/* Grille avec header défilant (pub + bannière widget qui descendent avec les cartes) */}
         <FlatList
           key={activeTab} // force re-render on tab change (numColumns)
           data={currentData}
@@ -485,6 +464,49 @@ export default function ShopScreen() {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={{ paddingTop: 8, paddingBottom: 4 }}>
+              {/* Bouton Publicité Récompensée (+15 Pétales) qui défile avec l'interface */}
+              <View style={{ marginBottom: 12, marginHorizontal: 4 }}>
+                <RewardedAdButton
+                  coupleId={coupleId}
+                  onRewardEarned={() => {
+                    if (coupleId) {
+                      getWallet(coupleId).then(setWallet).catch(() => {});
+                    }
+                  }}
+                />
+              </View>
+
+              {Platform.OS !== 'web' && activeTab === 'widgets' && (
+                <Pressable
+                  onPress={() => {
+                    sound.tap();
+                    router.push('/widgets');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: theme.tint,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    borderRadius: 16,
+                    marginBottom: 14,
+                    marginHorizontal: 4,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 18 }}>📱</Text>
+                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>
+                      Personnaliser mes widgets en direct ›
+                    </Text>
+                  </View>
+                  <Text style={{ color: 'white', fontWeight: '900', fontSize: 14 }}>Voir</Text>
+                </Pressable>
+              )}
+            </View>
+          }
           ListFooterComponent={<GoogleAdBanner style={{ marginVertical: 16 }} />}
         />
       </View>
@@ -686,8 +708,14 @@ const getStyles = (theme: any) => StyleSheet.create({
   tabs: {
     flexDirection: 'row',
     backgroundColor: theme.card,
-    borderBottomWidth: 1,
+    borderBottomWidth: 1.5,
     borderBottomColor: theme.cardBorder,
+    zIndex: 10,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
   tab: {
     flex: 1, paddingVertical: 12, alignItems: 'center',
@@ -735,9 +763,9 @@ const getStyles = (theme: any) => StyleSheet.create({
     position: 'relative',
   },
   avatarMiniBase: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
+    width: '68%',
+    height: '68%',
+    borderRadius: 20,
     backgroundColor: '#FF9A8B',
     justifyContent: 'center',
     alignItems: 'center',
@@ -745,18 +773,18 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   borderCardImageOverlay: {
     position: 'absolute',
-    width: 74,
-    height: 74,
+    width: '96%',
+    height: '96%',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
   },
   borderCardCssOverlay: {
     position: 'absolute',
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    borderWidth: 3,
+    width: '74%',
+    height: '74%',
+    borderRadius: 22,
+    borderWidth: 4,
     borderStyle: 'solid',
     zIndex: 2,
   },

@@ -15,14 +15,13 @@ export default function AppLaunchAd() {
   const isDarkMode = store.isDarkMode;
   const theme = isDarkMode ? Colors.dark : Colors.light;
 
-  // Pas de pub au démarrage si toujours en cours d'onboarding ou de synchro (nom, âge, code, date de couple...)
+  // Pas de pub au démarrage si toujours en cours d'onboarding (nom, âge, login...)
   const isOnboarding = segments[0] === 'onboarding';
   const isSyncComplete = Boolean(
     store.uid &&
     store.pseudo &&
     store.age &&
-    store.isSynced &&
-    store.partnerUid
+    !isOnboarding
   );
 
   const [visible, setVisible] = useState(false);
@@ -33,7 +32,7 @@ export default function AppLaunchAd() {
       return;
     }
 
-    if (isOnboarding || !isSyncComplete) {
+    if (!isSyncComplete) {
       return;
     }
 
@@ -106,7 +105,8 @@ export default function AppLaunchAd() {
     return () => clearInterval(interval);
   }, []);
 
-  if (!visible || isOnboarding || !isSyncComplete) return null;
+  if (isOnboarding || !isSyncComplete) return null;
+  if (!visible) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade">

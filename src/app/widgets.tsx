@@ -72,12 +72,12 @@ export default function WidgetsScreen() {
           pUid = userDoc?.data()?.linkedTo || null;
         }
 
-        if (pUid) {
-          const cId = [store.uid, pUid].sort().join('_');
+        const effectiveCId = pUid ? [store.uid, pUid].sort().join('_') : (store.uid ? `${store.uid}_solo` : null);
+        if (effectiveCId) {
           const [inv, w, s] = await Promise.all([
-            getInventory(cId).catch(() => null),
-            getWallet(cId).catch(() => null),
-            computeStreakCached(cId).catch(() => 0),
+            getInventory(effectiveCId).catch(() => null),
+            getWallet(effectiveCId).catch(() => null),
+            computeStreakCached(effectiveCId).catch(() => 0),
           ]);
           setInventory(inv);
           const activeStreak = typeof w?.streak === 'number' && w.streak > 0 ? w.streak : (s || 0);
@@ -85,6 +85,8 @@ export default function WidgetsScreen() {
           if (activeStreak > 0) {
             data.streak = activeStreak;
             setWidgetData({ ...data, streak: activeStreak });
+            void AsyncStorage.setItem('@nousdeux_max_streak', String(activeStreak)).catch(() => {});
+            setMaxSeenStreak(prev => Math.max(prev, activeStreak));
           }
         }
       }
@@ -250,8 +252,12 @@ export default function WidgetsScreen() {
               const effectiveStreak = Math.max(currentStreak, maxSeenStreak);
               const isStreakUnlock = item.unlock.type === 'streak' && effectiveStreak >= (item.unlock.days ?? 0);
               const isInventoryOwned = isOwned(inventory, item, effectiveStreak, {});
-              const isStoreOwned = store.selectedWidget === item.id || userProfile?.selectedWidget === item.id || (inventory as any)?.widgets?.includes(item.id);
-              const owned = isInventoryOwned || isStreakUnlock || isStoreOwned || item.id === 'widget_default';
+              const isStoreOwned = store.selectedWidget === item.id ||
+                userProfile?.selectedWidget === item.id ||
+                Boolean((inventory as any)?.widgets?.includes(item.id)) ||
+                Boolean((inventory as any)?.widget?.includes(item.id)) ||
+                Boolean((userProfile as any)?.unlockedWidgets?.includes(item.id));
+              const owned = isInventoryOwned || isStreakUnlock || isStoreOwned || item.id === 'widget_default' || item.unlock.type === 'free';
               const isEquipped = (store.selectedWidget || 'widget_default') === item.id;
               const widgetConf = getWidgetTheme(item.id);
 
@@ -263,7 +269,7 @@ export default function WidgetsScreen() {
                       void handleSelectTheme(item.id);
                     } else {
                       sound.tap();
-                      router.push({ pathname: '/shop', params: { tab: 'widgets' } });
+                      router.push({ pathname: '/shop', params: { tab: 'widgets', from: 'widgets' } });
                     }
                   }}
                   style={[
