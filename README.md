@@ -1,57 +1,77 @@
-# Welcome to your Expo app 👋
+# ❤️ NousDeux — L'Application Mobile Complice pour les Couples
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+[![Release](https://img.shields.io/github/v/release/je-tu-il/NousDeux?color=pink&label=Version)](https://github.com/je-tu-il/NousDeux/releases/latest)
+[![Build Android](https://github.com/je-tu-il/NousDeux/actions/workflows/build-android.yml/badge.svg)](https://github.com/je-tu-il/NousDeux/actions/workflows/build-android.yml)
+[![Build iOS](https://github.com/je-tu-il/NousDeux/actions/workflows/build-ios.yml/badge.svg)](https://github.com/je-tu-il/NousDeux/actions/workflows/build-ios.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Platforms](https://img.shields.io/badge/Plateformes-Android%20%7C%20iOS%20%7C%20Web-purple.svg)](https://github.com/je-tu-il/NousDeux/releases/latest)
 
-## Get started
+> **NousDeux** est une application mobile intimiste conçue pour rapprocher les couples au quotidien : questions et dilemmes quotidiens, suivi de flammes (streaks), widgets d'écran d'accueil interactifs, personnalisation d'avatars et carnet de souvenirs partagés.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## 📲 Téléchargement Direct & Installation (Pour les Utilisateurs)
 
-2. Start the app
+Retrouvez les installateurs sur la page des [**Dernières Versions (Releases)**](https://github.com/je-tu-il/NousDeux/releases/latest) :
 
-   ```bash
-   npx expo start
-   ```
+### 🤖 Sur Android (Samsung, Xiaomi, Pixel, Oppo...)
+1. Téléchargez le fichier **`NousDeux.apk`** depuis la dernière Release.
+2. Ouvrez le fichier sur votre smartphone.
+3. Si votre téléphone affiche une alerte de sécurité *"Source inconnue"*, cliquez sur **Paramètres** puis cochez **Autoriser l'installation depuis cette source**.
+4. Validez l'installation et lancez **NousDeux** !
 
-In the output, you'll find options to open the app in a
+### 🍏 Sur iPhone & iPad (iOS)
+1. Téléchargez le fichier **`NousDeux.ipa`**.
+2. Installez-le facilement via votre gestionnaire de sideloading favori :
+   - [AltStore](https://altstore.io/) (recommandé sans jailbreak)
+   - [SideStore](https://sidestore.io/) (autonome sans PC après configuration)
+   - [Sideloadly](https://sideloadly.io/) (installation USB en 1 clic)
+   - [TrollStore](https://github.com/opa334/TrollStore) (si version iOS compatible)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+---
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## ✨ Fonctionnalités Principales
 
-## Get a fresh project
+- 💬 **Questions & Dilemmes Quotidiens** : Une nouvelle question chaque jour dans 12 thématiques (Amour, Intime, Souvenirs, Débats, Futurs projets, Défis, Famille, Fun, Rêves...). Découvrez la réponse de votre moitié une fois que vous avez tous les deux répondu !
+- 🔥 **Système de Streaks & Calendrier** : Gardez la flamme vivante avec un compteur de jours consécutifs et visualisez vos moments forts sur un calendrier interactif.
+- 📱 **Widgets iOS & Android** :
+  - **Question du Jour** : Affichez la question directement sur votre écran d'accueil sans ouvrir l'application.
+  - **Compteur de Flammes** : Gardez toujours un œil sur votre série de jours complices.
+- 🎨 **Avatars & Cosmétiques** : Personnalisez vos profils de couple avec des cadres, des bordures animées et des récompenses à débloquer via la boutique.
+- 💌 **Messagerie & Notes Privées** : Un espace sécurisé réservé uniquement à votre duo, synchronisé en temps réel via Firebase Firestore.
+- 🪙 **Quêtes Quotidiennes & Boutique** : Complétez vos quêtes de couple, gagnez des cœurs et débloquez de nouveaux éléments de personnalisation.
 
-When you're ready, run:
+---
+
+## 🛠️ Stack Technique
+
+- **Framework** : [React Native](https://reactnative.dev/) (0.85) avec [Expo SDK 56](https://expo.dev/)
+- **Langage** : TypeScript
+- **Base de données & Auth** : Firebase (Firestore, Auth, Realtime Database)
+- **Widgets natifs** : Swift (WidgetKit avec support iOS 17 containerBackground)
+- **CI/CD** : GitHub Actions (compilation automatisée des APK Release et IPA non signés)
+
+---
+
+## 💻 Démarrage en Développement
+
+### Prérequis
+- [Node.js](https://nodejs.org/) (v20+)
+- [Expo CLI](https://docs.expo.dev/)
 
 ```bash
-npm run reset-project
+# Installation des dépendances
+npm install --legacy-peer-deps
+
+# Lancement du serveur de développement Metro
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+- Scannez le QR code affiché dans le terminal avec l'application **Expo Go** (Android/iOS).
+- Appuyez sur `w` pour prévisualiser dans le navigateur web.
 
-### Other setup steps
+---
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## 📄 Licence
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-"# NousDeuxlikes" 
+Ce projet est distribué sous licence **MIT**. Consultez le fichier [LICENSE](LICENSE) pour plus de détails.
