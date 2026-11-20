@@ -1,0 +1,2 @@
+# Dépendances pour NousDeux — Application Mobile Couple & Intimité
+Pillow

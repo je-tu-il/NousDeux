@@ -19,6 +19,7 @@ import {
     serverTimestamp,
     setDoc,
     updateDoc,
+    writeBatch,
 } from 'firebase/firestore';
 import {
     ArrowLeft,
@@ -1884,7 +1885,7 @@ function DebugTab({ couples, onRefresh }: { couples: CoupleData[]; onRefresh: ()
           Bloque les versions obsolètes avec un pop-up bloquant et un bouton vers les stores.
         </Text>
         <Text style={{ fontSize: 13, color: '#6B7280', marginVertical: 4 }}>
-          Version actuelle de l'app : <Text style={{ fontWeight: 'bold' }}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
+          Version actuelle de l’app : <Text style={{ fontWeight: 'bold' }}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
         </Text>
         <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>
           Version minimale en production : <Text style={{ fontWeight: 'bold', color: '#FF6A88' }}>{currentMinVersion || 'Aucune (libre)'}</Text>
@@ -2350,6 +2351,7 @@ export default function AdminScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#665459', marginBottom: 6 },
   container: { flex: 1, backgroundColor: '#FFF5F2' },
 
   header: {

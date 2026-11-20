@@ -186,11 +186,7 @@ export default function FloatingChat() {
 
   // Écoute continue des messages (pour le point rouge de notification quand le chat est fermé)
   useEffect(() => {
-    if (!cId) {
-      setMessages([]);
-      setHasUnread(false);
-      return;
-    }
+    if (!cId) return;
     
     const q = query(collection(db, `couples/${cId}/messages`), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, async (snap) => {

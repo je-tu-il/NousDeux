@@ -13,7 +13,8 @@ import { router } from 'expo-router';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Send, CheckCircle2, Mail, MessageSquare, User } from 'lucide-react-native';
-import { db } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { openContactEmail } from '../lib/contact';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { ContactEmailLink } from '../components/ContactEmailLink';
@@ -48,6 +49,10 @@ export default function ContactScreen() {
     setSending(true);
 
     try {
+      if (!auth.currentUser) {
+        await openContactEmail(`NousDeux — ${category}`, `Nom : ${name.trim()}\nE-mail : ${email.trim()}\n\n${message.trim()}`);
+        return;
+      }
       await addDoc(collection(db, 'contacts'), {
         name:       name.trim(),
         email:      email.trim().toLowerCase(),
@@ -175,6 +180,7 @@ export default function ContactScreen() {
                   placeholder="Décris ton problème ou ta suggestion..."
                   placeholderTextColor="#C4B4B2"
                   multiline
+                  maxLength={1000}
                   numberOfLines={5}
                   textAlignVertical="top"
                 />
@@ -201,7 +207,7 @@ export default function ContactScreen() {
                     ? <ActivityIndicator color="white" />
                     : <>
                         <Send color="white" size={18} />
-                        <Text style={styles.sendText}>Envoyer le message</Text>
+                        <Text style={styles.sendText}>{auth.currentUser ? 'Envoyer le message' : 'Préparer un e-mail'}</Text>
                       </>}
                 </LinearGradient>
               </Pressable>

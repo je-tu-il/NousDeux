@@ -8,8 +8,8 @@ export const CONTACT_EMAIL = 'nousdeux.contact.app@gmail.com';
  * En cas d'échec (absence de client email configuré sur l'appareil),
  * copie l'adresse dans le presse-papier et affiche un toast discret de 2s.
  */
-export async function openContactEmail(subject = 'Contact NousDeux'): Promise<boolean> {
-  const query = subject ? `?subject=${encodeURIComponent(subject)}` : '';
+export async function openContactEmail(subject = 'Contact NousDeux', body = ''): Promise<boolean> {
+  const query = `?subject=${encodeURIComponent(subject)}${body ? `&body=${encodeURIComponent(body)}` : ''}`;
   const mailUrl = `mailto:${CONTACT_EMAIL}${query}`;
 
   try {
@@ -24,8 +24,8 @@ export async function openContactEmail(subject = 'Contact NousDeux'): Promise<bo
 
   try {
     const Clipboard = await import('expo-clipboard');
-    await Clipboard.setStringAsync(CONTACT_EMAIL);
-    useToastStore.getState().showToast('E-mail copié ! 📋');
+    await Clipboard.setStringAsync(body ? `${CONTACT_EMAIL}\n${subject}\n\n${body}` : CONTACT_EMAIL);
+    useToastStore.getState().showToast(body ? 'Message et adresse copiés ! 📋' : 'E-mail copié ! 📋');
   } catch {
     useToastStore.getState().showToast(CONTACT_EMAIL);
   }

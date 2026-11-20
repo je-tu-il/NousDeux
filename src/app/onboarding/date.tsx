@@ -32,8 +32,8 @@ export default function DateScreen() {
 
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
   const defaultBg = store.isDarkMode
-    ? require('../../../assets/images/nousdeux_dark_background.png')
-    : require('../../../assets/images/nousdeux_warm_background.png');
+    ? require('../../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../../assets/images/optimized/nousdeux_warm_background.jpg');
   const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
   const [day, setDay]     = useState('');
   const [month, setMonth] = useState('');
@@ -264,7 +264,7 @@ export default function DateScreen() {
 
   return (
     <View style={styles.container}>
-      <Image source={bgImage} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+      <Image source={bgImage} style={StyleSheet.absoluteFill} resizeMode="cover" />
       {store.isDarkMode && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)', zIndex: 0 }} pointerEvents="none" />
       )}
@@ -380,7 +380,7 @@ export default function DateScreen() {
             ) : success ? (
               <View style={styles.waitingContainer}>
                 <Text style={{ fontSize: 60, marginBottom: 20 }}>✅</Text>
-                <Text style={styles.waitingText}>C'est la bonne date !</Text>
+                <Text style={styles.waitingText}>C’est la bonne date !</Text>
               </View>
             ) : (
               <View style={styles.waitingContainer}>

@@ -595,7 +595,7 @@ export default function Daylink() {
           >
             <Clock size={16} color={theme.tint} />
             <Text style={[styles.yesterdayBtnText, { color: theme.tint }]}>
-              Voir la question et réponses d'hier
+              Voir la question et réponses d’hier
             </Text>
           </Pressable>
         </ScrollView>
@@ -619,7 +619,7 @@ export default function Daylink() {
               <ActivityIndicator color={theme.tint} size="small" style={{ marginVertical: 30 }} />
             ) : !yesterdayData?.exists ? (
               <Text style={{ textAlign: 'center', color: '#A99693', marginVertical: 20 }}>
-                Aucune question enregistrée pour la journée d'hier.
+                Aucune question enregistrée pour la journée d’hier.
               </Text>
             ) : (
               <ScrollView style={{ maxHeight: 380 }}>

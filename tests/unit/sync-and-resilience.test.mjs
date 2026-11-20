@@ -67,12 +67,12 @@ test('StreakCalendar orders bubbles chronologically with today on the right and 
 });
 
 test('avatar persistence and photo removal are supported', async () => {
-  const layoutSrc = await read('src/app/_layout.tsx');
+  const layoutSrc = await read('src/app/_layout.tsx') + await read('src/hooks/use-session-bootstrap.ts');
   const loginSrc = await read('src/app/onboarding/login.tsx');
   const avatarSrc = await read('src/app/onboarding/avatar.tsx');
   assert.match(layoutSrc, /avatarToSet/, '_layout.tsx must resolve avatar from avatarUrl or avatar');
   assert.match(layoutSrc, /getUserProfile/, '_layout.tsx must load userProfile to restore cosmetics/avatarConfig');
-  assert.match(loginSrc, /getUserProfile/, 'login.tsx must restore userProfile');
+  assert.match(layoutSrc, /getUserProfile/, 'Bootstrap must restore cosmetics');
   assert.match(avatarSrc, /Clique pour ajouter/, 'avatar.tsx must prompt Clique pour ajouter when empty');
   assert.match(avatarSrc, /handleRemovePhoto/, 'avatar.tsx must provide photo removal handler');
   assert.match(avatarSrc, /Plus tard/, 'avatar.tsx must always offer Plus tard option');
@@ -93,19 +93,14 @@ test('chat is read-only when unlinked and purged before new couple connection', 
 
 test('session isolation prevents partner data bleeding across account switches', async () => {
   const loginSrc = await read('src/app/onboarding/login.tsx');
-  const layoutSrc = await read('src/app/_layout.tsx');
+  const layoutSrc = await read('src/app/_layout.tsx') + await read('src/hooks/use-session-bootstrap.ts');
   const dashboardSrc = await read('src/app/dashboard.tsx');
   const cosmeticsSrc = await read('src/data/cosmetics.ts');
   const syncSrc = await read('src/app/onboarding/sync.tsx');
 
-  // 1. login.tsx must reset session or clear partner cache when switching accounts or unlinked
-  assert.match(loginSrc, /currentStore\.uid !== user\.uid/, 'login.tsx must detect switching user accounts');
-  assert.match(loginSrc, /currentStore\.resetSession\(\)/, 'login.tsx must reset session when switching accounts');
-  assert.match(loginSrc, /currentStore\.clearPartnerCache\(\)/, 'login.tsx must clear partner cache');
-
-  // 2. _layout.tsx must reset session when cached UID does not match auth user
-  assert.match(layoutSrc, /store\.uid && store\.uid !== user\.uid/, '_layout.tsx must reset session if UID changed');
-  assert.match(layoutSrc, /store\.clearPartnerCache\(\)/, '_layout.tsx must clear partner cache when user is unlinked');
+  assert.match(layoutSrc, /store\.uid !== firebaseUser\.uid/);
+  assert.match(layoutSrc, /store\.resetSession\(\)/);
+  assert.match(layoutSrc, /current\.clearPartnerCache\(\)/);
 
   // 3. dashboard.tsx partner state initialization must require isSynced
   assert.match(dashboardSrc, /store\.isSynced && store\.partnerUid/, 'dashboard.tsx must only initialize partner if isSynced is true');

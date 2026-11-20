@@ -1,4 +1,5 @@
 import { Platform, NativeModules } from 'react-native';
+import { useOnboardingStore } from '../store/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COSMETICS, Cosmetic } from '../data/cosmetics';
 import { getScheduledQuestionId, getDailyQuestionForDate } from '../data/scheduledQuestions';
@@ -24,6 +25,8 @@ export interface WidgetPayload {
   themeName: string;
   gradientColors: [string, string];
   updatedAt: string;
+  localDate?: string;
+  ownerUid?: string | null;
 }
 
 export const WIDGET_STORAGE_KEY = 'nousdeux_widget_payload_v1';
@@ -130,9 +133,10 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
     const defaultQuestion = todayQ.text;
     const defaultCategory = todayQ.category;
 
-    const existing: WidgetPayload = existingRaw ? JSON.parse(existingRaw) : {
-      streak: 1,
-      daysTogether: 1,
+    const previous = existingRaw ? JSON.parse(existingRaw) : null;
+    const existing: WidgetPayload = previous && previous.ownerUid === useOnboardingStore.getState().uid ? previous : {
+      streak: 0,
+      daysTogether: 0,
       todayQuestion: defaultQuestion,
       categoryName: defaultCategory,
       userAnswered: false,
@@ -146,18 +150,28 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
       themeName: "Classique Douceur",
       gradientColors: ["#FF9A8B", "#FF6A88"],
       updatedAt: new Date().toISOString(),
+      localDate: todayKey,
+      ownerUid: useOnboardingStore.getState().uid,
     };
 
-    // Auto-update to today's question if existing was empty or placeholder
-    if (!payload.todayQuestion && (!existing.todayQuestion || existing.todayQuestion.startsWith('Quelle est la plus belle') || existing.todayQuestion.startsWith('Ouvrez NousDeux'))) {
+    // Détection automatique du changement de jour ou question vide
+    const isNewDay = Boolean(existing.updatedAt && (existing.localDate || new Date(existing.updatedAt).toLocaleDateString('en-CA')) !== todayKey);
+    if (!payload.todayQuestion && (isNewDay || !existing.todayQuestion || existing.todayQuestion.startsWith('Quelle est la plus belle') || existing.todayQuestion.startsWith('Ouvrez NousDeux'))) {
       existing.todayQuestion = todayQ.text;
       existing.categoryName = todayQ.category;
+      if (isNewDay) {
+        existing.userAnswered = false;
+        existing.partnerAnswered = false;
+        existing.bothAnswered = false;
+      }
     }
 
     const merged: WidgetPayload = {
       ...existing,
       ...payload,
       updatedAt: new Date().toISOString(),
+      localDate: todayKey,
+      ownerUid: useOnboardingStore.getState().uid,
     };
 
     const theme = getWidgetTheme(merged.themeId);
@@ -282,6 +296,15 @@ export async function getWidgetData(): Promise<WidgetPayload> {
     const raw = await AsyncStorage.getItem(WIDGET_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      if (parsed.ownerUid !== useOnboardingStore.getState().uid) throw new Error('Different widget owner');
+      const savedDate = parsed.localDate || new Date(parsed.updatedAt).toLocaleDateString('en-CA');
+      if (savedDate !== todayKey) {
+        parsed.todayQuestion = todayQ.text;
+        parsed.categoryName = todayQ.category;
+        parsed.userAnswered = false;
+        parsed.partnerAnswered = false;
+        parsed.bothAnswered = false;
+      }
       if ((!parsed.todayQuestion || parsed.todayQuestion.startsWith('Quelle est la plus belle') || parsed.todayQuestion.startsWith('Quel est ton plus') || parsed.todayQuestion.startsWith('Ouvrez NousDeux'))) {
         parsed.todayQuestion = todayQ.text;
         parsed.categoryName = todayQ.category;
@@ -292,8 +315,8 @@ export async function getWidgetData(): Promise<WidgetPayload> {
 
   const defaultTheme = getWidgetTheme('widget_default');
   return {
-    streak: 1,
-    daysTogether: 1,
+    streak: 0,
+    daysTogether: 0,
     todayQuestion: todayQ.text,
     categoryName: todayQ.category,
     userAnswered: false,

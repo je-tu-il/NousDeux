@@ -15,7 +15,7 @@ export interface Question {
   category: QuestionCategory;
 }
 
-export const QUESTIONS = ([
+const questionsPart0: Question[] = [
   {"id":"q_gen_amour_001","text":"Quel est le tout premier détail physique qui t'a attiré chez moi ?","category":"amour"},
   {"id":"q_gen_amour_002","text":"À quel moment précis as-tu su que tu étais en train de tomber amoureux/amoureuse de moi ?","category":"amour"},
   {"id":"q_gen_amour_003","text":"Quelle est ma tenue dans laquelle tu me trouves le plus irrésistible ?","category":"amour"},
@@ -216,6 +216,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_amour_198","text":"Quelle est la chanson que tu aimerais que je te dédie en la chantant (même si je chante mal) ?","category":"amour"},
   {"id":"q_gen_amour_199","text":"Quel est le détail de ma personnalité qui réveille le plus ta tendresse ?","category":"amour"},
   {"id":"q_gen_amour_200","text":"Qu'est-ce qui te touche le plus dans ma façon de te réconforter quand tu es vulnérable ?","category":"amour"},
+];
+
+const questionsPart1: Question[] = [
   {"id":"q_gen_amour_201","text":"Quel est le geste d'affection que je devrais te faire encore plus souvent ?","category":"amour"},
   {"id":"q_gen_amour_202","text":"Qu'est-ce qui, dans mes yeux, te dit 'Je t'aime' sans qu'aucun son ne sorte ?","category":"amour"},
   {"id":"q_gen_amour_203","text":"Quelle est la façon dont tu aimes que l'on se retrouve après une dispute pour se réconcilier romantiquement ?","category":"amour"},
@@ -416,6 +419,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_debat_098","text":"Si on lave un aspirateur, devient-on nous-mêmes un nettoyeur d'aspirateur ?","category":"debat"},
   {"id":"q_gen_debat_099","text":"Est-ce qu'une pizza est en réalité une tarte salée qui s'ignore ?","category":"debat"},
   {"id":"q_gen_debat_100","text":"La couleur orange a-t-elle été nommée d'après le fruit, ou est-ce l'inverse ?","category":"debat"},
+];
+
+const questionsPart2: Question[] = [
   {"id":"q_gen_debat_101","text":"Vacances idéales : à la plage à rien faire, ou à la montagne pour faire de la rando ?","category":"debat"},
   {"id":"q_gen_debat_102","text":"Dans l'avion ou le train : côté hublot ou côté couloir ?","category":"debat"},
   {"id":"q_gen_debat_103","text":"Aéroport : arriver 3 heures en avance au cas où, ou à la dernière seconde dans le stress ?","category":"debat"},
@@ -616,6 +622,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_debat_298","text":"Le melon en entrée avec du jambon cru, ou le melon en dessert nature ?","category":"debat"},
   {"id":"q_gen_debat_299","text":"Être très en avance à la gare (1 heure avant) ou arriver au moment où le train siffle ?","category":"debat"},
   {"id":"q_gen_debat_300","text":"Ce débat est-il objectivement le plus important que nous ayons jamais eu ?","category":"debat"},
+];
+
+const questionsPart3: Question[] = [
   {"id":"q_gen_defi_001","text":"Défi : Fais un massage des épaules de 2 minutes à ton/ta partenaire.","category":"defi"},
   {"id":"q_gen_defi_002","text":"Défi : Embrasse tendrement le cou de ton/ta partenaire.","category":"defi"},
   {"id":"q_gen_defi_003","text":"Défi : Écris un petit mot doux et cache-le dans ses affaires.","category":"defi"},
@@ -816,6 +825,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_defi_198","text":"Défi : Embrasse l'intérieur de son bras.","category":"defi"},
   {"id":"q_gen_defi_199","text":"Défi : Serrez-vous fort l'un contre l'autre comme si vous vous retrouviez.","category":"defi"},
   {"id":"q_gen_defi_200","text":"Défi : Murmure-lui une chose que tu n'oses pas toujours lui demander au lit.","category":"defi"},
+];
+
+const questionsPart4: Question[] = [
   {"id":"q_gen_defi_201","text":"Défi : Caresse sa nuque en l'embrassant doucement.","category":"defi"},
   {"id":"q_gen_defi_202","text":"Défi : Dis-lui ce qui te fascine le plus dans sa personnalité.","category":"defi"},
   {"id":"q_gen_defi_203","text":"Défi : Joue doucement avec l'ourlet de son vêtement.","category":"defi"},
@@ -1016,6 +1028,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_famille_098","text":"As-tu l'impression que l'on communiquait facilement sur l'intimité et la sexualité chez toi ?","category":"famille"},
   {"id":"q_gen_famille_099","text":"Qu'est-ce qui faisait la singularité de ta maison d'enfance (déco, ambiance, règles) ?","category":"famille"},
   {"id":"q_gen_famille_100","text":"Si tu pouvais remercier ta famille pour une seule chose aujourd'hui, que dirais-tu ?","category":"famille"},
+];
+
+const questionsPart5: Question[] = [
   {"id":"q_gen_famille_101","text":"Quel trait de caractère as-tu hérité de ta famille et que tu essaies de changer ?","category":"famille"},
   {"id":"q_gen_famille_102","text":"Quel trait de caractère as-tu hérité de ta famille et dont tu es fier/fière ?","category":"famille"},
   {"id":"q_gen_famille_103","text":"Dans quelle mesure penses-tu que la relation de tes parents a influencé ta vision de l'amour ?","category":"famille"},
@@ -1216,6 +1231,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_famille_298","text":"Quelle promesse es-tu prêt(e) à me faire aujourd'hui concernant l'éducation de nos enfants ?","category":"famille"},
   {"id":"q_gen_famille_299","text":"En quoi le fait de t'aimer me prépare-t-il à aimer notre future famille ?","category":"famille"},
   {"id":"q_gen_famille_300","text":"Si tu devais donner un seul mot pour décrire l'avenir de notre famille, quel serait-il ?","category":"famille"},
+];
+
+const questionsPart6: Question[] = [
   {"id":"q_gen_fun_001","text":"Si je me transformais en zombie, est-ce que tu essaierais de me garder comme animal de compagnie ou tu me neutraliserais direct ?","category":"fun"},
   {"id":"q_gen_fun_002","text":"Si on devait échanger nos corps pour 24h, quelle est la première chose absurde que tu ferais avec le mien ?","category":"fun"},
   {"id":"q_gen_fun_003","text":"Quel crime stupide serions-nous le plus susceptibles de commettre ensemble par pur accident ?","category":"fun"},
@@ -1416,6 +1434,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_fun_198","text":"Si on devait se battre en duel à la loyale, avec quel objet du salon on le ferait ?","category":"fun"},
   {"id":"q_gen_fun_199","text":"Lequel de nous deux survivrait à un film d'horreur simplement en dormant pendant tout le film ?","category":"fun"},
   {"id":"q_gen_fun_200","text":"Si je participais à une comédie musicale, quel serait le nom de la chanson que je chanterais faux ?","category":"fun"},
+];
+
+const questionsPart7: Question[] = [
   {"id":"q_gen_fun_201","text":"Si j'étais un personnage de cartoon, quel serait mon gag récurrent (ex: me prendre un mur) ?","category":"fun"},
   {"id":"q_gen_fun_202","text":"Quel super-vilain de comics me ressemble le plus quand je n'ai pas eu mon café le matin ?","category":"fun"},
   {"id":"q_gen_fun_203","text":"Si on inventait une maladie qui porte mon nom, quels en seraient les symptômes farfelus ?","category":"fun"},
@@ -1616,6 +1637,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_futur_098","text":"Quelle est ton approche face aux horaires décalés (travail de nuit, travail posté) si la profession l'exige ?","category":"futur"},
   {"id":"q_gen_futur_099","text":"Si mon supérieur se montre toxique, jusqu'à quel point seras-tu d'accord pour que je quitte mon emploi sans plan B ?","category":"futur"},
   {"id":"q_gen_futur_100","text":"Comment gèrerions-nous la rivalité professionnelle si nous étions dans le même secteur et en concurrence ?","category":"futur"},
+];
+
+const questionsPart8: Question[] = [
   {"id":"q_gen_futur_101","text":"À quelle heure devrions-nous idéalement instaurer un 'couvre-feu' pour cesser de parler boulot le soir ?","category":"futur"},
   {"id":"q_gen_futur_102","text":"Quelle est l'importance du prestige social ou de la réussite de ma carrière à tes yeux ?","category":"futur"},
   {"id":"q_gen_futur_103","text":"T'est-il indispensable que nos métiers aient un impact positif sur la société ou la planète ?","category":"futur"},
@@ -1816,6 +1840,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_futur_298","text":"Si l'on trouve un objet de grande valeur dans la rue, qui aura le réflexe de le rapporter aux objets trouvés ou de le déclarer ?","category":"futur"},
   {"id":"q_gen_futur_299","text":"Serons-nous du genre à conserver méticuleusement chaque ticket de caisse et garantie d'appareil pendant des années ?","category":"futur"},
   {"id":"q_gen_futur_300","text":"Quel est ton plan si un proche te demande de te porter garant(e) pour un appartement, serai-je consulté(e) avant ta décision ?","category":"futur"},
+];
+
+const questionsPart9: Question[] = [
   {"id":"q_gen_intime_001","text":"Quel est ton souvenir le plus excitant de nos tout premiers rapprochements ?","category":"intime"},
   {"id":"q_gen_intime_002","text":"Quelle partie de mon corps aimes-tu le plus regarder en secret ?","category":"intime"},
   {"id":"q_gen_intime_003","text":"Si tu devais décrire mon odeur naturelle, que dirais-tu ?","category":"intime"},
@@ -2016,6 +2043,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_intime_198","text":"Quelle est ta manière préférée d'être rassuré(e) sur ton potentiel de séduction envers moi ?","category":"intime"},
   {"id":"q_gen_intime_199","text":"Aimes-tu l'idée d'un week-end où l'on reste enfermés sans aucun contact avec l'extérieur ?","category":"intime"},
   {"id":"q_gen_intime_200","text":"Qu'est-ce qui te plaît le plus dans le goût de ma peau après l'amour ?","category":"intime"},
+];
+
+const questionsPart10: Question[] = [
   {"id":"q_gen_intime_201","text":"Quelle est l'attention physique qui prouve que je suis à l'écoute de tes désirs ?","category":"intime"},
   {"id":"q_gen_intime_202","text":"Quel est le scénario que tu trouves le plus drôle et excitant à la fois ?","category":"intime"},
   {"id":"q_gen_intime_203","text":"Comment aimerais-tu que je te déshabille si nous avions tout notre temps devant nous ?","category":"intime"},
@@ -2216,6 +2246,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_profond_098","text":"Comment aimes-tu que je te réconforte quand tu as l'impression d'avoir échoué ?","category":"profond"},
   {"id":"q_gen_profond_099","text":"Y a-t-il une chose que tu pardonnes plus facilement aujourd'hui grâce à l'amour que l'on se porte ?","category":"profond"},
   {"id":"q_gen_profond_100","text":"Qu'est-ce qui te donne la certitude profonde que nous sommes faits l'un pour l'autre ?","category":"profond"},
+];
+
+const questionsPart11: Question[] = [
   {"id":"q_gen_profond_101","text":"Quelle est la chose la plus importante que tu souhaites transmettre avec moi au monde ou à notre entourage ?","category":"profond"},
   {"id":"q_gen_profond_102","text":"Comment puis-je t'aider à te libérer de tes pressions quotidiennes ?","category":"profond"},
   {"id":"q_gen_profond_103","text":"Quel est ton refuge intérieur, et comment puis-je le respecter au mieux ?","category":"profond"},
@@ -2416,6 +2449,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_profond_298","text":"Comment aimerais-tu que l'on cultive notre gratitude l'un envers l'autre pour les décennies à venir ?","category":"profond"},
   {"id":"q_gen_profond_299","text":"Quelle est la plus belle preuve de la maturité et de la profondeur de notre amour aujourd'hui ?","category":"profond"},
   {"id":"q_gen_profond_300","text":"Si tu devais résumer en une phrase l'empreinte profonde que notre couple a laissée sur ton cœur, quelle serait-elle ?","category":"profond"},
+];
+
+const questionsPart12: Question[] = [
   {"id":"q_gen_quotidien_001","text":"Qui est le plus difficile à réveiller le matin ?","category":"quotidien"},
   {"id":"q_gen_quotidien_002","text":"Quelle est ta boisson chaude préférée pour commencer la journée ?","category":"quotidien"},
   {"id":"q_gen_quotidien_003","text":"Lequel de nous deux repousse le plus souvent son réveil ?","category":"quotidien"},
@@ -2616,6 +2652,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_quotidien_198","text":"Lequel de nous deux lit les nouvelles à haute voix pendant le petit-déjeuner ?","category":"quotidien"},
   {"id":"q_gen_quotidien_199","text":"Qui laisse le plus d'onglets ouverts sur l'ordinateur commun ?","category":"quotidien"},
   {"id":"q_gen_quotidien_200","text":"Quelle est la photo encadrée ou affichée chez nous que tu préfères ?","category":"quotidien"},
+];
+
+const questionsPart13: Question[] = [
   {"id":"q_gen_quotidien_201","text":"Qui s'occupe de mettre les photos de nos vacances dans des albums ?","category":"quotidien"},
   {"id":"q_gen_quotidien_202","text":"Lequel de nous deux est le plus nostalgique des anciens appartements ou maisons ?","category":"quotidien"},
   {"id":"q_gen_quotidien_203","text":"Qui propose le plus souvent des améliorations ou petits travaux de bricolage ?","category":"quotidien"},
@@ -2816,6 +2855,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_reve_098","text":"Quel sera le prochain défi sportif que nous relèverons à deux ?","category":"reve"},
   {"id":"q_gen_reve_099","text":"Si on pouvait rajeunir d'un jour tous les ans à la même date, que ferions-nous de cette journée ?","category":"reve"},
   {"id":"q_gen_reve_100","text":"Si notre futur était une chanson, de quel genre musical serait-elle ?","category":"reve"},
+];
+
+const questionsPart14: Question[] = [
   {"id":"q_gen_reve_101","text":"Quelle est la prochaine grande étape de notre vie que tu as hâte de franchir ?","category":"reve"},
   {"id":"q_gen_reve_102","text":"Si on pouvait construire une maison complètement sous l'eau, à quoi ressemblerait notre salon ?","category":"reve"},
   {"id":"q_gen_reve_103","text":"Quel festival ou carnaval mondial devrions-nous vivre au moins une fois ?","category":"reve"},
@@ -3016,6 +3058,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_reve_298","text":"Si l'on pouvait concevoir la piscine la plus incroyable du monde, comment serait-elle ?","category":"reve"},
   {"id":"q_gen_reve_299","text":"Qu'est-ce que tu espères qu'on n'arrêtera jamais de se dire avant de dormir ?","category":"reve"},
   {"id":"q_gen_reve_300","text":"Si nous écrivions aujourd'hui le dernier chapitre du livre de notre vie, quel en serait le message final ?","category":"reve"},
+];
+
+const questionsPart15: Question[] = [
   {"id":"q_gen_souvenir_001","text":"Tu te souviens de la toute première fois où nos regards se sont croisés ?","category":"souvenir"},
   {"id":"q_gen_souvenir_002","text":"Tu te rappelles de la tenue que je portais lors de notre première rencontre ?","category":"souvenir"},
   {"id":"q_gen_souvenir_003","text":"Quel est ton souvenir le plus précis de notre tout premier rendez-vous ?","category":"souvenir"},
@@ -3216,6 +3261,9 @@ export const QUESTIONS = ([
   {"id":"q_gen_souvenir_198","text":"Tu te souviens du moment où l'on s'est rendu compte qu'on avait les mêmes goûts bizarres sur un sujet précis ?","category":"souvenir"},
   {"id":"q_gen_souvenir_199","text":"Te rappelles-tu de la fois où l'on s'est promis de toujours se soutenir ?","category":"souvenir"},
   {"id":"q_gen_souvenir_200","text":"Tu te souviens de notre première soirée au théâtre, à l'opéra ou à un spectacle d'humour ?","category":"souvenir"},
+];
+
+const questionsPart16: Question[] = [
   {"id":"q_gen_souvenir_201","text":"Quel est ton souvenir de la fois où on s'est perdus dans une ville inconnue ?","category":"souvenir"},
   {"id":"q_gen_souvenir_202","text":"Tu te souviens du premier souvenir que tu as rapporté pour moi d'un voyage où je n'étais pas ?","category":"souvenir"},
   {"id":"q_gen_souvenir_203","text":"Te rappelles-tu de la première fois où l'on a discuté de ce que l'on voulait accomplir dans la vie ?","category":"souvenir"},
@@ -3316,7 +3364,27 @@ export const QUESTIONS = ([
   {"id":"q_gen_souvenir_298","text":"Tu te souviens de ce moment suspendu où l'on a su que notre relation était unique ?","category":"souvenir"},
   {"id":"q_gen_souvenir_299","text":"Te rappelles-tu de l'instant précis où tu as eu envie de construire ton avenir avec moi ?","category":"souvenir"},
   {"id":"q_gen_souvenir_300","text":"Si tu devais résumer tous nos souvenirs en un seul moment, te souviens-tu duquel tu choisirais ?","category":"souvenir"},
-]) as Question[];
+];
+
+export const QUESTIONS: Question[] = [
+  ...questionsPart0,
+  ...questionsPart1,
+  ...questionsPart2,
+  ...questionsPart3,
+  ...questionsPart4,
+  ...questionsPart5,
+  ...questionsPart6,
+  ...questionsPart7,
+  ...questionsPart8,
+  ...questionsPart9,
+  ...questionsPart10,
+  ...questionsPart11,
+  ...questionsPart12,
+  ...questionsPart13,
+  ...questionsPart14,
+  ...questionsPart15,
+  ...questionsPart16
+];
 
 export function getByCategory(category: QuestionCategory): Question[] {
   return QUESTIONS.filter((q) => q.category === category);

@@ -151,15 +151,15 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
 
   useEffect(() => {
     if (wallet === null) {
-      setPhase('loading');
+      // Initial phase is loading; later wallet updates are resolved below.
       const timeout = setTimeout(() => setPhase('locked'), 3000);
       return () => clearTimeout(timeout);
     }
     if (alreadyClaimed) {
-      setPhase('done');
+      const timer = setTimeout(() => setPhase('done'), 0);
       markRouletteClaimedToday(myUid).catch(() => {});
       cancelRouletteReminder().catch(() => {});
-      return;
+      return () => clearTimeout(timer);
     }
     if (!coupleId || !myUid) return;
 
@@ -190,49 +190,6 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
   // Options du composant
   const WHEEL_SIZE_DYNAMIC = compact ? 220 : 280;
 
-  // Calcul du gain cible au moment de cliquer
-  const doSpin = useCallback(() => {
-    if (wheelPhase === 'spinning') return;
-    sound.pop();
-    const segIdx = weightedRandom();
-    const seg = SEGMENTS[segIdx];
-    const amount = seg.isRespin ? 0 : Math.round(base * seg.multiplier);
-
-    const currentNorm = rotation.value % 360;
-    // Ajoute un décalage naturel de +/- 15 degrés pour ne pas atterrir pile au centre (évite l'impression de tomber sur la ligne)
-    const randomOffset = (Math.random() - 0.5) * (SEG_ANGLE * 0.7); 
-    const targetAngle = 360 - (segIdx * SEG_ANGLE + (SEG_ANGLE / 2) + randomOffset);
-    let delta = targetAngle - currentNorm;
-    if (delta < 0) delta += 360;
-    
-    // 10 tours complets supplémentaires + l'angle cible
-    const totalRotation = rotation.value + 10 * 360 + delta;
-
-    setWheelPhase('spinning');
-    resultScale.value = 0;
-
-    // Micro-ticks sonores pendant la rotation
-    let tickCount = 0;
-    const tickInterval = setInterval(() => {
-      tickCount++;
-      if (tickCount < 14) {
-        sound.tick();
-      } else {
-        clearInterval(tickInterval);
-      }
-    }, 220);
-    
-    // Fallback animation easing (très fluide, pas de risque d'erreur bezier)
-    rotation.value = withTiming(totalRotation, { 
-      duration: 5500, 
-      easing: Easing.out(Easing.cubic),
-      reduceMotion: ReduceMotion.Never 
-    }, (finished) => {
-      clearInterval(tickInterval);
-      if (finished) runOnJS(onSpinDone)(segIdx, amount, seg.isRespin ?? false);
-    });
-  }, [wheelPhase, base, coupleId, rotation, resultScale]);
-
   const onSpinDone = useCallback(async (segIdx: number, amount: number, isRespinResult: boolean) => {
     setWonSeg(segIdx);
 
@@ -252,7 +209,7 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
     setWonAmount(claim.petals);
     setClaimedBalance(claim.balance);
     setClaimedTotalEarned(claim.totalEarned);
-    resultScale.value = withSpring(1, { damping: 10 });
+    resultScale.set(withSpring(1, { damping: 10 }));
     setWheelPhase('result');
     if (SEGMENTS[segIdx]?.isJackpot) {
       sound.reward();
@@ -260,6 +217,51 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
       sound.coin();
     }
   }, [coupleId, myUid, resultScale]);
+
+
+  // Calcul du gain cible au moment de cliquer
+  const doSpin = useCallback(() => {
+    if (wheelPhase === 'spinning') return;
+    sound.pop();
+    const segIdx = weightedRandom();
+    const seg = SEGMENTS[segIdx];
+    const amount = seg.isRespin ? 0 : Math.round(base * seg.multiplier);
+
+    const currentNorm = rotation.value % 360;
+    // Ajoute un décalage naturel de +/- 15 degrés pour ne pas atterrir pile au centre (évite l'impression de tomber sur la ligne)
+    const randomOffset = (Math.random() - 0.5) * (SEG_ANGLE * 0.7); 
+    const targetAngle = 360 - (segIdx * SEG_ANGLE + (SEG_ANGLE / 2) + randomOffset);
+    let delta = targetAngle - currentNorm;
+    if (delta < 0) delta += 360;
+    
+    // 10 tours complets supplémentaires + l'angle cible
+    const totalRotation = rotation.value + 10 * 360 + delta;
+
+    setWheelPhase('spinning');
+    resultScale.set(0);
+
+    // Micro-ticks sonores pendant la rotation
+    let tickCount = 0;
+    const tickInterval = setInterval(() => {
+      tickCount++;
+      if (tickCount < 14) {
+        sound.tick();
+      } else {
+        clearInterval(tickInterval);
+      }
+    }, 220);
+    
+    // Fallback animation easing (très fluide, pas de risque d'erreur bezier)
+    rotation.set(withTiming(totalRotation, {
+      duration: 5500, 
+      easing: Easing.out(Easing.cubic),
+      reduceMotion: ReduceMotion.Never 
+    }, (finished) => {
+      clearInterval(tickInterval);
+      if (finished) runOnJS(onSpinDone)(segIdx, amount, seg.isRespin ?? false);
+    }));
+  }, [wheelPhase, base, coupleId, rotation, resultScale, onSpinDone]);
+
 
   const handleCollect = () => {
     sound.coin();
@@ -353,7 +355,7 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
               style={{ backgroundColor: '#FF6A88', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20, alignSelf: 'center' }}
               onPress={() => setLockedInfoModal({ visible: false, title: '', message: '' })}
             >
-              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>J'ai compris</Text>
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>J’ai compris</Text>
             </Pressable>
           </View>
         </Pressable>
@@ -365,7 +367,7 @@ export const DailyClaim = memo(function DailyClaim({ coupleId, myUid, wallet, on
             {wheelPhase !== 'spinning' && wheelPhase !== 'result' && (
               <Pressable style={styles.closeBtn} onPress={() => setShowModal(false)}><X color="#A99693" size={24} /></Pressable>
             )}
-            <Text style={[styles.modalTitle, { marginBottom: 20 }]}>Roulette de l'Amour</Text>
+            <Text style={[styles.modalTitle, { marginBottom: 20 }]}>Roulette de l’Amour</Text>
             
             <View style={styles.wheelOuter}>
               <Pointer />

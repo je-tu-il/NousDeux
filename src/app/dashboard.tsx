@@ -13,8 +13,8 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router, useSegments } from 'expo-router';
-import { collection, doc, getDocs, onSnapshot } from 'firebase/firestore';
-import { Brain, CalendarHeart, Camera, Coffee, Copy, Flame, Heart, HeartHandshake, Home, Infinity as InfinityIcon, Lock, MessageCircle, Rocket, Settings, Smile, Split, Star, Trophy, X } from 'lucide-react-native';
+import { collection, doc, getDoc, getDocs, onSnapshot } from 'firebase/firestore';
+import { Brain, CalendarHeart, Camera, Coffee, Copy, Flame, Heart, HeartHandshake, Home, Infinity as InfinityIcon, Lock, MessageCircle, Rocket, Settings, Smartphone, Smile, Split, Star, Trophy, X } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { ensureUserPairingCode } from '@/lib/pairing';
 import { useToastStore } from '@/store/toastStore';
@@ -24,6 +24,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Image, ImageBackground, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { useLocalDay } from '@/hooks/use-local-day';
 import { useTopInset } from '@/hooks/useTopInset';
 import { syncWidgetData } from '@/lib/widgets';
 import {
@@ -44,6 +45,7 @@ export default function DashboardScreen() {
   const store = useOnboardingStore((state) => state);
   const { width: windowWidth } = useWindowDimensions();
   const topInset = useTopInset();
+  const localDay = useLocalDay();
   const segments = useSegments();
   const redirectGuardRef = useRef<string | null>(null);
 
@@ -59,8 +61,8 @@ export default function DashboardScreen() {
   const styles: any = getStyles(theme, windowWidth);
   const background = getCosmeticById(store.selectedBackground);
   const backgroundSource = getCosmeticImage(background, store.isDarkMode) || (store.isDarkMode
-    ? require('../../assets/images/nousdeux_dark_background.png')
-    : require('../../assets/images/nousdeux_warm_background.png'));
+    ? require('../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../assets/images/optimized/nousdeux_warm_background.jpg'));
   const backgroundResizeMode = 'cover';
 
   const [unlockedCosmetic, setUnlockedCosmetic] = useState<Cosmetic | null>(null);
@@ -78,7 +80,6 @@ export default function DashboardScreen() {
   const [showPartnerProfile, setShowPartnerProfile] = useState(false);
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
-  const [unlockedItems, setUnlockedItems] = useState<Cosmetic[]>([]);
   const [wallet, setWallet] = useState<any>(() => {
     const initialCoupleId = store.isSynced && store.partnerUid && store.uid ? [store.uid, store.partnerUid].sort().join('_') : null;
     return initialCoupleId ? getCachedWallet(initialCoupleId) : null;
@@ -96,28 +97,11 @@ export default function DashboardScreen() {
       setMyProfile(null);
       setPartnerProfile(null);
       setWallet(null);
-      setUnlockedItems([]);
+      setUnlockedCosmetic(null);
       setPartnerAnsweredCategories(new Set());
     }
   }, [activeUid]);
 
-  useEffect(() => {
-    const checkStreakUnlock = async () => {
-      if (!wallet?.streak) return;
-      try {
-        const lastSeenStr = await AsyncStorage.getItem('last_seen_streak_unlock');
-        const lastSeen = lastSeenStr ? parseInt(lastSeenStr) : 0;
-        if (wallet.streak > lastSeen) {
-          const newUnlocks = COSMETICS.filter(c => c.unlock.type === 'streak' && c.unlock.days === wallet.streak);
-          if (newUnlocks.length > 0) {
-            setUnlockedItems(newUnlocks);
-            await AsyncStorage.setItem('last_seen_streak_unlock', wallet.streak.toString());
-          }
-        }
-      } catch(e) {}
-    };
-    checkStreakUnlock();
-  }, [wallet?.streak]);
 
   const [streakRestoreOffer, setStreakRestoreOffer] = useState<{ canRestore: boolean; lostStreak: number; cost: number; yesterdayKey?: string } | null>(null);
   const [showStreakRestoreModal, setShowStreakRestoreModal] = useState(false);
@@ -302,14 +286,14 @@ export default function DashboardScreen() {
     }
   }, [store.uid, partner?.coupleId]);
 
-  // Synchronisation immédiate du widget dès que le store/wallet est disponible
+  // Solo defaults; linked accounts use the actual daily slot below.
   useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' && !partner?.coupleId) {
       const d = new Date();
       const tKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const defaultQ = getDailyQuestionForDate(tKey);
       void syncWidgetData({
-        streak: wallet?.streak ?? 1,
+        streak: wallet?.streak ?? 0,
         todayQuestion: defaultQ.text,
         categoryName: defaultQ.category,
         userPseudo: store.pseudo || 'Moi',
@@ -319,7 +303,7 @@ export default function DashboardScreen() {
         themeId: store.selectedWidget || 'widget_default',
       });
     }
-  }, [store.uid, partner?.pseudo, wallet?.streak, store.selectedWidget]);
+  }, [store.uid, partner?.coupleId, partner?.pseudo, wallet?.streak, store.selectedWidget, localDay]);
 
   useEffect(() => {
     const currentUid = store.uid;
@@ -380,7 +364,7 @@ export default function DashboardScreen() {
       }
 
       if (hasUserAnsweredToday) {
-        markQuestionAnsweredToday(store.uid, tKey).catch(() => {});
+        markQuestionAnsweredToday(currentUid, tKey).catch(() => {});
         cancelDailyQuestionReminder().catch(() => {});
       }
 
@@ -389,11 +373,11 @@ export default function DashboardScreen() {
         cancelStreakReminder().catch(() => {});
       }
 
-      const activeStreak = await computeStreakCached(coupleId, true).catch(() => wallet?.streak ?? 1);
+      const activeStreak = await computeStreakCached(coupleId, true).catch(() => wallet?.streak ?? 0);
 
       if (Platform.OS !== 'web') {
         void syncWidgetData({
-          streak: typeof activeStreak === 'number' && activeStreak >= 0 ? activeStreak : (wallet?.streak ?? 1),
+          streak: typeof activeStreak === 'number' && activeStreak >= 0 ? activeStreak : (wallet?.streak ?? 0),
           todayQuestion: todayQuestionText,
           categoryName: todayCategory,
           userAnswered: hasUserAnsweredToday,
@@ -434,13 +418,13 @@ export default function DashboardScreen() {
       unsubscribeDaily();
       unsubscribeAnswers();
     };
-  }, [partner?.coupleId, store.uid]);
+  }, [partner?.coupleId, store.uid, localDay, store.selectedWidget]);
 
   // Notification de déblocage par série
   useEffect(() => {
     if (!wallet?.streak) return;
     const checkUnlocks = async () => {
-      const lastSeenStr = await AsyncStorage.getItem('last_seen_streak');
+      const lastSeenStr = await AsyncStorage.getItem(`last_seen_streak:${store.uid}`);
       const lastSeen = lastSeenStr ? parseInt(lastSeenStr) : 0;
       if (wallet.streak > lastSeen) {
         // Trouver s'il y a un cosmétique pour cette série exacte
@@ -448,7 +432,7 @@ export default function DashboardScreen() {
         if (unlocked) {
           setUnlockedCosmetic(unlocked);
         }
-        await AsyncStorage.setItem('last_seen_streak', wallet.streak.toString());
+        await AsyncStorage.setItem(`last_seen_streak:${store.uid}`, wallet.streak.toString());
       }
     };
     checkUnlocks();
@@ -494,7 +478,7 @@ export default function DashboardScreen() {
         setWallet(updatedWallet);
         cacheWallet(partner.coupleId, updatedWallet);
       } else {
-        sound.warning();
+        triggerHaptic('warning');
         triggerHaptic('warning');
         useToastStore.getState().showToast(res.error || 'Impossible de restaurer la série.');
       }
@@ -587,44 +571,13 @@ export default function DashboardScreen() {
           <Text style={{ color: theme.text, marginTop: 14 }}>Chargement du Dashboard...</Text>
         </View>
         
-        {/* Streak Unlock Popup */}
-      <Modal visible={unlockedItems.length > 0} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={{ fontSize: 24, textAlign: 'center', marginBottom: 10 }}>🎯</Text>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 10 }}>Nouveauté Débloquée !</Text>
-            <Text style={{ fontSize: 14, color: theme.tabIconDefault, textAlign: 'center', marginBottom: 20 }}>Ton streak de {wallet?.streak} jours t’a permis de débloquer :</Text>
-            
-            {unlockedItems.map(item => (
-              <View key={item.id} style={{ alignItems: 'center', marginBottom: 15, padding: 10, backgroundColor: 'rgba(255,154,139,0.1)', borderRadius: 16, width: '100%' }}>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FF6A88' }}>{item.emoji ? item.emoji + ' ' : ''}{item.name}</Text>
-                <Text style={{ fontSize: 12, color: theme.tabIconDefault }}>{item.description}</Text>
-              </View>
-            ))}
-
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, width: '100%' }}>
-              <Pressable style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#F5F5F5', alignItems: 'center' }} onPress={() => setUnlockedItems([])}>
-                <Text style={{ color: theme.text, fontWeight: 'bold' }}>Fermer</Text>
-              </Pressable>
-              <Pressable style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#FF6A88', alignItems: 'center' }} onPress={() => { setUnlockedItems([]); router.push('/shop'); }}>
-                <Text style={{ color: 'white', fontWeight: 'bold' }}>Voir boutique</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-  
       </ImageBackground>
     );
   }
 
   const renderAvatar = (avatarUrl: string | null | undefined, pseudo: string, isPartner: boolean, profile: UserProfile | null) => {
-    const streak = wallet?.streak || 0;
-    const isUnlocked = (c: any) => !c || c.unlock.type !== 'streak' || streak >= c.unlock.days;
-    let cosmeticBg = profile?.selectedBackground ? getCosmeticById(profile.selectedBackground) : null;
-    let cosmeticBorder = profile?.selectedBorder ? getCosmeticById(profile.selectedBorder) : null;
-    if (!isUnlocked(cosmeticBg)) cosmeticBg = null;
-    if (!isUnlocked(cosmeticBorder)) cosmeticBorder = null;
+    // Equipped rewards remain visible after a streak reset; ownership is permanent.
+    const cosmeticBorder = profile?.selectedBorder ? getCosmeticById(profile.selectedBorder) : null;
 
 
     const fallbackBorderColor = cosmeticBorder && !cosmeticBorder.image 
@@ -724,10 +677,10 @@ export default function DashboardScreen() {
              Ligne 2: Roulette (flex: 1) + Mini-calendrier (flex: 1.2) côte à côte
              ========================================================================= */
           <>
-            <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, gap: 10, alignItems: 'stretch' }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: 0, marginBottom: 12, gap: 10, alignItems: 'stretch' }}>
               {/* BLOC 1: EN COUPLE AVEC / MODE SOLO */}
               <Pressable 
-                style={{ flex: 1, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+                style={{ flex: 1, flexBasis: '100%', backgroundColor: theme.glassBackground, borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
                 onPress={() => {
                   triggerHaptic('light');
                   if (partner && !partnerLeft) {
@@ -753,8 +706,8 @@ export default function DashboardScreen() {
                     </>
                   ) : (
                     <>
-                      <Text style={{ color: theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>Mode solo</Text>
-                      <Text style={{ color: theme.tint, fontSize: 18, fontWeight: '800', marginTop: 2 }} numberOfLines={1}>
+                      <Text style={{ color: theme.tabIconDefault, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Mode solo</Text>
+                      <Text style={{ color: theme.tint, fontSize: 20, fontWeight: '900', marginTop: 2 }} numberOfLines={1}>
                         Lier un partenaire 💕
                       </Text>
                     </>
@@ -769,23 +722,36 @@ export default function DashboardScreen() {
                 </View>
               </Pressable>
 
+  {/* WIDGETS */}
+              <Pressable
+                accessibilityLabel="Widgets Écran d’accueil"
+                style={{ flex: 1, minHeight: 58, gap: 5, flexDirection: 'row', backgroundColor: theme.glassBackground, borderRadius: 20, padding: 10, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+                onPress={() => {
+                  sound.tap();
+                  triggerHaptic('light');
+                  router.push('/widgets');
+                }}
+              >
+                <Smartphone color={theme.tint} size={20} /><Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>Widgets</Text>
+              </Pressable>
+
               {/* REGLAGES */}
-              <Pressable 
+              <Pressable
                 accessibilityLabel="Réglages"
-                style={{ width: 60, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
+                style={{ flex: 1, minHeight: 58, gap: 5, flexDirection: 'row', backgroundColor: theme.glassBackground, borderRadius: 20, padding: 10, justifyContent: 'center', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
                 onPress={() => {
                   sound.tap();
                   triggerHaptic('light');
                   router.push('/settings');
                 }}
               >
-                <Settings color="#FF6A88" size={28} />
+                <Settings color={theme.tint} size={20} /><Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>Paramètres</Text>
               </Pressable>
             </View>
 
             {/* LIGNE 2 MOBILE: ROULETTE + MINI-CALENDRIER CÔTE À CÔTE */}
             {partner?.coupleId && store.uid && (
-              <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, gap: 10, height: 116, alignItems: 'stretch' }}>
+              <View style={{ flexDirection: 'row', marginHorizontal: 0, marginBottom: 16, gap: 10, height: 116, alignItems: 'stretch' }}>
                 <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ flex: 1, height: 116 }}>
                   <DailyClaim 
                     compact={true}
@@ -823,7 +789,7 @@ export default function DashboardScreen() {
             )}
 
             {/* BOUTON PUB RÉCOMPENSÉE MOBILE */}
-            <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+            <View style={{ marginHorizontal: 0, marginBottom: 16 }}>
               <RewardedAdButton 
                 coupleId={partner?.coupleId || (store.uid ? `${store.uid}_solo` : null)}
                 onRewardEarned={() => {
@@ -841,7 +807,7 @@ export default function DashboardScreen() {
              Ligne 2: StreakCalendar pleine largeur (fullWidth: true)
              ========================================================================= */
           <>
-            <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 14, gap: 10, alignItems: 'stretch' }}>
+            <View style={{ flexDirection: 'row', marginHorizontal: 0, marginBottom: 14, gap: 10, alignItems: 'stretch' }}>
               {/* BLOC 1: EN COUPLE AVEC / MODE SOLO */}
               <Pressable 
                 style={{ flex: partner?.coupleId ? 2 : 2.5, backgroundColor: theme.glassBackground, borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 }}
@@ -870,8 +836,8 @@ export default function DashboardScreen() {
                     </>
                   ) : (
                     <>
-                      <Text style={{ color: theme.tabIconDefault, fontSize: 13, fontWeight: '600' }}>Mode solo</Text>
-                      <Text style={{ color: theme.tint, fontSize: 18, fontWeight: '800', marginTop: 2 }} numberOfLines={1}>
+                      <Text style={{ color: theme.tabIconDefault, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Mode solo</Text>
+                      <Text style={{ color: theme.tint, fontSize: 20, fontWeight: '900', marginTop: 2 }} numberOfLines={1}>
                         Lier un partenaire 💕
                       </Text>
                     </>
@@ -919,7 +885,7 @@ export default function DashboardScreen() {
 
             {/* --- LIGNE CALENDRIER PLEINE LONGUEUR --- */}
             {partner?.coupleId && (
-              <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ marginHorizontal: 16, marginBottom: 16 }}>
+              <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ marginHorizontal: 0, marginBottom: 16 }}>
                 <Link href="/calendar" asChild>
                   <Pressable 
                     style={{ width: '100%' }}
@@ -938,7 +904,7 @@ export default function DashboardScreen() {
             )}
 
             {/* BOUTON PUB RÉCOMPENSÉE TABLET */}
-            <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+            <View style={{ marginHorizontal: 0, marginBottom: 16 }}>
               <RewardedAdButton 
                 coupleId={partner?.coupleId || (store.uid ? `${store.uid}_solo` : null)}
                 onRewardEarned={() => {
@@ -953,7 +919,7 @@ export default function DashboardScreen() {
 
         {/* BANNIÈRE DE RESTAURATION DE SÉRIE */}
         {streakRestoreOffer?.canRestore && (
-          <Animated.View entering={FadeInUp.duration(400)} style={{ marginHorizontal: 16, marginBottom: 16, borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: '#FF9A8B' }}>
+          <Animated.View entering={FadeInUp.duration(400)} style={{ marginHorizontal: 0, marginBottom: 16, borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: '#FF9A8B' }}>
             <LinearGradient
               colors={store.isDarkMode ? ['#362222', '#261919'] : ['#FFF2EE', '#FFE5DC']}
               style={{ padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
@@ -995,7 +961,7 @@ export default function DashboardScreen() {
           {/* Quêtes & Boutique (Haut) */}
           <View style={styles.row}>
             <Animated.View entering={FadeInUp.delay(120).duration(400)} style={styles.halfCardWrapper}>
-              <Link href="/quests" style={[styles.smallCard, { backgroundColor: store.isDarkMode ? 'rgba(28,18,5,0.88)' : 'rgba(255,247,237,0.85)', borderColor: 'rgba(234,179,8,0.3)' }]}>
+              <Link href="/quests" asChild><Pressable style={StyleSheet.flatten([styles.smallCard, { backgroundColor: store.isDarkMode ? 'rgba(28,18,5,0.88)' : 'rgba(255,247,237,0.85)', borderColor: 'rgba(234,179,8,0.3)' }])} >
                 <Trophy color="#B45309" size={28} />
                 <View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1004,32 +970,28 @@ export default function DashboardScreen() {
                   </View>
                   <Text style={{ fontSize: 12, color: '#B45309', fontWeight: 'bold' }}>Récompenses</Text>
                 </View>
-              </Link>
+              </Pressable></Link>
             </Animated.View>
 
             <Animated.View entering={FadeInUp.delay(140).duration(400)} style={styles.halfCardWrapper}>
-              <Link href="/shop" style={[styles.smallCard, { backgroundColor: store.isDarkMode ? 'rgba(28,10,20,0.88)' : 'rgba(253,242,248,0.85)', borderColor: 'rgba(236,72,153,0.3)' }]}>
+              <Link href="/shop" asChild><Pressable style={StyleSheet.flatten([styles.smallCard, { backgroundColor: store.isDarkMode ? 'rgba(28,10,20,0.88)' : 'rgba(253,242,248,0.85)', borderColor: 'rgba(236,72,153,0.3)' }])} >
                 <Star color="#BE185D" size={28} />
                 <View>
                   <Text style={[styles.smallCardTitle, { color: theme.text }]}>Boutique</Text>
                   <Text style={{ fontSize: 12, color: '#BE185D', fontWeight: 'bold' }}>Cosmétiques</Text>
                 </View>
-              </Link>
+              </Pressable></Link>
             </Animated.View>
           </View>
 
           <Animated.View entering={FadeInUp.delay(150).duration(400)}>
-            <Link 
-              href="/daylink" 
-              style={[styles.mainCard, { backgroundColor: store.isDarkMode ? 'rgba(5,22,20,0.88)' : 'rgba(240,253,250,0.85)', borderColor: 'rgba(20,184,166,0.3)' }]}
-              onPress={() => sound.tap()}
-            >
+            <Link href="/daylink" asChild><Pressable style={StyleSheet.flatten([styles.mainCard, { backgroundColor: store.isDarkMode ? 'rgba(5,22,20,0.88)' : 'rgba(240,253,250,0.85)', borderColor: 'rgba(20,184,166,0.3)' }])} onPress={() => sound.tap()}>
               <Animated.View style={[styles.iconWrapper, { backgroundColor: theme.tint }, pulseStyle]}>
                 <CalendarHeart color="white" size={32} />
               </Animated.View>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Question du Jour</Text>
               <Text style={[styles.cardDesc, { color: theme.text }]}>La même pour vous deux chaque jour !</Text>
-            </Link>
+            </Pressable></Link>
           </Animated.View>
 
           {/* Questions Illimitées */}
@@ -1098,15 +1060,11 @@ export default function DashboardScreen() {
                       </View>
                     </Pressable>
                   ) : (
-                    <Link 
-                      href={`/unlimited?category=${cat.id}`} 
-                      style={[styles.categoryCard, { backgroundColor: cardBg, borderColor: cat.border }]}
-                      onPress={() => sound.tap()}
-                    >
+                    <Link href={`/unlimited?category=${cat.id}`} asChild><Pressable style={StyleSheet.flatten([styles.categoryCard, { backgroundColor: cardBg, borderColor: cat.border }])} onPress={() => sound.tap()}>
                       {cat.icon}
                       {partnerAnsweredCategories.has(cat.id) && <View style={styles.partnerAnswerDot} />}
                       <Text style={styles.categoryCardTitle}>{cat.title}</Text>
-                    </Link>
+                    </Pressable></Link>
                   )}
                 </Animated.View>
               );
@@ -1204,11 +1162,11 @@ export default function DashboardScreen() {
               Série perdue hier ! 💔
             </Text>
             <Text style={{ fontSize: 14, color: theme.text, opacity: 0.8, textAlign: 'center', marginBottom: 16, lineHeight: 20 }}>
-              Vous n'avez pas validé votre question hier. Votre série de <Text style={{ fontWeight: '800', color: theme.tint }}>{streakRestoreOffer?.lostStreak || 1} jours</Text> est retombée à zéro.
+              Vous n’avez pas validé votre question hier. Votre série de <Text style={{ fontWeight: '800', color: theme.tint }}>{streakRestoreOffer?.lostStreak || 1} jours</Text> est retombée à zéro.
             </Text>
             <View style={{ backgroundColor: theme.glassBackground, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: theme.cardBorder, width: '100%', marginBottom: 20, alignItems: 'center' }}>
               <Text style={{ fontSize: 13, color: theme.text, fontWeight: '600', marginBottom: 4 }}>
-                Restaure votre série d'hier
+                Restaure votre série d’hier
               </Text>
               <Text style={{ fontSize: 18, fontWeight: '900', color: '#FF6A88' }}>
                 🌸 {streakRestoreOffer?.cost ?? 2000} pétales
@@ -1284,7 +1242,7 @@ export default function DashboardScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxWidth: 320, alignItems: 'center' }]}>
             <Text style={{ fontSize: 22, fontWeight: '900', color: theme.text, textAlign: 'center', marginBottom: 10 }}>Nouveau Cosmétique !</Text>
-            <Text style={{ fontSize: 16, color: theme.text, opacity: 0.8, textAlign: 'center', marginBottom: 20 }}>Ta série de {wallet?.streak} jours a débloqué :</Text>
+            <Text style={{ fontSize: 16, color: theme.text, opacity: 0.8, textAlign: 'center', marginBottom: 20 }}>Ta série de {unlockedCosmetic?.unlock.type === 'streak' ? unlockedCosmetic.unlock.days : 0} jours a débloqué :</Text>
             
             <View style={{ width: 120, height: 120, borderRadius: 24, overflow: 'hidden', marginBottom: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: theme.tint }}>
               {unlockedCosmetic?.type === 'background' ? (
@@ -1320,21 +1278,21 @@ export default function DashboardScreen() {
 
 const getStyles = (theme: any, windowWidth: number = 400) => StyleSheet.create({
   headerBanner: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 20, borderRadius: 30, marginBottom: 20 },
-  container: { flex: 1, width: '100%', height: '100%', minHeight: Platform.OS === 'web' ? 700 : 0, overflow: 'hidden', backgroundColor: 'transparent' },
+  container: { flex: 1, width: '100%', height: '100%', minHeight: 0, overflow: 'hidden', backgroundColor: 'transparent' },
   safeArea: { flex: 1, width: '100%', maxWidth: windowWidth >= 640 ? 720 : 500, alignSelf: 'center' },
-  scrollContent: { padding: 20, paddingTop: Platform.OS === 'web' ? 20 : 10, paddingBottom: 24 },
+  scrollContent: { padding: 16, paddingTop: Platform.OS === 'web' ? 20 : 10, paddingBottom: 24 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 },
-  userAvatar: { width: 70, height: 70, borderRadius: 4, borderWidth: 3, borderColor: 'white', overflow: 'hidden' },
+  userAvatar: { width: 70, height: 70, borderRadius: 22, borderWidth: 3, borderColor: 'white', overflow: 'hidden' },
   welcome: { fontSize: 28, fontWeight: '900', marginBottom: 6 },
   streak: { fontSize: 16, fontWeight: 'bold' },
   partnerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.glassBackground, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start' },
-  partnerAvatar: { width: 28, height: 28, borderRadius: 4, marginRight: 8, overflow: 'hidden' },
+  partnerAvatar: { width: 28, height: 28, borderRadius: 10, marginRight: 8, overflow: 'hidden' },
   partnerText: { fontSize: 14, fontWeight: '700', color: theme.text },
   grid: { flex: 1, gap: 20 },
   mainCard: { padding: 24, borderRadius: 24, borderWidth: 1, alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5 },
   iconWrapper: { padding: 20, borderRadius: 24, marginBottom: 16, shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
   cardTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
-  cardDesc: { fontSize: 16, opacity: 0.7 },
+  cardDesc: { fontSize: 14, lineHeight: 22, opacity: 0.8, textAlign: 'center' },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   halfCardWrapper: { flex: 1 },
   smallCard: { flexDirection: 'row', padding: 16, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 12, minHeight: 80, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
@@ -1361,7 +1319,7 @@ const getStyles = (theme: any, windowWidth: number = 400) => StyleSheet.create({
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
   categoryCardWrapper: { width: windowWidth >= 640 ? '31.5%' : '48%', marginBottom: 12 },
   categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1.5, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },
-  categoryCardTitle: { fontSize: 15, fontWeight: '700', color: theme.text },
+  categoryCardTitle: { fontSize: 14, lineHeight: 19, flexShrink: 1, fontWeight: '600', color: theme.text },
   partnerAnswerDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#16A34A', borderWidth: 3, borderColor: '#FFFFFF', position: 'absolute', top: 5, right: 5, shadowColor: '#16A34A', shadowOpacity: 0.55, shadowRadius: 5, elevation: 5 },
   settingsButton: { padding: 10 },
   // Modaux

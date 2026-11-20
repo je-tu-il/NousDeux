@@ -294,6 +294,7 @@ const styles = StyleSheet.create({
   miniCheck: { fontSize: 13, fontWeight: '900', color: 'white' },
 
 
+  legendText: { color: '#79646A', fontSize: 12, lineHeight: 18, marginTop: 12 },
   recordBox: { marginTop: 18, padding: 14, borderRadius: 14, backgroundColor: 'rgba(255,154,139,0.12)' },
   recordTitle: { fontSize: 14, fontWeight: '800', color: '#4A3B39' },
   recordValue: { fontSize: 24, fontWeight: '900', color: '#FF6B35', marginTop: 4 },

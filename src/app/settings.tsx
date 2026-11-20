@@ -8,7 +8,7 @@ import { arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, o
 import { deleteUser, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithPopup, signOut } from 'firebase/auth';
 import { ArrowLeft, Camera, Check, CheckCircle2, Copy, FileText, HeartCrack, LogOut, Mail, Shield, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ImageBackground, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ImageBackground, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeInUp, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { isUserAdmin } from '@/constants/admins';
 import UIModal, { UIModalType } from '@/components/UIModal';
@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AvatarPickerModal from '@/components/AvatarPickerModal';
 import { takePhotoWithCamera, pickImageFromGallery } from '@/lib/avatarPicker';
 import { useTopInset } from '@/hooks/useTopInset';
+import { confirmAccountIdentity, deleteCoupleData } from '@/lib/account';
 import { clearEconomyCache } from '@/lib/economy';
 import { triggerHaptic } from '@/lib/haptics';
 import { sound } from '@/lib/sound';
@@ -259,35 +260,19 @@ export default function SettingsScreen() {
         return;
       }
       const firebaseUser = auth.currentUser;
-      const lastSignIn = firebaseUser?.metadata.lastSignInTime
-        ? Date.parse(firebaseUser.metadata.lastSignInTime)
-        : 0;
-      const recentLogin = lastSignIn > Date.now() - 5 * 60 * 1000;
-      if (firebaseUser?.providerData.some((provider: any) => provider.providerId === 'google.com') && !recentLogin) {
-        await reauthenticateWithPopup(firebaseUser, new GoogleAuthProvider());
-      }
+      if (!firebaseUser || firebaseUser.uid !== store.uid) throw new Error('Reconnecte-toi avant de supprimer ton compte.');
+      await confirmAccountIdentity(firebaseUser);
 
       // 1. Récupérer le partnerUid avant suppression
       const myDoc = await getDoc(doc(db, 'users', store.uid));
       const partnerUid = myDoc.exists() ? myDoc.data().linkedTo : null;
 
-      // 2. Supprimer toutes les données du couple (droit à l'oubli RGPD)
-      if (partnerUid) {
-        const coupleKey = [store.uid, partnerUid].sort().join('_');
-        const coupleRef = doc(db, 'couples', coupleKey);
-
-        // Supprimer les sous-collections connues par batch
-        const subcollections = ['daily', 'progress'];
-        for (const sub of subcollections) {
-          const subCol = collection(db, 'couples', coupleKey, sub);
-          const snap = await getDocs(subCol);
-          if (!snap.empty) {
-            const batch = writeBatch(db);
-            snap.docs.forEach((d) => batch.delete(d.ref));
-            await batch.commit();
-          }
-        }
-        await deleteDoc(coupleRef);
+      // Include solo progress and past couples, not only the currently linked account.
+      const data = myDoc.data();
+      const partnerIds = new Set<string>([partnerUid, data?.lastPartner, ...(data?.archivedPartners || [])].filter((id): id is string => typeof id === 'string' && !!id));
+      await deleteCoupleData(`${firebaseUser.uid}_solo`);
+      for (const partnerId of partnerIds) {
+        await deleteCoupleData([firebaseUser.uid, partnerId].sort().join('_'));
       }
 
       // 3. Désolidariser le partenaire et supprimer le profil courant
@@ -318,9 +303,8 @@ export default function SettingsScreen() {
       }
 
       if (firebaseUser) {
-        await deleteUser(firebaseUser).catch(async () => {
-          await signOut(auth).catch(() => {});
-        });
+        // Do not report success if Firebase refuses the account deletion.
+        await deleteUser(firebaseUser);
       }
       await signOut(auth).catch(() => {});
 
@@ -338,7 +322,7 @@ export default function SettingsScreen() {
           visible: true,
           type: 'auth',
           title: 'Confirmation requise',
-          message: 'Google doit confirmer ton identité avant la suppression. Déconnecte-toi puis reconnecte-toi, et recommence.',
+          message: 'Confirme ton identité avant la suppression. Déconnecte-toi puis reconnecte-toi, et recommence.',
         });
       } else {
         setModalState({
@@ -414,8 +398,8 @@ export default function SettingsScreen() {
   // ── Render ───────────────────────────────────────────────────────────────
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
   const defaultBg = store.isDarkMode
-    ? require('../../assets/images/nousdeux_dark_background.png')
-    : require('../../assets/images/nousdeux_warm_background.png');
+    ? require('../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../assets/images/optimized/nousdeux_warm_background.jpg');
   const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
 
   return (
@@ -758,13 +742,13 @@ export default function SettingsScreen() {
               <Text style={{ color: store.isDarkMode ? '#EAD6D2' : '#5A4A48', fontSize: 12, fontWeight: '700' }}>Informations légales</Text>
             </View>
             <Link href="/terms" asChild>
-              <Pressable onPress={() => sound.tap()} style={[styles.legalLink, { backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.94)' : 'rgba(255, 255, 255, 0.95)' }]}>
+              <Pressable onPress={() => sound.tap()} style={StyleSheet.flatten([styles.legalLink, { backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.94)' : 'rgba(255, 255, 255, 0.95)' }])}>
                 <FileText color={theme.text} size={15} />
                 <Text style={[styles.legalLinkText, { color: theme.text }]}>Conditions Générales d’Utilisation</Text>
               </Pressable>
             </Link>
             <Link href="/privacy" asChild>
-              <Pressable onPress={() => sound.tap()} style={[styles.legalLink, { backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.94)' : 'rgba(255, 255, 255, 0.95)' }]}>
+              <Pressable onPress={() => sound.tap()} style={StyleSheet.flatten([styles.legalLink, { backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.94)' : 'rgba(255, 255, 255, 0.95)' }])}>
                 <Shield color={theme.text} size={15} />
                 <Text style={[styles.legalLinkText, { color: theme.text }]}>Politique de Confidentialité</Text>
               </Pressable>
@@ -868,117 +852,33 @@ export default function SettingsScreen() {
 
 // ── Composant Toggle Dark Mode Animé ─────────────────────────────────────────
 function DarkModeToggle({ isDark, onToggle, theme, styles }: { isDark: boolean; onToggle: () => void; theme: any; styles: any }) {
-  const thumbX = useSharedValue(isDark ? 20 : 0);
-
-  useEffect(() => {
-    thumbX.value = withTiming(isDark ? 20 : 0, {
-      duration: 250,
-      easing: Easing.bezier(0.4, 0, 0.2, 1),
-    });
-  }, [isDark]);
-
-  const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: thumbX.value }],
-  }));
-
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={[styles.supportIcon, { backgroundColor: isDark ? 'rgba(255,184,173,0.15)' : 'rgba(59,130,246,0.15)' }]}>
-          <Text style={{ fontSize: 20 }}>{isDark ? '🌙' : '☀️'}</Text>
-        </View>
+        <View style={[styles.supportIcon, { backgroundColor: '#F5E6EB' }]}><Text style={{ fontSize: 20 }}>{isDark ? '🌙' : '☀️'}</Text></View>
         <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Mode Sombre</Text>
       </View>
-      <Pressable
-        onPress={onToggle}
-        style={{
-          width: 52,
-          height: 30,
-          borderRadius: 15,
-          backgroundColor: isDark ? '#FF9A8B' : '#E5E7EB',
-          padding: 2,
-          justifyContent: 'center',
-        }}
-      >
-        <Animated.View
-          style={[
-            {
-              width: 26,
-              height: 26,
-              borderRadius: 13,
-              backgroundColor: 'white',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.2,
-              shadowRadius: 3,
-              elevation: 3,
-            },
-            thumbStyle,
-          ]}
-        />
-      </Pressable>
+      <Switch accessibilityLabel="Mode sombre" value={isDark} onValueChange={onToggle} trackColor={{ false: '#D8CDCF', true: '#AF4A61' }} thumbColor="#FFFFFF" />
     </View>
   );
 }
 
-// ── Composant Toggle Effets Sonores Animé ────────────────────────────────────
 function SoundToggle({ isEnabled, onToggle, theme, styles }: { isEnabled: boolean; onToggle: () => void; theme: any; styles: any }) {
-  const thumbX = useSharedValue(isEnabled ? 20 : 0);
-
-  useEffect(() => {
-    thumbX.value = withTiming(isEnabled ? 20 : 0, {
-      duration: 250,
-      easing: Easing.bezier(0.4, 0, 0.2, 1),
-    });
-  }, [isEnabled]);
-
-  const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: thumbX.value }],
-  }));
-
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={[styles.supportIcon, { backgroundColor: isEnabled ? 'rgba(34,197,94,0.15)' : 'rgba(156,163,175,0.15)' }]}>
-          <Text style={{ fontSize: 20 }}>{isEnabled ? '🔊' : '🔇'}</Text>
-        </View>
+        <View style={[styles.supportIcon, { backgroundColor: '#E7F1E8' }]}><Text style={{ fontSize: 20 }}>{isEnabled ? '🔊' : '🔇'}</Text></View>
         <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Effets Sonores</Text>
       </View>
-      <Pressable
-        onPress={onToggle}
-        style={{
-          width: 52,
-          height: 30,
-          borderRadius: 15,
-          backgroundColor: isEnabled ? '#4ADE80' : '#E5E7EB',
-          padding: 2,
-          justifyContent: 'center',
-        }}
-      >
-        <Animated.View
-          style={[
-            {
-              width: 26,
-              height: 26,
-              borderRadius: 13,
-              backgroundColor: 'white',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.2,
-              shadowRadius: 3,
-              elevation: 3,
-            },
-            thumbStyle,
-          ]}
-        />
-      </Pressable>
+      <Switch accessibilityLabel="Effets sonores" value={isEnabled} onValueChange={onToggle} trackColor={{ false: '#D8CDCF', true: '#54785E' }} thumbColor="#FFFFFF" />
     </View>
   );
 }
 
 // ── Styles adaptés au thème ───────────────────────────────────────────────────
 const getStyles = (theme: any, windowWidth: number = 400) => StyleSheet.create({
-  container: { flex: 1, width: '100%', height: '100%', minHeight: '100vh' as any, backgroundColor: 'transparent' },
+  dividerLight: { height: 1, backgroundColor: 'rgba(120,90,100,0.12)', marginVertical: 16 },
+  container: { flex: 1, width: '100%', height: '100%', minHeight: 0, backgroundColor: 'transparent' },
   bgImage: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 },
   headerFixedContainer: {
     width: '100%',

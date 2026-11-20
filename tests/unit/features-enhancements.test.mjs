@@ -13,7 +13,8 @@ test('ForceUpdateModal listens to app_config and blocks outdated versions with s
 
   assert.match(modalSrc, /doc\(db,\s*'app_config',\s*'global'\)/, 'ForceUpdateModal must listen to app_config/global');
   assert.match(modalSrc, /play\.google\.com/, 'ForceUpdateModal must include Google Play link');
-  assert.match(modalSrc, /apps\.apple\.com/, 'ForceUpdateModal must include App Store link');
+  assert.match(modalSrc, /iosStoreUrl/, 'The actual App Store URL must come from configuration');
+  assert.doesNotMatch(modalSrc, /6470000000/, 'A fabricated App Store ID must never be used');
   assert.match(modalSrc, /MISE À JOUR OBLIGATOIRE/, 'ForceUpdateModal must display mandatory update notice');
 
   assert.match(layoutSrc, /import ForceUpdateModal/, '_layout.tsx must import ForceUpdateModal');
@@ -67,13 +68,13 @@ test('admin.tsx provides global cleanup for orphan pairing codes and user profil
   assert.match(adminSrc, /🧹 Nettoyer Firebase/, 'admin.tsx must provide Nettoyer Firebase button');
 });
 
-test('Widgets are cleanly accessible via settings on mobile, removed from crowded profile header, and hidden on web', async () => {
+test('Widgets have an accessible dedicated dashboard shortcut and a settings entry', async () => {
   const dashboardSrc = await read('src/app/dashboard.tsx');
   const settingsSrc = await read('src/app/settings.tsx');
   const shopSrc = await read('src/app/shop.tsx');
 
   // Le bouton widget qui cachait le profil a bien été retiré du header du dashboard
-  assert.ok(!dashboardSrc.includes("router.push('/widgets')"), 'dashboard.tsx header must not crowd profile area with widgets button');
+  assert.match(dashboardSrc, /accessibilityLabel="Widgets/);
 
   // Accessible via Réglages sur mobile mais masqué sur le web
   assert.match(settingsSrc, /Widgets Écran d’accueil/, 'settings.tsx must have dedicated Widgets section');

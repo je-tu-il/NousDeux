@@ -24,7 +24,7 @@ test('login screen provides Apple and Google sign-in with Android BackHandler is
   assert.match(loginSrc, /BackHandler\.exitApp\(\)/, 'login.tsx must exit app on back press to prevent showing old session');
 
   // 2. Navigation stack clearing
-  assert.match(loginSrc, /router\.canDismiss\(\)[\s\S]*router\.dismissAll\(\)/, 'login.tsx must clear navigation stack on login');
+  assert.match(await read('src/app/_layout.tsx'), /key=\{firebaseUser\?\.uid \?\? 'signed-out'\}/, 'Navigation must be reset on each account change');
 
   // 3. Apple Sign-In support
   assert.match(loginSrc, /handleAppleLogin/, 'login.tsx must define handleAppleLogin');

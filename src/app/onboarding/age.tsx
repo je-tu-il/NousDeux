@@ -20,8 +20,8 @@ export default function AgeScreen() {
 
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
   const defaultBg = store.isDarkMode
-    ? require('../../../assets/images/nousdeux_dark_background.png')
-    : require('../../../assets/images/nousdeux_warm_background.png');
+    ? require('../../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../../assets/images/optimized/nousdeux_warm_background.jpg');
   const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
 
   useEffect(() => {
@@ -32,6 +32,7 @@ export default function AgeScreen() {
 
   const handleNext = async () => {
     const finalAge = age || "18";
+    if (Number(finalAge) < 16) return;
     if (!age) setAge(finalAge);
 
     const state = useOnboardingStore.getState();
@@ -50,7 +51,7 @@ export default function AgeScreen() {
     router.push('/onboarding/avatar');
   };
 
-  const ageOptions = Array.from({ length: 88 }, (_, i) => String(i + 13));
+  const ageOptions = Array.from({ length: 85 }, (_, i) => String(i + 16));
 
   return (
     <ImageBackground source={bgImage} style={styles.container} resizeMode="cover">
@@ -85,7 +86,7 @@ export default function AgeScreen() {
           <View style={styles.content}>
             <Animated.View entering={FadeInDown.duration(600)}>
               <Text style={[styles.title, { color: theme.text }]}>Quel âge as-tu ?</Text>
-              <Text style={[styles.subtitle, { color: theme.text }]}>Pour adapter l'expérience.</Text>
+              <Text style={[styles.subtitle, { color: theme.text }]}>Pour adapter l’expérience.</Text>
             </Animated.View>
 
             <Animated.View 

@@ -4,12 +4,13 @@ const baseURL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:8081';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  outputDir: '.expo/test-results',
   timeout: 30_000,
   expect: { timeout: 8_000 },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  reporter: [['list'], ['html', { open: 'never', outputFolder: '.expo/playwright-report' }]],
   use: {
     baseURL,
     trace: 'retain-on-failure',
@@ -20,7 +21,7 @@ export default defineConfig({
   webServer: process.env.E2E_NO_SERVER
     ? undefined
     : {
-        command: 'npm run web -- --port 8081',
+        command: 'npx expo start --web --port 8081',
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

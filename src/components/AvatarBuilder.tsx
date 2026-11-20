@@ -48,7 +48,7 @@ const ColorSwatch = memo(function ColorSwatch({
 
   return (
     <Pressable
-      onPress={() => { scale.value = withSpring(1.2, { damping: 5 }, () => { scale.value = withSpring(1); }); onPress(); }}
+      onPress={() => { scale.set(withSpring(1.2, { damping: 5 }, () => { scale.set(withSpring(1)); })); onPress(); }}
     >
       <Animated.View style={[styles.swatch, { backgroundColor: color.startsWith('rainbow') ? '#FF9A8B' : color }, style]}>
         {selected && <Check color="white" size={14} strokeWidth={3} />}

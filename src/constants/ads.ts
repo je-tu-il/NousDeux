@@ -13,7 +13,7 @@ export const GOOGLE_ADS_CONFIG = {
   enabled: true,
 
   // Mode test (à passer à false en production une fois l'app validée sur les stores)
-  isTestMode: false,
+  isTestMode: process.env.EXPO_PUBLIC_APP_ENV !== 'production',
 
   // Limite quotidienne de vidéos pour obtenir des pétales gratuits (3 ou 4 max)
   maxDailyRewardedVideos: 4,

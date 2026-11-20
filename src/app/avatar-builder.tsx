@@ -15,7 +15,7 @@ export default function AvatarBuilderScreen() {
   const styles = getStyles(theme);
 
   return (
-    <ImageBackground source={getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'))} style={styles.container} resizeMode="cover">
+    <ImageBackground source={getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/optimized/nousdeux_dark_background.jpg') : require('../../assets/images/optimized/nousdeux_warm_background.jpg'))} style={styles.container} resizeMode="cover">
       <View style={{ flex: 1 }}>
         <View style={[styles.header, { paddingTop: topInset + 10 }]}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
@@ -31,7 +31,7 @@ export default function AvatarBuilderScreen() {
           </View>
           <Text style={styles.title}>Les Skins arrivent ! 🚀</Text>
           <Text style={styles.desc}>
-            Nous préparons un tout nouveau système d'avatars en très haute résolution pour une prochaine mise à jour.{'\n\n'}
+            Nous préparons un tout nouveau système d’avatars en très haute résolution pour une prochaine mise à jour.{'\n\n'}
             Encore un peu de patience !
           </Text>
         </View>

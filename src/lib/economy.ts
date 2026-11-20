@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, increment, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, doc, getDoc, getDocs, increment, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 import { getById } from '../data/questions';
 import { QUESTS, Quest, QuestEvent, QuestTierLevel } from '../data/quests';
 import { db } from './firebase';
@@ -207,7 +207,12 @@ export async function syncStreakCosmetics(cId: string, streak: number): Promise<
       }
     }
     if (updated) {
-      await setDoc(invRef, invData, { merge: true });
+      // Another device may purchase an item after the read above. Union only
+      // the earned rewards instead of overwriting its newer inventory arrays.
+      const grants = Object.fromEntries(
+        ['backgrounds', 'borders', 'widgets'].map(type => [type, arrayUnion(...STREAK_UNLOCKS.filter(item => item.type === type && streak >= item.days).map(item => item.id))])
+      );
+      await setDoc(invRef, grants, { merge: true });
     }
   } catch (err) {
     console.error('Failed to sync streak cosmetics:', err);

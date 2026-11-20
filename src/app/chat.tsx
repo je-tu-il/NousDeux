@@ -77,11 +77,7 @@ export default function ChatScreen() {
 
   // Écouter les messages
   useEffect(() => {
-    if (!cId) {
-      setMessages([]);
-      setLoading(false);
-      return;
-    }
+    if (!cId) return;
     
     const messagesRef = collection(db, `couples/${cId}/messages`);
     const q = query(messagesRef, orderBy('createdAt', 'desc'));
@@ -167,7 +163,7 @@ export default function ChatScreen() {
           Tu dois être en couple pour accéder au chat avec ton partenaire.
         </Text>
         <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={[styles.sendBtn, { width: 'auto', paddingHorizontal: 20, height: 44 }]}>
-          <Text style={{ color: 'white', fontWeight: 'bold' }}>Retour à l'accueil</Text>
+          <Text style={{ color: 'white', fontWeight: 'bold' }}>Retour à l’accueil</Text>
         </Pressable>
       </View>
     );

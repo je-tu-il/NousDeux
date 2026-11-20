@@ -188,7 +188,7 @@ export default function AvatarPickerModal({
               <View style={styles.optionTextContainer}>
                 <Text style={[styles.optionTitle, { color: '#EF4444' }]}>Supprimer la photo</Text>
                 <Text style={[styles.optionSubtitle, { color: isDark ? '#FCA5A5' : '#DC2626' }]}>
-                  Revenir à l'avatar par défaut
+                  Revenir à l’avatar par défaut
                 </Text>
               </View>
             </Pressable>

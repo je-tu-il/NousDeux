@@ -25,7 +25,7 @@ export default function PrivacyScreen() {
   const topInset = useTopInset();
   return (
     <ImageBackground
-      source={require('../../assets/images/settings_bg.png')}
+      source={require('../../assets/images/optimized/settings_bg.jpg')}
       style={styles.container}
       resizeMode="cover"
     >
@@ -41,7 +41,7 @@ export default function PrivacyScreen() {
         </View>
 
         <Animated.View entering={FadeInUp.duration(500)} style={styles.card}>
-          <Text style={styles.lastUpdated}>Dernière mise à jour : 6 août 2026</Text>
+          <Text style={styles.lastUpdated}>Dernière mise à jour : 9 novembre 2026</Text>
 
           <Section title="1. Qui sommes-nous ?">
             NousDeux est une application permettant à deux partenaires de répondre ensemble à des questions quotidiennes.{'\n\n'}
@@ -49,16 +49,16 @@ export default function PrivacyScreen() {
           </Section>
 
           <Section title="2. Données collectées">
-            Dans le cadre du fonctionnement de l'application, nous collectons :{'\n\n'}
-            • <B>Données d'identification Google</B> : adresse e-mail, UID Firebase (fourni automatiquement lors de la connexion via Google).{'\n\n'}
+            Dans le cadre du fonctionnement de l’application, nous collectons :{'\n\n'}
+            • <B>Données d’identification Google ou Apple</B> : adresse e-mail, UID Firebase (fourni automatiquement lors de la connexion via Google ou Apple).{'\n\n'}
             • <B>Profil utilisateur</B> : pseudo choisi, âge, photo de profil (optionnelle, encodée en base64 et stockée dans Firebase).{'\n\n'}
-            • <B>Données de couple</B> : date d'anniversaire du couple, identifiant du couple (anonyme), code de synchronisation.{'\n\n'}
-            • <B>Réponses aux questions</B> : vos réponses sont <B>chiffrées de bout en bout</B> (AES-256-GCM) avant d'être envoyées sur nos serveurs. Ni NousDeux, ni Firebase, ni aucun administrateur ne peut les lire.{'\n\n'}
+            • <B>Données de couple</B> : date d’anniversaire du couple, identifiant du couple (anonyme), code de synchronisation.{'\n\n'}
+            • <B>Réponses aux questions</B> : les nouvelles réponses sont chiffrées sur votre appareil (AES-256-GCM) avant leur stockage. Le système actuel utilise un identifiant de couple pour dériver la clé ; il ne garantit pas un chiffrement de bout en bout contre l’opérateur du service. Les anciennes données peuvent utiliser un ancien format.{'\n\n'}
             • <B>Données de progression</B> : index de question atteint, identifiants de questions vues.
           </Section>
 
           <Section title="3. Finalité du traitement">
-            Les données sont utilisées exclusivement pour :{'\n\n'}
+            Les données permettent de :{'\n\n'}
             • Permettre la synchronisation entre partenaires{'\n'}
             • Afficher votre profil et celui de votre partenaire{'\n'}
             • Gérer la progression dans les questions{'\n'}
@@ -77,21 +77,25 @@ export default function PrivacyScreen() {
 
           <Section title="6. Vos droits (RGPD)">
             Vous disposez des droits suivants :{'\n\n'}
-            • <B>Droit d'accès</B> : vous pouvez consulter vos données dans l'application (profil, réponses).{'\n\n'}
+            • <B>Droit d’accès</B> : vous pouvez consulter vos données dans l’application (profil, réponses).{'\n\n'}
             • <B>Droit de rectification</B> : vous pouvez modifier vos données dans Paramètres.{'\n\n'}
-            • <B>Droit à l'effacement</B> : vous pouvez supprimer votre compte et toutes vos données via Paramètres → Zone Danger.{'\n\n'}
-            • <B>Droit à la portabilité</B> : vous pouvez demander l'export de vos données.{'\n\n'}
-            • <B>Droit d'opposition</B> : vous pouvez cesser d'utiliser l'application à tout moment.{'\n\n'}
-            Pour exercer l'un de ces droits, vous pouvez nous écrire directement via le bouton de contact en section 10 ci-dessous.
+            • <B>Droit à l’effacement</B> : vous pouvez supprimer votre compte et toutes vos données via Paramètres → Zone Danger.{'\n\n'}
+            • <B>Droit à la portabilité</B> : vous pouvez demander l’export de vos données.{'\n\n'}
+            • <B>Droit d’opposition</B> : vous pouvez cesser d’utiliser l’application à tout moment.{'\n\n'}
+            Pour exercer l’un de ces droits, vous pouvez nous écrire directement via le bouton de contact en section 10 ci-dessous.
           </Section>
 
           <Section title="7. Sécurité">
-            Vos réponses aux questions sont protégées par un chiffrement <B>AES-256-GCM de bout en bout</B>. La clé de chiffrement est dérivée localement sur votre appareil et n'est jamais transmise à nos serveurs. Seuls vous et votre partenaire pouvez déchiffrer vos réponses.{'\n\n'}
+            Les nouvelles réponses sont chiffrées avec <B>AES-256-GCM</B>. Les accès sont également contrôlés par Firebase Authentication et les règles de la base de données. Ce mécanisme ne constitue pas une garantie de chiffrement de bout en bout contre l’opérateur du service.{'\n\n'}
             La communication avec Firebase est sécurisée via TLS/HTTPS.
           </Section>
 
           <Section title="8. Mineurs">
-            NousDeux est destinée aux personnes âgées d'au moins 16 ans. Si vous avez connaissance qu'un mineur de moins de 16 ans utilise l'application, veuillez nous contacter.
+            NousDeux est destinée aux personnes âgées d’au moins 16 ans. Si vous avez connaissance qu’un mineur de moins de 16 ans utilise l’application, veuillez nous contacter.
+          </Section>
+
+          <Section title="Publicités et notifications">
+            L’application mobile intègre Google AdMob pour afficher des publicités et proposer des récompenses facultatives. Ce service peut traiter des identifiants publicitaires, des informations sur l’appareil et des interactions publicitaires. Les notifications utilisent les autorisations de votre appareil et, si vous les activez, un jeton de notification. Vous pouvez désactiver les notifications dans les réglages du système.
           </Section>
 
           <Section title="9. Modifications">
@@ -102,8 +106,8 @@ export default function PrivacyScreen() {
             title="10. Contact & réclamation"
             action={<ContactEmailLink label="nousdeux.contact.app@gmail.com" subject="Contact & Réclamation NousDeux" />}
           >
-            Pour toute question relative à la protection de vos données ou l'exercice de vos droits, vous pouvez nous contacter directement ci-dessus.{'\n\n'}
-            Vous avez également le droit d'introduire une réclamation auprès de la <B>CNIL</B> (Commission Nationale de l'Informatique et des Libertés) : www.cnil.fr
+            Pour toute question relative à la protection de vos données ou l’exercice de vos droits, vous pouvez nous contacter directement ci-dessus.{'\n\n'}
+            Vous avez également le droit d’introduire une réclamation auprès de la <B>CNIL</B> (Commission Nationale de l’Informatique et des Libertés) : www.cnil.fr
           </Section>
         </Animated.View>
       </ScrollView>

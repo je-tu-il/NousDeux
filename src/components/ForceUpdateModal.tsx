@@ -31,7 +31,6 @@ export function isVersionOutdated(current: string, minRequired: string): boolean
 }
 
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.pixelthings.nousdeux';
-const APP_STORE_URL = 'https://apps.apple.com/app/nousdeux/id6470000000';
 const WEB_URL = 'https://nousdeux.app';
 
 export default function ForceUpdateModal() {
@@ -39,16 +38,24 @@ export default function ForceUpdateModal() {
   const [isOutdated, setIsOutdated] = useState(false);
   const [minVersion, setMinVersion] = useState<string | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [storeUrl, setStoreUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    // Native minimum versions must not trap the website in a reload loop.
+    if (Platform.OS === 'web') return;
     try {
       const unsub = onSnapshot(
         doc(db, 'app_config', 'global'),
         (snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.data();
+            const url = Platform.OS === 'ios' ? data.iosStoreUrl : (data.androidStoreUrl || PLAY_STORE_URL);
+            const validUrl = typeof url === 'string' && (Platform.OS === 'ios'
+              ? /^https:\/\/apps\.apple\.com\/.+\/id\d+/.test(url)
+              : /^https:\/\/play\.google\.com\/store\/apps\/details\?id=/.test(url));
+            setStoreUrl(validUrl ? url : null);
             const minReq = data?.minVersion || data?.minAppVersion;
-            if (minReq && isVersionOutdated(currentVersion, String(minReq))) {
+            if (validUrl && minReq && isVersionOutdated(currentVersion, String(minReq))) {
               setIsOutdated(true);
               setMinVersion(String(minReq));
               if (data?.updateMessage) setUpdateMessage(data.updateMessage);
@@ -80,9 +87,9 @@ export default function ForceUpdateModal() {
 
   const handleOpenStore = () => {
     if (Platform.OS === 'ios') {
-      Linking.openURL(APP_STORE_URL).catch(() => Linking.openURL(WEB_URL));
+      if (storeUrl) Linking.openURL(storeUrl).catch(() => Linking.openURL(WEB_URL));
     } else if (Platform.OS === 'android') {
-      Linking.openURL(PLAY_STORE_URL).catch(() => Linking.openURL(WEB_URL));
+      if (storeUrl) Linking.openURL(storeUrl).catch(() => Linking.openURL(WEB_URL));
     } else {
       if (typeof window !== 'undefined') {
         window.location.reload();

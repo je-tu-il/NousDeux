@@ -45,7 +45,7 @@ Retrouvez les installateurs sur la page des [**Dernières Versions (Releases)**]
 
 ## 🛠️ Stack Technique
 
-- **Framework** : [React Native](https://reactnative.dev/) (0.85) avec [Expo SDK 56](https://expo.dev/)
+- **Framework** : [React Native](https://reactnative.dev/) (0.86.3) avec [Expo SDK 57](https://expo.dev/)
 - **Langage** : TypeScript
 - **Base de données & Auth** : Firebase (Firestore, Auth, Realtime Database)
 - **Widgets natifs** : Swift (WidgetKit avec support iOS 17 containerBackground)
@@ -61,7 +61,7 @@ Retrouvez les installateurs sur la page des [**Dernières Versions (Releases)**]
 
 ```bash
 # Installation des dépendances
-npm install --legacy-peer-deps
+npm ci
 
 # Lancement du serveur de développement Metro
 npx expo start
@@ -75,3 +75,14 @@ npx expo start
 ## 📄 Licence
 
 Ce projet est distribué sous licence **MIT**. Consultez le fichier [LICENSE](LICENSE) pour plus de détails.
+
+
+## Vérification locale avant publication
+
+Voir [AUDIT_AVANT_PUBLICATION.md](AUDIT_AVANT_PUBLICATION.md) pour les correctifs, les tests et les conditions restantes avant les stores.
+
+- `npm run typecheck` et `npm run test:unit` : contrôles du code et régressions.
+- `npm run test:e2e:preview` : export web et tests navigateur sur la version optimisée.
+- `npm run preview:web` : aperçu local sur http://127.0.0.1:8082 après export.
+
+Les modules natifs (Google Sign-In, publicités, widgets) nécessitent un build de développement ou de distribution pour leur validation mobile. Expo Go ne couvre pas ces intégrations.

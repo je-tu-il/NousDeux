@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ImageBackground, Share, Alert, Image, ScrollView } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { Colors } from '@/constants/Colors';
 import { getCosmeticById, getCosmeticImage } from '@/data/cosmetics';
@@ -41,6 +41,7 @@ async function resetCoupleData(coupleId: string) {
 }
 
 export default function SyncScreen() {
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const [partnerCode, setPartnerCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -62,8 +63,8 @@ export default function SyncScreen() {
   const theme = store.isDarkMode ? Colors.dark : Colors.light;
   const backgroundSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode)
     || (store.isDarkMode
-      ? require('../../../assets/images/nousdeux_dark_background.png')
-      : require('../../../assets/images/nousdeux_warm_background.png'));
+      ? require('../../../assets/images/optimized/nousdeux_dark_background.jpg')
+      : require('../../../assets/images/optimized/nousdeux_warm_background.jpg'));
 
   const isLinking = React.useRef(false);
   const topInset = useTopInset();
@@ -88,13 +89,13 @@ export default function SyncScreen() {
 
     // Assurer immédiatement un code sans attendre pour éviter de bloquer sur "Génération..."
     if (!state.myCode) {
-      ensureUserPairingCode(state.uid, null).then((code) => {
+      ensureUserPairingCode(activeUid, null).then((code) => {
         setMyCode(code);
       }).catch(() => {});
     }
 
     // Écoute en temps réel du profil utilisateur (source unique de vérité Firestore)
-    const unsub = onSnapshot(doc(db, "users", state.uid), async (docSnap) => {
+    const unsub = onSnapshot(doc(db, "users", activeUid), async (docSnap) => {
       if (!docSnap.exists()) {
         const code = await ensureUserPairingCode(state.uid!, useOnboardingStore.getState().myCode);
         setMyCode(code);
@@ -450,10 +451,12 @@ export default function SyncScreen() {
           {/* Header */}
           <View style={styles.header}>
             <Pressable style={styles.backBtn} onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else if (store.pseudo && store.age) {
+                if (from === 'avatar') {
+                  router.replace('/onboarding/avatar');
+                } else if (store.uid && store.pseudo) {
                 router.replace('/dashboard');
+              } else if (router.canGoBack()) {
+                router.back();
               } else {
                 router.replace('/onboarding/avatar');
               }
@@ -480,9 +483,9 @@ export default function SyncScreen() {
           </View>
 
           <View style={styles.content}>
-            <Animated.View entering={FadeInDown.duration(800)} style={[styles.titleCard, { backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.88)' : 'rgba(255, 255, 255, 0.90)', borderColor: theme.cardBorder }]}>
-              <Text style={[styles.title, { color: theme.text }]}>Synchronisation</Text>
-              <Text style={[styles.subtitle, { color: store.isDarkMode ? '#E0D0CE' : '#4A3B39' }]}>
+            <Animated.View entering={FadeInDown.duration(800)} style={[styles.titleCard, { backgroundColor: store.isDarkMode ? 'rgba(32, 22, 22, 0.94)' : 'rgba(255, 255, 255, 0.96)', borderColor: theme.cardBorder, shadowOpacity: 0.15 }]}>
+              <Text style={[styles.title, { color: store.isDarkMode ? '#FFFFFF' : '#1A1010' }]}>Synchronisation</Text>
+              <Text style={[styles.subtitle, { color: store.isDarkMode ? '#F0E0DE' : '#2A1E1C', fontWeight: '600' }]}>
                 Donne ton code à ton partenaire ou entre le sien pour lier vos téléphones.
               </Text>
             </Animated.View>

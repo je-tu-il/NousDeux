@@ -66,7 +66,32 @@ export const useOnboardingStore = create<OnboardingState>()(
       selectedTag: '',
       selectedWidget: 'widget_default',
 
-      setUid: (uid) => set({ uid }),
+      setUid: (uid) =>
+        set((state) => {
+          if (state.uid !== uid) {
+            try {
+              clearEconomyCache();
+            } catch {}
+            return {
+              uid,
+              pseudo: '',
+              age: '',
+              avatar: null,
+              avatarConfig: null,
+              partnerCode: '',
+              myCode: '',
+              selectedBackground: 'bg_free_1',
+              selectedBorder: 'border_none',
+              selectedTag: '',
+              selectedWidget: 'widget_default',
+              partnerUid: null,
+              partnerPseudo: '',
+              partnerAvatar: null,
+              isSynced: false,
+            };
+          }
+          return { uid };
+        }),
       setPseudo: (pseudo) => set({ pseudo }),
       setAge: (age) => set({ age }),
       setAvatar: (avatar) => set({ avatar }),

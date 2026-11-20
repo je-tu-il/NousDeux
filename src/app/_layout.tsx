@@ -1,8 +1,9 @@
 import { getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
 import { auth, db } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { doc, getDoc } from 'firebase/firestore';
-import { ensureUserPairingCode } from '@/lib/pairing';
+import { useSessionBootstrap } from '@/hooks/use-session-bootstrap';
+import StartupScreen from '@/components/StartupScreen';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as Linking from 'expo-linking';
@@ -11,30 +12,22 @@ import { StatusBar } from 'expo-status-bar';
 import FloatingToast from '@/components/FloatingToast';
 import ForceUpdateModal from '@/components/ForceUpdateModal';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, ImageBackground, LogBox, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, Image, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-const originalError = console.error;
-console.error = (...args) => {
-  if (typeof args[0] === 'string' && args[0].includes('M_ID')) return;
-  originalError(...args);
-};
-
-LogBox.ignoreLogs(['M_ID']);
-
 export default function RootLayout() {
   const { width: windowWidth } = useWindowDimensions();
   const [FloatingChat, setFloatingChat] = useState<React.ComponentType | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState(auth?.currentUser ?? null);
+  const { ready: authReady, error: startupError, user: firebaseUser, retry } = useSessionBootstrap();
   const segments = useSegments();
   const router = useRouter();
   const uid = useOnboardingStore((state) => state.uid);
   const pseudo = useOnboardingStore((state) => state.pseudo);
   const age = useOnboardingStore((state) => state.age);
   const pendingDeepLinkRef = useRef<string | null>(null);
+  const initialUrlHandled = useRef(false);
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -54,12 +47,12 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (authReady && Platform.OS !== 'web') {
       import('@/lib/widgets')
         .then(({ syncWidgetData }) => syncWidgetData({}))
         .catch((err) => console.warn('[App] Initial widget sync error:', err));
     }
-  }, []);
+  }, [authReady, uid]);
 
   useEffect(() => {
     const handleUrl = (event: { url: string }) => {
@@ -75,146 +68,38 @@ export default function RootLayout() {
         }
 
         if (target) {
+          if (!authReady || !uid) {
+            pendingDeepLinkRef.current = target;
+            return;
+          }
           const currentPath = `/${segments.join('/')}`;
           if (currentPath === target || (target === '/daylink' && currentPath.includes('daylink'))) {
             return;
           }
-          if (!authReady || !uid) {
-            pendingDeepLinkRef.current = target;
-          } else {
-            router.replace(target as any);
-          }
+          router.replace(target as any);
         }
       } catch (e) {
         console.warn('[Linking] Error handling url:', e);
       }
     };
 
-    Linking.getInitialURL().then((url) => {
-      if (url) handleUrl({ url });
-    }).catch(() => {});
+    if (!initialUrlHandled.current) {
+      initialUrlHandled.current = true;
+      Linking.getInitialURL().then((url) => {
+        if (url) handleUrl({ url });
+      }).catch(() => {});
+    }
 
     const subscription = Linking.addEventListener('url', handleUrl);
     return () => {
       subscription.remove();
     };
-  }, [router, authReady, uid]);
+  }, [router, authReady, uid, segments]);
 
   useEffect(() => {
-    const clearDeletedSession = async () => {
-      if (Platform.OS !== 'web') {
-        try {
-          const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
-          await GoogleSignin.signOut().catch(() => {});
-        } catch {}
-      }
-      if (auth?.signOut) await auth.signOut().catch(() => {});
-      useOnboardingStore.getState().resetSession();
-      router.replace('/onboarding/login');
-    };
-
-    const authFallbackTimer = setTimeout(() => {
-      setAuthReady(true);
-    }, 1500);
-
-    if (!auth?.onAuthStateChanged) {
-      setAuthReady(true);
-      return () => clearTimeout(authFallbackTimer);
-    }
-
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setFirebaseUser(user);
-      if (user) {
-        const store = useOnboardingStore.getState();
-        if (store.uid !== user.uid) store.setUid(user.uid);
-      }
-      const syncAuthState = async () => {
-        try {
-          if (user) {
-            // Firebase Auth is the source of truth after a refresh/reconnection.
-            // The persisted Zustand UID can be empty or stale while Auth is restoring.
-            const store = useOnboardingStore.getState();
-            if (store.uid && store.uid !== user.uid) {
-              store.resetSession();
-            }
-            if (store.uid !== user.uid) store.setUid(user.uid);
-            try {
-              await user.reload();
-            } catch (error: any) {
-              if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-user-token') {
-                void clearDeletedSession();
-                return;
-              }
-            }
-            // Synchroniser le profil Firestore pour éviter de forcer l'onboarding sur un nouveau navigateur
-            try {
-              const userSnap = await getDoc(doc(db, 'users', user.uid));
-              if (userSnap.exists()) {
-                const uData = userSnap.data();
-                if (uData.pseudo && store.pseudo !== uData.pseudo) store.setPseudo(uData.pseudo);
-                if (uData.age && store.age !== uData.age) store.setAge(uData.age);
-                const avatarToSet = uData.avatarUrl || uData.avatar || null;
-                if (store.avatar !== avatarToSet) store.setAvatar(avatarToSet);
-                if (uData.pairingCode && store.myCode !== uData.pairingCode) store.setMyCode(uData.pairingCode);
-                const isLinked = Boolean(uData.linkedTo);
-                store.setSynced(isLinked);
-                if (!isLinked) {
-                  store.clearPartnerCache();
-                } else if (store.partnerUid && store.partnerUid !== uData.linkedTo) {
-                  store.clearPartnerCache();
-                }
-              } else {
-                // Le compte Firestore n'existe pas encore ou a été supprimé
-                // Nettoyer les données locales de session pour éviter la persistance fantôme
-                store.setPseudo('');
-                store.setAge('');
-                store.setAvatar(null);
-                store.setSynced(false);
-                store.clearPartnerCache();
-                const code = await ensureUserPairingCode(user.uid, store.myCode);
-                if (store.myCode !== code) store.setMyCode(code);
-              }
-              try {
-                const { getUserProfile } = await import('@/lib/economy');
-                const p = await getUserProfile(user.uid);
-                if (p) {
-                  if (p.selectedBackground) store.setSelectedCosmetics(p.selectedBackground, p.selectedBorder, p.selectedTag);
-                  if (p.avatar) store.setAvatarConfig(p.avatar);
-                  if (p.selectedWidget) store.setSelectedWidget(p.selectedWidget);
-                }
-              } catch (errProfile) {
-                console.error('Erreur chargement userProfile :', errProfile);
-              }
-            } catch (err) {
-              console.error('Erreur chargement profil Firestore :', err);
-            }
-          }
-        } finally {
-          clearTimeout(authFallbackTimer);
-          setAuthReady(true);
-        }
-      };
-      void syncAuthState();
-    });
-    return () => {
-      clearTimeout(authFallbackTimer);
-      unsubscribe();
-    };
+    // The lightweight recovery screen is already drawn when the native splash hides.
+    SplashScreen.hideAsync().catch(() => {});
   }, []);
-
-  useEffect(() => {
-    // Masquer le splash screen dès que l'auth est prête (ou après 1.5s max de sécurité)
-    const timer = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {});
-    }, 1500);
-
-    if (authReady) {
-      clearTimeout(timer);
-      SplashScreen.hideAsync().catch(() => {});
-    }
-
-    return () => clearTimeout(timer);
-  }, [authReady]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -224,7 +109,7 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (authReady && Platform.OS !== 'web') {
       import('@/lib/notifications').then(({ initBackgroundSync, scheduleDailyReminders, checkPartnerAnswerAndSync }) => {
         initBackgroundSync().catch(() => {});
         if (uid) {
@@ -246,7 +131,7 @@ export default function RootLayout() {
         subscription.remove();
       };
     }
-  }, [uid]);
+  }, [uid, authReady]);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -303,6 +188,8 @@ export default function RootLayout() {
         } else {
           router.replace('/dashboard');
         }
+      } else {
+        router.replace(!pseudo ? '/onboarding/pseudo' : '/onboarding/age');
       }
       return;
     }
@@ -320,11 +207,7 @@ export default function RootLayout() {
       if (pendingDeepLinkRef.current) {
         const next = pendingDeepLinkRef.current;
         pendingDeepLinkRef.current = null;
-        if (next === '/dashboard') {
-          router.replace('/dashboard');
-        } else {
-          router.push(next as any);
-        }
+        router.replace(next as any);
       }
     }
   }, [authReady, firebaseUser, segments, uid, pseudo, age]);
@@ -332,7 +215,7 @@ export default function RootLayout() {
   const store = useOnboardingStore();
   const isDark = store.isDarkMode;
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
-  const defaultBg = isDark ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png');
+  const defaultBg = isDark ? require('../../assets/images/optimized/nousdeux_dark_background.jpg') : require('../../assets/images/optimized/nousdeux_warm_background.jpg');
   const bgImage = getCosmeticImage(bgCosmetic, isDark) ?? defaultBg;
   const backgroundResizeMode = 'cover';
   const isGradient = bgCosmetic && !getCosmeticImage(bgCosmetic, isDark);
@@ -342,34 +225,19 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider style={{ flex: 1, width: '100%', height: '100%' }}>
-      <View style={[{ flex: 1, width: '100%', height: '100%', backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }] as any}>
-        <StatusBar style={isDark ? 'light' : 'dark'} translucent backgroundColor="transparent" />
+      <View style={[{ flex: 1, width: '100%', height: '100%', overflow: 'hidden', backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }] as any}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <View style={webScaleStyle as any}>
         {isGradient && bgColors ? (
-          <LinearGradient colors={bgColors as [string, string]} style={{ flex: 1, width: '100%', height: '100%' }}>
-            <View style={{ flex: 1, width: '100%', height: '100%', backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
-              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent', flex: 1, width: '100%', height: '100%' } }} />
-            </View>
-          </LinearGradient>
+          <LinearGradient colors={bgColors as [string, string]} style={StyleSheet.absoluteFill} />
         ) : (
-          <ImageBackground
-            source={bgImage}
-            style={[{ flex: 1, width: '100%', height: '100%', backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }]}
-            resizeMode={backgroundResizeMode}
-            imageStyle={{
-              width: '100%',
-              height: '100%',
-              ...(Platform.OS === 'web' ? { objectPosition: bgCosmetic?.imagePosition || (windowWidth < 600 ? 'center bottom' : 'center') } : {}) 
-            } as any}
-            blurRadius={0}
-          >
-            <View style={{ flex: 1, width: '100%', height: '100%', backgroundColor: Platform.OS === 'web' ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
-              <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent', flex: 1, width: '100%', height: '100%' } }} />
-            </View>
-          </ImageBackground>
+          <Image source={bgImage} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode={backgroundResizeMode} />
         )}
+        {authReady ? (
+          <Stack key={firebaseUser?.uid ?? 'signed-out'} screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
+        ) : <StartupScreen error={startupError} onRetry={retry} />}
         </View>
-        {FloatingChat && segments[0] !== 'onboarding' && !segments.includes('login') ? <FloatingChat /> : null}
+        {authReady && FloatingChat && store.uid && store.isSynced && segments[0] !== 'onboarding' ? <FloatingChat /> : null}
         <FloatingToast />
         <ForceUpdateModal />
       </View>

@@ -370,7 +370,7 @@ function QuestionWidgetContent({
             style={[styles.questionTextMed, { color: theme.textColor }]}
             numberOfLines={3}
           >
-            "{data.todayQuestion}"
+            &quot;{data.todayQuestion}&quot;
           </Text>
 
           <View style={[styles.actionPromptMed, { backgroundColor: theme.cardBg }]}>
@@ -405,7 +405,7 @@ function QuestionWidgetContent({
       {/* Intitulé de la question */}
       <View style={[styles.questionCardLarge, { backgroundColor: theme.cardBg }]}>
         <Text style={[styles.questionQuoteLarge, { color: theme.textColor }]}>
-          "{data.todayQuestion}"
+          &quot;{data.todayQuestion}&quot;
         </Text>
       </View>
 

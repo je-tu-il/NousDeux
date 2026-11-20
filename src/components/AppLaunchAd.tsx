@@ -90,7 +90,7 @@ export default function AppLaunchAd() {
       return;
     }
 
-    setVisible(true);
+    const showTimer = setTimeout(() => setVisible(true), 0);
     const interval = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
@@ -102,7 +102,7 @@ export default function AppLaunchAd() {
       });
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => { clearTimeout(showTimer); clearInterval(interval); };
   }, []);
 
   if (isOnboarding || !isSyncComplete) return null;
@@ -133,7 +133,7 @@ export default function AppLaunchAd() {
             </View>
             <ActivityIndicator size="small" color="#FF6A88" style={{ marginVertical: 8 }} />
             <Text style={{ fontSize: 11, color: theme.text, opacity: 0.5, fontStyle: 'italic' }}>
-              Format interstitiel court d'ouverture
+              Format interstitiel court d’ouverture
             </Text>
           </View>
 

@@ -43,3 +43,11 @@ example
 /android
 
 .vercel
+
+# Local test export
+/dist-test/
+
+# Generated local verification reports
+/playwright-report/
+/test-results/
+/*-debug.log

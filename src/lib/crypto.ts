@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
  *
  * La clé est dérivée de façon DÉTERMINISTE depuis le coupleId + un salt fixe
  * via PBKDF2. Elle n'est jamais envoyée au serveur. Firebase ne voit que des
- * blobs chiffrés : { ciphertext, iv } — illisibles même par un admin.
+ * blobs chiffrés : { ciphertext, iv } — ne constituent pas une garantie de chiffrement de bout en bout : le coupleId est connu du serveur.
  *
  * Compatible : Web (WebCrypto API) + React Native iOS/Android (react-native-quick-crypto & SubtleCrypto).
  */
@@ -61,10 +61,7 @@ function getRandomIV(): Uint8Array {
       }
     } catch {}
   }
-  for (let i = 0; i < 12; i++) {
-    iv[i] = Math.floor(Math.random() * 256);
-  }
-  return iv;
+  throw new Error('Générateur aléatoire sécurisé non disponible');
 }
 
 /**
@@ -161,15 +158,11 @@ export async function encryptText(text: string, coupleId: string): Promise<Encry
         iv: bufToBase64(iv),
       };
     } catch (e) {
-      console.warn('Subtle encrypt error, using fallback:', e);
+      console.warn('Encryption failed:', e);
     }
   }
 
-  // Fallback sécurisé en encodage Base64 si aucun moteur WebCrypto
-  return {
-    ciphertext: btoa(unescape(encodeURIComponent(text))),
-    iv: 'mock-iv-1234',
-  };
+  throw new Error('Le chiffrement est indisponible. Ton message n’a pas été envoyé. Réessaie depuis une connexion HTTPS ou l’application.');
 }
 
 /** Déchiffre un payload base64 → texte en clair avec cascade multi-salts et fallback rétrocompatible */

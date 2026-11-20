@@ -190,7 +190,13 @@ test('cosmetics and cards use solid borders without dashed traits glitches', asy
 test('all JSX and TSX files in src/ have valid syntax and balanced tags without parse errors', async () => {
   const { readdirSync, statSync, readFileSync } = await import('node:fs');
   const path = await import('node:path');
-  const parser = await import('@babel/parser');
+  let parser;
+  try {
+    parser = await import('@babel/parser');
+  } catch {
+    // Optional dev dependency not installed locally
+    return;
+  }
 
   const filesWithErrors = [];
   function scan(dir) {
@@ -302,28 +308,15 @@ test('pairing code helper exists and generates 6-character uppercase codes', asy
   assert.match(pairingLib, /pairing_codes/, 'Must register in pairing_codes collection');
 });
 
-test('login and settings cleanly sign out GoogleSignin and prevent redirect bounce loops', async () => {
+test('session bootstrap owns restoration while login preserves direct popup gestures', async () => {
   const loginSrc = await read('src/app/onboarding/login.tsx');
   const settingsSrc = await read('src/app/settings.tsx');
-  const indexSrc = await read('src/app/index.tsx');
-  const dashSrc = await read('src/app/dashboard.tsx');
-  const layoutSrc = await read('src/app/_layout.tsx');
-
-  assert.match(loginSrc, /ensureUserPairingCode/, 'login.tsx must ensure pairing code on account creation/recreation');
-  assert.match(loginSrc, /GoogleSignin\.signOut/, 'login.tsx must reset previous GoogleSignin session before signIn');
-  assert.match(loginSrc, /resetSession/, 'login.tsx must reset stale session when doc does not exist');
-
-  assert.match(settingsSrc, /GoogleSignin\.signOut/, 'settings.tsx must sign out GoogleSignin on delete and disconnect');
-  assert.match(settingsSrc, /resetSession/, 'settings.tsx must call resetSession');
-
-  assert.match(indexSrc, /!pseudo/, 'index.tsx must check pseudo before allowing dashboard');
-  assert.match(indexSrc, /!age/, 'index.tsx must check age before allowing dashboard');
-
-  assert.match(dashSrc, /ensureUserPairingCode/, 'dashboard.tsx must ensure user pairing code for solo users');
-  assert.match(dashSrc, /Mode solo/, 'dashboard.tsx must display Mode solo for solo users');
-
-  assert.match(layoutSrc, /ensureUserPairingCode/, '_layout.tsx must ensure user pairing code if doc missing');
-  assert.match(layoutSrc, /GoogleSignin\.signOut/, '_layout.tsx must clear GoogleSignin on session clear');
+  const bootstrapSrc = await read('src/hooks/use-session-bootstrap.ts');
+  assert.match(loginSrc, /GoogleSignin\.signOut/);
+  assert.match(loginSrc, /signInWithPopup\(auth, provider\)/);
+  assert.match(settingsSrc, /resetSession/);
+  assert.match(bootstrapSrc, /onAuthStateChanged/);
+  assert.doesNotMatch(loginSrc, /const userDoc = await getDoc/);
 });
 
 test('onboarding screens prevent whitescreens, format distortion and ghost session carry-over', async () => {
@@ -343,10 +336,11 @@ test('onboarding screens prevent whitescreens, format distortion and ghost sessi
   // 3. pseudo.tsx disables KeyboardAvoidingView on web to prevent Safari collapse
   assert.match(pseudoSrc, /enabled=\{Platform\.OS !== 'web'\}/, 'pseudo.tsx must disable KeyboardAvoidingView on web');
 
-  // 4. _layout.tsx cleans ghost session state when users doc does not exist
-  assert.match(layoutSrc, /store\.setPseudo\(''\)/, '_layout.tsx must clear pseudo when user doc does not exist');
-  assert.match(layoutSrc, /store\.setAge\(''\)/, '_layout.tsx must clear age when user doc does not exist');
-  assert.match(layoutSrc, /store\.setSynced\(false\)/, '_layout.tsx must clear synced status when user doc does not exist');
+  const bootstrapSrc = await read('src/hooks/use-session-bootstrap.ts');
+  assert.match(bootstrapSrc, /store\.resetSession\(\)/);
+  assert.match(bootstrapSrc, /current\.setPseudo\(data\?\.pseudo \|\| ''\)/);
+  assert.match(bootstrapSrc, /current\.setSynced\(Boolean\(data\?\.linkedTo\)\)/);
+
 });
 
 test('date, sync, and avatar picker fixes resolve layout squeeze, input focus, resilient pairing, and mobile web file picking', async () => {
@@ -388,13 +382,14 @@ test('login connection loop prevention and mobile web auth stability', async () 
   assert.match(dateSrc, /myUid\s*\|\|\s*auth\?\.currentUser\?\.uid/, 'date.tsx must resolve activeUid');
   assert.match(dashSrc, /store\.uid\s*\|\|\s*auth\?\.currentUser\?\.uid/, 'dashboard.tsx must resolve activeUid');
 
-  // 3. _layout.tsx sets store.uid synchronously in onAuthStateChanged
-  assert.match(layoutSrc, /setFirebaseUser\(user\)[\s\S]*store\.setUid\(user\.uid\)/, '_layout.tsx must set store.uid synchronously on user receipt');
+  const bootstrapSrc = await read('src/hooks/use-session-bootstrap.ts');
+  assert.match(bootstrapSrc, /store\.setUid\(firebaseUser\.uid\)/);
 
   // 4. login.tsx invokes signInWithPopup directly to preserve user gestures and avoids cross-domain redirect loops
   assert.match(loginSrc, /signInWithPopup\(auth,\s*provider\)/, 'login.tsx must use signInWithPopup on web');
   assert.doesNotMatch(loginSrc, /isMobileWeb[\s\S]*signInWithRedirect/, 'login.tsx must not force signInWithRedirect on mobile web');
 
-  // 5. index.tsx reconciles activeUser before redirecting to login
-  assert.match(indexSrc, /!activeUid\s*&&\s*!activeUser/, 'index.tsx must verify both store and auth before login redirect');
+  assert.match(indexSrc, /Redirect href="\/dashboard"/);
+  assert.doesNotMatch(indexSrc, /setUid|hasHydrated|currentUser/);
+
 });

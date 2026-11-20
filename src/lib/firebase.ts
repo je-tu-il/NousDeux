@@ -2,16 +2,23 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { 
   getAuth, 
+  connectAuthEmulator,
   initializeAuth, 
   // @ts-ignore
   getReactNativePersistence 
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 // Your web app's Firebase configuration
-const firebaseConfig = {
+const useLocalEmulators = process.env.EXPO_PUBLIC_FIREBASE_EMULATORS === 'true';
+const firebaseConfig = useLocalEmulators ? {
+  apiKey: 'demo-api-key',
+  authDomain: '127.0.0.1',
+  projectId: 'demo-nousdeux',
+  appId: 'demo-nousdeux-web',
+} : {
   apiKey: "AIzaSyDSLiuhXL7zQXq5F1nZbwBCFMYGxqoH_3I",
   authDomain: "bloum-5456e.firebaseapp.com",
   projectId: "bloum-5456e",
@@ -33,23 +40,19 @@ if (Platform.OS === 'web') {
     firebaseAuth = initializeAuth(app, {
       persistence: typeof getReactNativePersistence === 'function' ? getReactNativePersistence(AsyncStorage) : undefined,
     });
-  } catch (err) {
-    try {
-      firebaseAuth = getAuth(app);
-    } catch (e) {
-      console.warn('[Firebase] Fallback getAuth warning:', e);
-      firebaseAuth = {
-        currentUser: null,
-        onAuthStateChanged: (cb: (user: any) => void) => {
-          cb(null);
-          return () => {};
-        },
-        signOut: async () => {},
-      };
-    }
+  } catch {
+    // Reuse the real Auth singleton after Fast Refresh. Never substitute a fake
+    // signed-out client: it would discard restored sessions without an error.
+    firebaseAuth = getAuth(app);
   }
 }
 
 // Export Auth and Firestore
 export const auth = firebaseAuth;
 export const db = getFirestore(app);
+if (useLocalEmulators) {
+  const host = process.env.EXPO_PUBLIC_FIREBASE_EMULATOR_HOST || '127.0.0.1';
+  // A demo project cannot address any production Firebase resources.
+  try { connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true }); } catch {}
+  try { connectFirestoreEmulator(db, host, 8080); } catch {}
+}

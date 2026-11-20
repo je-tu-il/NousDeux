@@ -55,8 +55,8 @@ export default function QuestsScreen() {
   const styles = getStyles(theme, windowWidth);
   const background = getCosmeticById(store.selectedBackground);
   const backgroundSource = getCosmeticImage(background, store.isDarkMode) || (store.isDarkMode
-    ? require('../../assets/images/nousdeux_dark_background.png')
-    : require('../../assets/images/nousdeux_warm_background.png'));
+    ? require('../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../assets/images/optimized/nousdeux_warm_background.jpg'));
   const myUid = store.uid || auth.currentUser?.uid;
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
   const [loading, setLoading]     = useState(Boolean(myUid));

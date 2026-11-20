@@ -275,8 +275,8 @@ export async function scheduleDailyReminders(): Promise<void> {
   const store = useOnboardingStore.getState();
   const isCouple = Boolean(store.isSynced && store.partnerUid);
 
-  const wheelDone = await isRouletteClaimedToday(store.uid);
-  const questionDone = await isQuestionAnsweredToday(store.uid);
+  const wheelDone = await isRouletteClaimedToday(store.uid ?? undefined);
+  const questionDone = await isQuestionAnsweredToday(store.uid ?? undefined);
   const bothDone = await isBothAnsweredToday();
 
   const now = new Date();

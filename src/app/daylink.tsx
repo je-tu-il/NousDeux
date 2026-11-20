@@ -12,7 +12,7 @@ export default function DaylinkScreen() {
   const store = useOnboardingStore();
   const topInset = useTopInset();
   const { width: windowWidth } = useWindowDimensions();
-  const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));
+  const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/optimized/nousdeux_dark_background.jpg') : require('../../assets/images/optimized/nousdeux_warm_background.jpg'));
 
   return (
     <ImageBackground 
@@ -24,7 +24,7 @@ export default function DaylinkScreen() {
       <View style={[styles.safeArea, { paddingTop: topInset + 14, maxWidth: windowWidth >= 700 ? 680 : 500 }]}>
         {/* Header avec Bouton Retour */}
         <View style={styles.headerRow}>
-          <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); }} style={styles.backBtn}>
+          <Pressable onPress={() => { router.replace('/dashboard'); }} style={styles.backBtn}>
             <ArrowLeft color={Colors.light.text} size={28} />
           </Pressable>
         </View>

@@ -1,12 +1,16 @@
-const admin = require('firebase-admin');
+const { getApps, initializeApp, applicationDefault } = require('firebase-admin/app');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
+const admin = { auth: getAuth };
+const verifyUser = require('./_verify-user');
 
 // Initialize Admin SDK
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault()
+if (!getApps().length) {
+  initializeApp({
+    credential: applicationDefault()
   });
 }
-const db = admin.firestore();
+const db = getFirestore();
 
 /**
  * Serverless Function to handle atomic pairing
@@ -17,10 +21,10 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { code, requesterUserId } = req.body;
-  if (!code || !requesterUserId) {
-    return res.status(400).json({ error: 'Missing code or requesterUserId' });
-  }
+  const requesterUserId = await verifyUser(req, res, admin);
+  if (!requesterUserId) return;
+  const code = String(req.body?.code || '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(code)) return res.status(400).json({ error: 'Invalid pairing code' });
 
   try {
     const codeRef = db.collection('pairing_codes').doc(code);
@@ -61,7 +65,7 @@ module.exports = async (req, res) => {
       t.set(coupleRef, {
         partnerA: partnerUserId,
         partnerB: requesterUserId,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       });
 
       // Update both users — use set(merge) for resilience against race conditions

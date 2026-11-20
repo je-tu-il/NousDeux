@@ -89,8 +89,8 @@ export default function ShopScreen() {
   const styles = getStyles(theme);
   const background = getCosmeticById(store.selectedBackground);
   const backgroundSource = getCosmeticImage(background, store.isDarkMode) || (store.isDarkMode
-    ? require('../../assets/images/nousdeux_dark_background.png')
-    : require('../../assets/images/nousdeux_warm_background.png'));
+    ? require('../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../assets/images/optimized/nousdeux_warm_background.jpg'));
   const myUid = useOnboardingStore(s => s.uid);
 
   const params = useLocalSearchParams<{ tab?: string | string[]; from?: string | string[] }>();
@@ -125,13 +125,6 @@ export default function ShopScreen() {
     message?: string;
   }>({ visible: false });
 
-  useEffect(() => {
-    const currentTab = Array.isArray(params?.tab) ? params.tab[0] : params?.tab;
-    if (currentTab && ['backgrounds', 'borders', 'tags', 'widgets'].includes(currentTab)) {
-      setActiveTab(currentTab as TabType);
-    }
-  }, [params?.tab]);
-
   const fetchShopData = useCallback(async () => {
     if (!myUid) return;
     try {
@@ -152,7 +145,11 @@ export default function ShopScreen() {
     }
   }, [myUid]);
 
-  useEffect(() => { fetchShopData(); }, [fetchShopData]);
+  useEffect(() => {
+    // Data arrives asynchronously; do not synchronously re-enter React from the effect.
+    const timer = setTimeout(() => { void fetchShopData(); }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchShopData]);
 
   // Écoute des données en temps réel
   useEffect(() => {
@@ -161,7 +158,7 @@ export default function ShopScreen() {
       if (docSnap.exists()) {
         const data = docSnap.data() as WalletData;
         setWallet(data);
-        void computeStreakCached(coupleId, true).then((streak) => {
+        void computeStreakCached(coupleId, false).then((streak) => {
           setWallet((current) => current ? { ...current, streak } : current);
         });
       }
@@ -432,7 +429,7 @@ export default function ShopScreen() {
         </LinearGradient>
 
       {/* Wrapper global pour centrer sur grand écran avec overflow: hidden */}
-      <View style={{ flex: 1, width: '100%', maxWidth: 500, alignSelf: 'center', overflow: 'hidden' }}>
+      <View style={{ flex: 1, width: '100%', maxWidth: windowWidth >= 768 ? 860 : 520, alignSelf: 'center', overflow: 'hidden' }}>
         {/* Onglets (barre de choix) - Fixe en haut de la liste */}
         <View style={styles.tabs}>
           {((Platform.OS === 'web'
@@ -456,11 +453,11 @@ export default function ShopScreen() {
 
         {/* Grille avec header défilant (pub + bannière widget qui descendent avec les cartes) */}
         <FlatList
-          key={activeTab} // force re-render on tab change (numColumns)
+          key={`${activeTab}_${windowWidth >= 768 ? 3 : 2}`}
           data={currentData}
           keyExtractor={item => item.id}
           renderItem={renderItemCard}
-          numColumns={2}
+          numColumns={windowWidth >= 768 ? 3 : 2}
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
@@ -608,7 +605,7 @@ export default function ShopScreen() {
                   <Text style={styles.modalDesc}>
                     Cet objet ({selectedItem.emoji && selectedItem.emoji + ' '}<Text style={{ fontWeight: '800' }}>{selectedItem.name}</Text>) est une récompense de fidélité !{'\n\n'}
                     Condition : <Text style={{ color: '#FF9A8B', fontWeight: '800' }}>
-                      Nécessite {(selectedItem.unlock as any).days} jours de connexion pour l'obtenir.
+                      Nécessite {(selectedItem.unlock as any).days} jours de connexion pour l’obtenir.
                     </Text>
                   </Text>
                   
@@ -727,12 +724,13 @@ const getStyles = (theme: any) => StyleSheet.create({
 
   listContent: {
     padding: 12, paddingBottom: 40,
-    maxWidth: 600, width: '100%', alignSelf: 'center',
+    maxWidth: 860, width: '100%', alignSelf: 'center',
   },
-  row: { justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 12 },
+  row: { justifyContent: 'space-between', paddingHorizontal: 2, marginBottom: 12 },
 
   card: {
-    width: '48%',
+    flex: 1,
+    marginHorizontal: 5,
     backgroundColor: theme.card,
     borderRadius: 16,
     padding: 10,

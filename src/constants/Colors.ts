@@ -7,18 +7,18 @@ export const Colors = {
   light: {
     text: '#4A3B39',
     background: '#FFF5F2',           // Warm cream
-    tint: '#FF9A8B',                 // Soft peach
+    tint: '#AF4A61',                 // Soft peach
     icon: '#4A3B39',
-    tabIconDefault: '#C6B2B0',
+    tabIconDefault: '#806D72',
     tabIconSelected: '#FF9A8B',
     card: '#FFFFFF',
     cardBorder: 'rgba(255, 154, 139, 0.2)',
-    gradientStart: '#FF9A8B',
-    gradientEnd: '#FF6A88',
+    gradientStart: '#BD6D7A',
+    gradientEnd: '#95465E',
     // Fonds de blocs translucides (sur fond d'écran)
-    glassBackground: 'rgba(255, 255, 255, 0.75)',
+    glassBackground: 'rgba(255, 252, 251, 0.96)',
     // Fonds de cartes principales (mainCard, smallCard, categoryCard)
-    cardGlass: 'rgba(255, 255, 255, 0.82)',
+    cardGlass: 'rgba(255, 252, 251, 0.96)',
     // Fonds de cartes colorées (ex: Question du Jour, Illimitées…)
     cardGlassColored: (r: number, g: number, b: number) => `rgba(${r},${g},${b},0.08)`,
     // Overlay de page (par-dessus le fond d'écran, sous le contenu)
@@ -40,9 +40,9 @@ export const Colors = {
     gradientStart: '#A94D62',
     gradientEnd: '#813B4D',
     // Fonds de blocs translucides (sur fond d'écran)
-    glassBackground: 'rgba(35, 26, 25, 0.75)', // less opaque, slightly lighter
+    glassBackground: 'rgba(35, 26, 25, 0.96)', // less opaque, slightly lighter
     // Fonds de cartes principales (mainCard, smallCard, categoryCard) — sombre avec transparence
-    cardGlass: 'rgba(54, 41, 39, 0.82)', // lighter glass
+    cardGlass: 'rgba(54, 41, 39, 0.96)', // lighter glass
     // Fonds de cartes colorées en dark (teinte sombre légèrement colorée)
     cardGlassColored: (r: number, g: number, b: number) => `rgba(${r},${g},${b},0.12)`,
     // Overlay de page sombre (réduit l'éblouissement sur les fonds clairs)

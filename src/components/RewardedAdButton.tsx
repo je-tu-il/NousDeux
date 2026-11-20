@@ -229,9 +229,9 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
             {modalStep === 'watching' ? (
               <View style={{ alignItems: 'center', padding: 10 }}>
                 <ActivityIndicator size="large" color="#FF6A88" style={{ marginBottom: 16 }} />
-                <Text style={[styles.modalTitle, { color: theme.text }]}>Lecture de l'annonce...</Text>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Lecture de l’annonce...</Text>
                 <Text style={[styles.modalDesc, { color: theme.text, opacity: 0.7 }]}>
-                  Merci de soutenir l'application !
+                  Merci de soutenir l’application !
                 </Text>
               </View>
             ) : (
@@ -242,7 +242,7 @@ export default function RewardedAdButton({ coupleId, onRewardEarned }: RewardedA
                   Vous avez gagné <Text style={{ fontWeight: 'bold', color: '#FF6A88' }}>+{GOOGLE_ADS_CONFIG.rewardPetalsAmount} pétales 🌸</Text> pour votre couple !
                 </Text>
                 <Text style={[styles.counterNotice, { color: theme.text, opacity: 0.6, marginBottom: 16 }]}>
-                  Vidéos utilisées aujourd'hui : {dailyWatches} / {maxVideos}
+                  Vidéos utilisées aujourd’hui : {dailyWatches} / {maxVideos}
                 </Text>
                 <Pressable
                   style={styles.confirmBtn}

@@ -8,13 +8,13 @@
       "android",
       "web"
     ],
-    "sdkVersion": "56.0.0",
+    "sdkVersion": "57.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "nousdeuxapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.pixelthings.nousdeuxapp",
       "googleServicesFile": "./GoogleService-Info.plist",
       "entitlements": {
@@ -34,6 +34,9 @@
         ]
       },
       "supportsTablet": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "usesAppleSignIn": true
     },
     "android": {
@@ -88,6 +91,7 @@
         "expo-image-picker",
         {
           "photosPermission": "NousDeux a besoin d'accéder à vos photos pour vous permettre de choisir une photo de profil.",
+          "microphonePermission": false,
           "cameraPermission": "NousDeux a besoin d'accéder à votre appareil photo pour vous prendre en photo pour votre profil."
         }
       ],
@@ -101,7 +105,11 @@
               "displayName": "NousDeux - Question du Jour",
               "description": "Affiche la question du jour de votre couple sur votre écran d'accueil",
               "ios": {
-                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"],
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "systemLarge"
+                ],
                 "contentMarginsDisabled": true
               },
               "android": null
@@ -111,7 +119,11 @@
               "displayName": "NousDeux - Flamme & Série",
               "description": "Affiche votre série de jours ensemble et votre flamme",
               "ios": {
-                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"],
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "systemLarge"
+                ],
                 "contentMarginsDisabled": true
               },
               "android": null
@@ -120,7 +132,10 @@
         }
       ],
       "./plugins/withIosWidgets",
-      "./plugins/withAndroidWidgets"
+      "./plugins/withAndroidWidgets",
+      "expo-web-browser",
+      "expo-font",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,

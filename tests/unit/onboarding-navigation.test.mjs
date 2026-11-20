@@ -44,7 +44,7 @@ test('_layout.tsx avoids aggressive auto-redirects between onboarding subpages',
     '_layout.tsx should not redirect directly to /onboarding/age during onboarding input'
   );
   // _layout must synchronize profile from Firestore to prevent forcing onboarding on new tab/browser
-  assert.match(layoutSrc, /doc\(db,\s*'users',\s*user\.uid\)/, '_layout.tsx must load users document upon auth restoration');
+  assert.match(await read('src/hooks/use-session-bootstrap.ts'), /doc\(db,\s*'users',\s*firebaseUser\.uid\)/, 'Bootstrap must restore the user document');
 });
 
 test('sync.tsx prevents self-pairing and persists pairing code to users document', async () => {

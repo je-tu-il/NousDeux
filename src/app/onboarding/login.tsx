@@ -4,17 +4,22 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { Link, router } from 'expo-router';
 import { browserLocalPersistence, getRedirectResult, GoogleAuthProvider, OAuthProvider, setPersistence, signInWithCredential, signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { CheckSquare, Square } from 'lucide-react-native';
+import { CheckSquare, Square, Heart, ArrowRight, Sparkles, MessageCircle, ShieldCheck } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { BackHandler, ImageBackground, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Image, ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import UIModal, { UIModalType } from '@/components/UIModal';
 import { ensureUserPairingCode } from '@/lib/pairing';
 import { triggerHaptic } from '@/lib/haptics';
 import * as Crypto from 'expo-crypto';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const theme = Colors.light;
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
+  const insets = useSafeAreaInsets();
   const setUid = useOnboardingStore((state) => state.setUid);
   const setPseudo = useOnboardingStore((state) => state.setPseudo);
   const setAge = useOnboardingStore((state) => state.setAge);
@@ -62,109 +67,11 @@ export default function LoginScreen() {
     }
   };
 
-  const completeLogin = async (user: { uid: string; displayName: string | null; photoURL?: string | null }) => {
-    const currentStore = useOnboardingStore.getState();
-    // Sécurité stricte d'isolation : si changement de compte ou nouvelle connexion,
-    // purger la session précédente pour empêcher tout résidu de partenaire ou de profil
-    if (currentStore.uid !== user.uid) {
-      currentStore.resetSession();
-    } else {
-      currentStore.clearPartnerCache();
-      currentStore.setSynced(false);
-    }
-    setUid(user.uid);
+  // Navigation and profile restoration are owned by the session bootstrap.
+  // Keeping a second asynchronous restore here caused first-login/reload races.
+  const completeLogin = async (_user: { uid: string; displayName: string | null; photoURL?: string | null }) => {
     setHasAcceptedTerms(true);
-    try {
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        setPseudo(data.pseudo || '');
-        setAge(data.age || '');
-        const av = data.avatarUrl || data.avatar || user.photoURL || null;
-        setAvatar(av);
-        if (!data.avatarUrl && user.photoURL) {
-          setDoc(doc(db, 'users', user.uid), { avatarUrl: user.photoURL }, { merge: true }).catch(() => {});
-        }
-        try {
-          const { getUserProfile } = await import('@/lib/economy');
-          const p = await getUserProfile(user.uid);
-          if (p?.avatar) useOnboardingStore.getState().setAvatarConfig(p.avatar);
-          if (p?.selectedBackground) {
-            useOnboardingStore.getState().setSelectedCosmetics(p.selectedBackground, p.selectedBorder, p.selectedTag);
-          }
-        } catch {}
-
-        if (data.pairingCode) {
-          setMyCode(data.pairingCode);
-        } else {
-          const code = await ensureUserPairingCode(user.uid);
-          setMyCode(code);
-        }
-
-        const isLinked = Boolean(data.linkedTo);
-        setSynced(isLinked);
-        if (!isLinked) {
-          useOnboardingStore.getState().clearPartnerCache();
-        } else if (currentStore.partnerUid && currentStore.partnerUid !== data.linkedTo) {
-          useOnboardingStore.getState().clearPartnerCache();
-        }
-
-        const navigateCleanly = (path: any) => {
-          if (router.canDismiss()) {
-            router.dismissAll();
-          }
-          router.replace(path);
-        };
-
-        if (isLinked && !data.needsDate) {
-          navigateCleanly('/dashboard');
-          return;
-        }
-        if (isLinked && data.needsDate) {
-          navigateCleanly('/onboarding/date');
-          return;
-        }
-        if (data.pseudo && data.age) {
-          navigateCleanly('/dashboard');
-          return;
-        }
-        if (data.pseudo) {
-          navigateCleanly('/onboarding/age');
-          return;
-        }
-      } else {
-        // Document inexistant (nouveau compte ou compte récréé après suppression)
-        // Réinitialiser complètement le store pour ne pas garder de résidus d'un ancien compte
-        useOnboardingStore.getState().resetSession();
-        setUid(user.uid);
-        setHasAcceptedTerms(true);
-        const code = await ensureUserPairingCode(user.uid, null);
-        setMyCode(code);
-        if (user.photoURL) {
-          setAvatar(user.photoURL);
-        }
-        if (user.displayName) {
-          setPseudo(user.displayName.split(' ')[0]);
-        }
-      }
-      if (router.canDismiss()) {
-        router.dismissAll();
-      }
-      router.replace('/onboarding/pseudo');
-    } catch (error: any) {
-      console.warn("Erreur chargement profil post-connexion :", error);
-      const currentStore = useOnboardingStore.getState();
-      if (router.canDismiss()) {
-        router.dismissAll();
-      }
-      if (currentStore.pseudo && currentStore.age) {
-        router.replace('/dashboard');
-      } else {
-        router.replace('/onboarding/pseudo');
-      }
-    } finally {
-      setIsSigningIn(false);
-    }
+    setIsSigningIn(false);
   };
 
   useEffect(() => {
@@ -289,7 +196,7 @@ export default function LoginScreen() {
         }
 
         // Génération d'un nonce cryptographique requis par Firebase Auth
-        const rawNonce = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+        const rawNonce = Crypto.randomUUID();
         const hashedNonce = await Crypto.digestStringAsync(
           Crypto.CryptoDigestAlgorithm.SHA256,
           rawNonce
@@ -360,7 +267,7 @@ export default function LoginScreen() {
       } else if (error?.name === 'auth-popup-timeout') {
         setLoginError(error.message);
       } else if (error?.code === '1000' || error?.message?.includes('1000') || error?.message?.includes('authorization')) {
-        setLoginError("La connexion native avec Apple en version sideloadée (sans certificat développeur payant Apple) est restreinte par Apple. Veuillez utiliser la connexion avec Google en 1 clic !");
+        setLoginError("Apple n’a pas pu autoriser cette connexion. Réessaie sur ton iPhone avec iCloud connecté. Si le problème persiste, contacte-nous.");
       } else {
         setLoginError(`Erreur de connexion Apple : ${error?.message ?? 'erreur inconnue'}`);
       }
@@ -376,103 +283,109 @@ export default function LoginScreen() {
   };
 
   return (
-    <ImageBackground source={require('../../../assets/images/nousdeux_warm_background.png')} style={styles.container} resizeMode="cover">
-      <View style={styles.content}>
-        <Animated.View entering={FadeInDown.duration(800)}>
-          <Text style={[styles.title, { color: theme.text }]}>Bienvenue sur NousDeux</Text>
-          <Text style={[styles.subtitle, { color: theme.text }]}>Connecte-toi pour lier ton compte à vie.</Text>
-        </Animated.View>
-
-        {/* Consentement RGPD */}
-        <Animated.View entering={FadeInUp.duration(800).delay(100)} style={styles.consentBox}>
-          {/* Checkbox séparée des liens pour éviter le toggle accidentel */}
-          <Pressable style={styles.checkRow} onPress={toggleAccepted} accessibilityRole="checkbox" accessibilityState={{ checked: accepted }}>
-            {accepted
-              ? <CheckSquare color={theme.tint} size={22} />
-              : <Square color="#A99693" size={22} />}
-            <Text style={styles.consentText}>
-              {"J'accepte les conditions générales et la politique de confidentialité de NousDeux."}
-            </Text>
-          </Pressable>
-
-          {/* Liens CGU en dehors du Pressable pour ne pas déclencher toggleAccepted */}
-          <View style={styles.linksRow}>
-            <Link href="/terms" style={styles.link}>Conditions Générales</Link>
-            <Text style={styles.linkSep}>·</Text>
-            <Link href="/privacy" style={styles.link}>Politique de Confidentialité</Link>
+    <ImageBackground source={require('../../../assets/images/optimized/nousdeux_warm_background.jpg')} style={styles.container} resizeMode="cover">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) }]} showsVerticalScrollIndicator={false}>
+        <View style={styles.page}>
+          <View style={styles.brandRow}>
+            <Image source={require('../../../assets/images/optimized/brand-icon.png')} style={styles.brandIcon} />
+            <Text style={styles.brandName}>NousDeux<Text style={{ color: '#B65A6D' }}>.</Text></Text>
+            {wide && <Text style={styles.brandNote}>LE RENDEZ-VOUS DES COMPLICES</Text>}
           </View>
-
-          <Text style={styles.consentNote}>
-            Vos réponses sont chiffrées de bout en bout. Ni NousDeux ni ses serveurs ne peuvent les lire.
-          </Text>
-        </Animated.View>
-
-        <Animated.View entering={FadeInUp.duration(800).delay(200)} style={styles.buttonContainer}>
-          {loginError && <Text style={styles.errorText}>{loginError}</Text>}
-          <Pressable
-            style={({ pressed }) => [
-              styles.googleButton,
-              { opacity: pressed || isSigningIn ? 0.6 : accepted ? 1 : 0.85 }
-            ]}
-            onPress={handleGoogleLogin}
-            disabled={isSigningIn}
-          >
-            <Text style={styles.googleButtonText}>{isSigningIn ? 'Connexion en cours...' : 'Continuer avec Google'}</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.appleButton,
-              { opacity: pressed || isSigningIn ? 0.6 : accepted ? 1 : 0.85 }
-            ]}
-            onPress={handleAppleLogin}
-            disabled={isSigningIn}
-          >
-            <Text style={styles.appleButtonText}>{isSigningIn ? 'Connexion en cours...' : 'Continuer avec Apple'}</Text>
-          </Pressable>
-        </Animated.View>
-      </View>
-
-      <UIModal
-        visible={modalState.visible}
-        onClose={() => setModalState({ visible: false })}
-        type={modalState.type}
-        title={modalState.title}
-        message={modalState.message}
-      />
+          <View style={[styles.content, wide && styles.wideContent]}>
+            <View style={[styles.story, wide && { flex: 1, paddingRight: 72 }]}>
+              <View style={styles.eyebrow}><Heart size={13} color="#A5475F" /><Text style={styles.eyebrowText}>UN PEU DE VOUS, CHAQUE JOUR</Text></View>
+              <Text style={[styles.title, wide && { fontSize: 66, lineHeight: 72 }]}>Les petits moments font les grandes histoires.</Text>
+              <Text style={styles.subtitle}>Une question, un sourire, une nouvelle façon de se découvrir. Prenez le temps de vous retrouver.</Text>
+              {wide && <View style={styles.features}>
+                <View style={styles.feature}><MessageCircle size={20} color="#A5475F" /><View style={{ flex: 1 }}><Text style={styles.featureTitle}>Votre rituel à deux</Text><Text style={styles.featureText}>Une nouvelle question à partager chaque jour.</Text></View></View>
+                <View style={styles.feature}><Sparkles size={20} color="#A5475F" /><View style={{ flex: 1 }}><Text style={styles.featureTitle}>À votre image</Text><Text style={styles.featureText}>Des souvenirs et un espace qui vous ressemblent.</Text></View></View>
+                <View style={styles.quote}><Text style={styles.quoteText}>« Et si on apprenait encore quelque chose sur nous aujourd’hui ? »</Text><Text style={styles.quoteCaption}>VOTRE PROCHAIN CHAPITRE COMMENCE ICI</Text></View>
+              </View>}
+            </View>
+            <View style={[styles.card, wide && { width: 410 }]}>
+              <View style={styles.cardBadge}><Heart size={22} color="#A5475F" /></View>
+              <Text style={styles.cardTitle}>Votre histoire continue ici</Text>
+              <Text style={styles.cardSubtitle}>Crée ton compte ou retrouve ton espace.
+Ton partenaire pourra te rejoindre ensuite.</Text>
+              <View style={styles.consentBox}>
+                <Pressable style={styles.checkRow} onPress={toggleAccepted} accessibilityRole="checkbox" accessibilityLabel="Accepter les conditions générales et la politique de confidentialité" accessibilityState={{ checked: accepted }} aria-checked={accepted}>
+                  {accepted ? <CheckSquare color="#A5475F" size={22} /> : <Square color="#89787C" size={22} />}
+                  <Text style={styles.consentText}>J’accepte les conditions générales et la politique de confidentialité.</Text>
+                </Pressable>
+                <View style={styles.linksRow}>
+                  <Link href="/terms" style={styles.link}>Conditions générales</Link>
+                  <Text style={styles.linkSep}>·</Text>
+                  <Link href="/privacy" style={styles.link}>Confidentialité</Link>
+                </View>
+              </View>
+              {loginError && <Text accessibilityRole="alert" style={styles.errorText}>{loginError}</Text>}
+              <View style={styles.buttonContainer}>
+                <Pressable accessibilityRole="button" style={({ pressed }) => [styles.googleButton, { opacity: pressed || isSigningIn ? 0.6 : 1 }]} onPress={handleGoogleLogin} disabled={isSigningIn}>
+                  <Text style={styles.googleMark}>G</Text><Text style={styles.googleButtonText}>{isSigningIn ? 'Connexion en cours…' : 'Continuer avec Google'}</Text><ArrowRight size={17} color="#665459" />
+                </Pressable>
+                {Platform.OS === 'ios' ? (
+                  <View pointerEvents={isSigningIn ? 'none' : 'auto'} style={{ width: '100%', opacity: isSigningIn ? 0.6 : 1 }}>
+                    <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={14} style={{ height: 54, width: '100%' }} onPress={handleAppleLogin} />
+                  </View>
+                ) : Platform.OS === 'web' ? (
+                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.appleButton, { opacity: pressed || isSigningIn ? 0.6 : 1 }]} onPress={handleAppleLogin} disabled={isSigningIn}>
+                    <Text style={styles.appleButtonText}>{isSigningIn ? 'Connexion en cours…' : 'Continuer avec Apple'}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={styles.securityNote}><ShieldCheck size={14} color="#89787C" /><Text style={styles.consentNote}>Un espace réservé à votre duo.</Text></View>
+            </View>
+          </View>
+          <View style={styles.footer}><Text style={styles.footerText}>À deux, c’est encore mieux.</Text><Link href="/contact" style={styles.footerLink}>Besoin d’un coup de main ?</Link></View>
+        </View>
+      </ScrollView>
+      <UIModal visible={modalState.visible} onClose={() => setModalState({ visible: false })} type={modalState.type} title={modalState.title} message={modalState.message} />
     </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', height: '100%', backgroundColor: '#FFF5F2', overflow: 'hidden' },
-  content: { flex: 1, justifyContent: 'center', padding: 30, width: '100%', maxWidth: 540, alignSelf: 'center' },
-  title: { fontSize: 36, fontWeight: '900', marginBottom: 10, textAlign: 'center' },
-  subtitle: { fontSize: 18, opacity: 0.8, textAlign: 'center', marginBottom: 40, lineHeight: 26 },
-  consentBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 154, 139, 0.35)',
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 30,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  consentText: { flex: 1, fontSize: 14, color: '#2B1C1A', fontWeight: '600', lineHeight: 20 },
-  link: { color: '#D94848', fontWeight: '800', textDecorationLine: 'underline' },
-  consentNote: { fontSize: 12, color: '#5A4543', fontStyle: 'italic', textAlign: 'center', fontWeight: '500' },
-  linksRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' },
-  linkSep: { color: '#A99693', fontSize: 13 },
-  buttonContainer: { alignItems: 'center', width: '100%', gap: 12 },
-  googleButton: { backgroundColor: 'white', paddingVertical: 18, paddingHorizontal: 32, borderRadius: 30, width: '100%', maxWidth: 320, alignItems: 'center', shadowColor: '#FF9A8B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
-  googleButtonText: { color: '#444', fontSize: 18, fontWeight: 'bold' },
-  appleButton: { backgroundColor: '#000000', paddingVertical: 18, paddingHorizontal: 32, borderRadius: 30, width: '100%', maxWidth: 320, alignItems: 'center', shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
-  appleButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
-  errorText: { color: '#B91C1C', backgroundColor: 'rgba(254,226,226,0.92)', padding: 12, borderRadius: 12, marginBottom: 16, textAlign: 'center', lineHeight: 19 },
+  container: { flex: 1, width: '100%', backgroundColor: '#FCF8F5' },
+  scroll: { flexGrow: 1, backgroundColor: 'rgba(252,248,245,0.97)', paddingHorizontal: 24 },
+  page: { flex: 1, width: '100%', maxWidth: 1120, alignSelf: 'center' },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, marginBottom: 38 },
+  brandIcon: { width: 38, height: 38, borderRadius: 12 },
+  brandName: { fontSize: 25, fontWeight: '700', color: '#402B32', letterSpacing: -1 },
+  brandNote: { marginLeft: 'auto', color: '#8E7C80', fontSize: 10, fontWeight: '600', letterSpacing: 2.2 },
+  content: { flex: 1, justifyContent: 'center', gap: 32, width: '100%', maxWidth: 480, alignSelf: 'center' },
+  wideContent: { flexDirection: 'row', alignItems: 'center', maxWidth: 1120, gap: 0, paddingVertical: 30 },
+  story: { width: '100%' },
+  eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
+  eyebrowText: { color: '#A5475F', fontSize: 10, fontWeight: '700', letterSpacing: 1.8 },
+  title: { fontSize: 37, lineHeight: 43, fontWeight: '600', color: '#402B32', letterSpacing: -1.7 },
+  subtitle: { color: '#79646A', fontSize: 16, lineHeight: 26, marginTop: 22, maxWidth: 420 },
+  features: { gap: 24, marginTop: 36 },
+  feature: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  featureTitle: { color: '#503740', fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  featureText: { color: '#89787C', fontSize: 13, lineHeight: 20 },
+  quote: { borderLeftWidth: 2, borderColor: '#DDB5BC', paddingLeft: 20, marginTop: 8, maxWidth: 370 },
+  quoteText: { fontSize: 17, lineHeight: 27, color: '#79646A', fontStyle: 'italic' },
+  quoteCaption: { fontSize: 8, letterSpacing: 1.6, color: '#A28A90', marginTop: 12 },
+  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EDE2E1', borderRadius: 28, padding: 28, width: '100%', shadowColor: '#67454E', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.07, shadowRadius: 36, elevation: 2 },
+  cardBadge: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#FAEFF1', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  cardTitle: { color: '#402B32', fontSize: 25, lineHeight: 31, fontWeight: '600', letterSpacing: -0.6 },
+  cardSubtitle: { color: '#89787C', fontSize: 14, lineHeight: 22, marginTop: 12, marginBottom: 26 },
+  consentBox: { gap: 12, marginBottom: 24 },
+  checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 6 },
+  consentText: { flex: 1, color: '#665459', fontSize: 12, lineHeight: 19 },
+  linksRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', paddingLeft: 32 },
+  link: { fontSize: 11, color: '#A5475F', textDecorationLine: 'underline' },
+  linkSep: { color: '#B6A2A7', fontSize: 11 },
+  buttonContainer: { width: '100%', gap: 12 },
+  googleButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#DED2D5', minHeight: 54, borderRadius: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  googleMark: { color: '#4285F4', fontSize: 20, fontWeight: '700' },
+  googleButtonText: { color: '#402B32', fontSize: 14, fontWeight: '600' },
+  appleButton: { backgroundColor: '#211C1E', minHeight: 54, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  appleButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  securityNote: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 24 },
+  consentNote: { color: '#89787C', fontSize: 11 },
+  errorText: { color: '#9D2841', backgroundColor: '#FFF0F2', padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 12, lineHeight: 19 },
+  footer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16, marginTop: 40, paddingVertical: 16, borderTopWidth: 1, borderColor: '#EDE2E1' },
+  footerText: { fontSize: 11, color: '#A28A90' },
+  footerLink: { fontSize: 11, color: '#79646A' },
 });

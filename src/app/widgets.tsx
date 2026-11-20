@@ -10,6 +10,9 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { ArrowLeft, Sparkles, Smartphone, Check, Palette, ShoppingBag, HelpCircle } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { useOnboardingStore } from '../store/onboardingStore';
@@ -36,11 +39,12 @@ export default function WidgetsScreen() {
   const [inventory, setInventory] = useState<any>(null);
   const [currentStreak, setCurrentStreak] = useState<number>(0);
   const [maxSeenStreak, setMaxSeenStreak] = useState<number>(0);
+  const [unlockedWidgets, setUnlockedWidgets] = useState<Set<string>>(new Set());
 
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
   const defaultBg = store.isDarkMode
-    ? require('../../assets/images/nousdeux_dark_background.png')
-    : require('../../assets/images/nousdeux_warm_background.png');
+    ? require('../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../assets/images/optimized/nousdeux_warm_background.jpg');
   const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
 
   useEffect(() => {
@@ -55,10 +59,19 @@ export default function WidgetsScreen() {
       setWidgetData(data);
 
       try {
-        const lastSeenStr = await AsyncStorage.getItem('last_seen_streak_unlock');
-        if (lastSeenStr) {
-          const parsed = parseInt(lastSeenStr, 10);
+        const maxStreakStr = (await AsyncStorage.getItem(`@nousdeux_max_streak:${store.uid}`)) || null;
+        if (maxStreakStr) {
+          const parsed = parseInt(maxStreakStr, 10);
           if (parsed > 0) setMaxSeenStreak(parsed);
+        }
+        const savedUnlocked = await AsyncStorage.getItem(`@nousdeux_unlocked_widgets:${store.uid}`);
+        if (savedUnlocked) {
+          try {
+            const list = JSON.parse(savedUnlocked);
+            if (Array.isArray(list) && list.length > 0) {
+              setUnlockedWidgets(prev => new Set([...prev, ...list]));
+            }
+          } catch {}
         }
       } catch {}
 
@@ -85,7 +98,7 @@ export default function WidgetsScreen() {
           if (activeStreak > 0) {
             data.streak = activeStreak;
             setWidgetData({ ...data, streak: activeStreak });
-            void AsyncStorage.setItem('@nousdeux_max_streak', String(activeStreak)).catch(() => {});
+            void AsyncStorage.setItem(`@nousdeux_max_streak:${store.uid}`, String(Math.max(activeStreak, maxSeenStreak))).catch(() => {});
             setMaxSeenStreak(prev => Math.max(prev, activeStreak));
           }
         }
@@ -93,6 +106,12 @@ export default function WidgetsScreen() {
     }
     loadData();
   }, [store.uid, store.partnerUid, store.selectedWidget]);
+
+  useEffect(() => {
+    const earned = WIDGETS.filter(item => item.unlock.type === 'streak' && Math.max(currentStreak, maxSeenStreak) >= item.unlock.days).map(item => item.id);
+    if (!earned.length) return;
+    void AsyncStorage.setItem(`@nousdeux_unlocked_widgets:${store.uid}`, JSON.stringify(earned)).catch(() => {});
+  }, [currentStreak, maxSeenStreak, store.uid]);
 
   const handleSelectTheme = async (themeId: string) => {
     sound.pop();
@@ -257,9 +276,10 @@ export default function WidgetsScreen() {
                 Boolean((inventory as any)?.widgets?.includes(item.id)) ||
                 Boolean((inventory as any)?.widget?.includes(item.id)) ||
                 Boolean((userProfile as any)?.unlockedWidgets?.includes(item.id));
-              const owned = isInventoryOwned || isStreakUnlock || isStoreOwned || item.id === 'widget_default' || item.unlock.type === 'free';
               const isEquipped = (store.selectedWidget || 'widget_default') === item.id;
               const widgetConf = getWidgetTheme(item.id);
+              const isPermanentlyUnlocked = unlockedWidgets.has(item.id);
+              const owned = isInventoryOwned || isStreakUnlock || isStoreOwned || isPermanentlyUnlocked || item.id === 'widget_default' || item.unlock.type === 'free';
 
               return (
                 <Pressable
@@ -307,7 +327,7 @@ export default function WidgetsScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <HelpCircle color={theme.tint} size={20} />
             <Text style={[styles.cardSectionTitle, { color: theme.text, marginBottom: 0 }]}>
-              Comment l'ajouter sur mon téléphone ?
+              Comment l’ajouter sur mon téléphone ?
             </Text>
           </View>
 
@@ -318,7 +338,7 @@ export default function WidgetsScreen() {
                 🍏 Sur iPhone (iOS) :
               </Text>
               <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-                1. Reste appuyé sur un espace vide de ton écran d'accueil jusqu'à ce que les icônes tremblent.
+                1. Reste appuyé sur un espace vide de ton écran d’accueil jusqu’à ce que les icônes tremblent.
               </Text>
               <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
                 2. Touche le bouton « + » tout en haut à gauche.
@@ -336,13 +356,13 @@ export default function WidgetsScreen() {
                 🤖 Sur Samsung & Android :
               </Text>
               <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-                1. Reste appuyé sur ton écran d'accueil et sélectionne « Widgets ».
+                1. Reste appuyé sur ton écran d’accueil et sélectionne « Widgets ».
               </Text>
               <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-                2. Fais défiler jusqu'à « NousDeux ».
+                2. Fais défiler jusqu’à « NousDeux ».
               </Text>
               <Text style={[styles.tutorialStep, { color: store.isDarkMode ? '#E0D0CE' : '#5A4B49' }]}>
-                3. Maintiens ton doigt sur le widget et glisse-le sur ton écran. Tu peux ensuite le redimensionner à n'importe quelle taille !
+                3. Maintiens ton doigt sur le widget et glisse-le sur ton écran. Tu peux ensuite le redimensionner à n’importe quelle taille !
               </Text>
             </View>
           )}

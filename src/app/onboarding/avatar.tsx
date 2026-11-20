@@ -30,8 +30,8 @@ export default function AvatarScreen() {
 
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
   const defaultBg = store.isDarkMode
-    ? require('../../../assets/images/nousdeux_dark_background.png')
-    : require('../../../assets/images/nousdeux_warm_background.png');
+    ? require('../../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../../assets/images/optimized/nousdeux_warm_background.jpg');
   const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
 
   const handleTakePhoto = async () => {
@@ -98,7 +98,7 @@ export default function AvatarScreen() {
         }, { merge: true });
         store.setAvatar(toSave);
       }
-      router.push('/onboarding/sync');
+      router.push({ pathname: '/onboarding/sync', params: { from: 'avatar' } });
     } catch (error: any) {
       setModalState({
         visible: true,
@@ -111,7 +111,7 @@ export default function AvatarScreen() {
   };
 
   const handleSkip = () => {
-    router.push('/onboarding/sync');
+    router.push({ pathname: '/onboarding/sync', params: { from: 'avatar' } });
   };
 
   return (
@@ -143,7 +143,7 @@ export default function AvatarScreen() {
           <Animated.View entering={FadeInDown.duration(600)}>
             <Text style={[styles.title, { color: theme.text }]}>Ta plus belle photo</Text>
             <Text style={[styles.subtitle, { color: theme.text }]}>
-              Ajoute une photo pour que ton partenaire te reconnaisse du premier coup d'œil !
+              Ajoute une photo pour que ton partenaire te reconnaisse du premier coup d’œil !
             </Text>
           </Animated.View>
 

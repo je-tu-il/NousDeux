@@ -1,0 +1,57 @@
+Enlever le bouton lier un partenaire et l'option de copier directement sur le dashboard, Laisser juste mode solo et lier un partenaire en plus gros
+La zone de texte Synchronisation et ce qui est marqué en dessous est illisible avec certains fonts
+Appuyer ensuite sur la fleche retour me remet sur la selection de la photo de profil plutot que le dashboard
+La boutique a la premiere ouverture a mis 7s au moins a s'ouvrir
+Les cadres dans la boutiques sont devenu trop petit ca prend a peine 1/4 de la place 
+On ne propose plus les pubs pour des petales ? Et au demarrage ?
+Quand on descend dans la boutique je veux que la zone de disparition sois parfaitement en desosus de la zone de selection fonds bordure,...
+Le truc personnaliser mes widgets en direct le faire descendre avec l'interface
+Info legal CGU Politique de confidentialité peu lisible sur certains fonds
+Quand je clic dans la zone de perosnnalisation de widget sur 1 que je ne possede pas, ca me remet dans la boutique mais quand je clic sur la fleche retour ca me remet dans la zone personalisation plutot que dans le dashboard
+Forcer les maj les anciennes versions affichent un pop up empêchant l'app de se lancer et un lien vers la maj ( play store apple store)
+La connexion avec apple ne marche pas
+La question sur le widget n'est pas la bonne
+La serie de jour non plus
+Ca ne s'actualise pas
+changer le theme n'actualise pas le widget
+Paramètres et Widget ecran d'acceuil Pas visible
+IPhone personnalisable retirer et le petit bouton shop en haut a droite
+Je possede cœur passion en widget mais il le marque verouiller dans la categorie widget ecran d'acceuil
+Retirer le chat si je suis sur la page de connexion
+Si je clic sur retour quand je suis sur synchro ca me remet sur l'age au lieu d'image
+Soucis le retour arriere sur telephone affiche toutes les infos de l'ancien couple avec en partenaire ca met le profil actuel connécté en couple avec le partenaire de l'ancien connecté avec les ressources le calendrier...
+Crash version web pdnt les chargements
+Si on clic plusieurs fois sur le widget ca nous met sur la question du jour plusieurs fois donc cliquer sur la fleche nous laisse sur le meme ecran ou alors il faut papuyer plusieurs fois
+
+========================================================
+--- POINTS COMPRIS ET ACTIONS A MENER ---
+========================================================
+[ ] Dashboard Simplifié : Mise en avant grand format de la carte 'Mode solo / Lier un partenaire' et retrait des anciens boutons redondants de copie de code sur le dashboard.
+[ ] Lisibilité des Textes & Fonds : Ajout de cartes opaques protectrices et de couleurs contrastées (#1F1A24 / #FDF8F7) sur l'écran Synchronisation, les CGU et la Politique de Confidentialité pour rester 100% lisible quel que soit le fond d'écran actif.
+[ ] Navigation & Retour Arrière :
+  - Sur l'écran Synchronisation, le bouton retour renvoie directement au Dashboard si le profil est connecté, ou à l'étape Avatar lors du premier parcours d'onboarding (au lieu de sauter vers l'âge).
+  - Après une redirection vers la boutique depuis les widgets, le bouton retour renvoie directement au Dashboard.
+[ ] Performance Boutique : Suppression des blocages asynchrones au premier montage de 'shop.tsx' pour une ouverture instantanée (< 500ms au lieu des 7 secondes observées).
+[ ] Mise en page Boutique : Redimensionnement optimisé des cartes de la boutique pour occuper toute la largeur disponible de la grille (correction de la taille 1/4 d'écran).
+[ ] Masque de Défilement Boutique : Zone de scroll avec masquage net sous la barre fixe des onglets (fonds, bordures, titres, widgets) sans débordement disgracieux.
+[ ] Widget Cœur Passion & Déblocage Permanent :
+  - Correction de l'incohérence de clé de stockage ('@nousdeux_max_streak' vs 'last_seen_streak_unlock') qui verrouillait à tort 'Cœur Passion'.
+  - Règle de déblocage permanent : tout cosmétique ou widget acquis reste débloqué à vie même en cas de réinitialisation temporaire de la streak.
+[ ] Actualisation Automatique des Widgets :
+  - Synchronisation automatique de la question du jour dès l'affichage du Dashboard (détection du changement de date sans obliger à ouvrir Daylink).
+  - Prise en compte instantanée des changements de thèmes et dégradés sur les widgets iOS et Android.
+[ ] Anti-Doublons Deep Link Widget : Navigation en mode 'replace' pour éviter d'empiler plusieurs écrans de question du jour lors de clics successifs sur le widget.
+[ ] Chat Flottant Sécurisé : Masquage strict de la bulle de chat sur les pages de connexion et d'onboarding, et désactivation tant que les deux partenaires ne sont pas synchronisés.
+[ ] Étanchéité des Profils (Anti-Ghosting) : Nettoyage immédiat du cache partenaire dès que l'identifiant UID utilisateur change, empêchant formellement toute fuite de données d'un ancien couple lors d'une déconnexion ou d'un retour arrière.
+[ ] Visibilité Accès Réglages & Widgets : Boutons 'Paramètres' et 'Widgets écran d'accueil' clairement identifiables et contrastés sur le Dashboard.
+[ ] Système de Mise à Jour Obligatoire (Force Update) : Pop-up bloquante 'Mise à jour requise' connectée à Firestore (app_config/global) avec redirection vers Google Play Store et Apple App Store.
+
+========================================================
+--- REPONSES AUX QUESTIONS POSEES ---
+========================================================
+* Pourquoi la connexion avec Apple échoue-t-elle ?
+  -> L'API native Apple Sign-In ('expo-apple-authentication') est exclusivement supportée par les systèmes d'exploitation Apple (iOS / iPadOS). Sur un appareil Android, le système d'exploitation ne dispose pas des bibliothèques de sécurité Apple, ce qui lève une exception native. Sur Android, l'authentification officielle est assurée par Google Sign-In. Sur iOS, Apple Sign-In fonctionne dès lors que l'application est signée avec un certificat Team ID Apple Developer actif.
+* Pourquoi 'Cœur Passion' apparaissait-il verrouillé alors qu'il avait été débloqué ?
+  -> Deux bugs se combinaient : d'une part, la clé de persistance lue au démarrage ('last_seen_streak_unlock') différait de la clé enregistrée ('@nousdeux_max_streak') ; d'autre part, la vérification de la streak évaluait la valeur en direct. Si la streak tombait à 0 (ou en mode solo), le widget redevenait verrouillé. La correction enregistre désormais de manière irréversible le statut débloqué dès que le seuil de 7 jours a été atteint une fois.
+* Pourquoi le retour arrière affichait-il l'ancien couple ?
+  -> Le store local Zustand conservait 'partnerUid' et 'partnerPseudo' en mémoire persistante. Lors de la connexion d'un nouvel utilisateur, le Dashboard combinait le nouvel UID avec l'ancien PartnerUID stocké. Le nouveau code purge obligatoirement tout le cache de couple dès qu'un changement d'UID est détecté.

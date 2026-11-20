@@ -42,7 +42,7 @@ export default function PairingScreen() {
   };
 
   return (
-    <ImageBackground source={getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'))} style={styles.container} resizeMode="cover">
+    <ImageBackground source={getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/optimized/nousdeux_dark_background.jpg') : require('../../assets/images/optimized/nousdeux_warm_background.jpg'))} style={styles.container} resizeMode="cover">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
         <Animated.View entering={FadeInUp.duration(800).springify()} style={[styles.card, { backgroundColor: theme.glassBackground, borderColor: theme.cardBorder }]}>
           

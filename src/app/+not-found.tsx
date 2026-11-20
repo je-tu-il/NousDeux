@@ -13,8 +13,8 @@ export default function NotFoundScreen() {
 
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
   const defaultBg = isDark
-    ? require('../../assets/images/nousdeux_dark_background.png')
-    : require('../../assets/images/nousdeux_warm_background.png');
+    ? require('../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../assets/images/optimized/nousdeux_warm_background.jpg');
   const bgImage = getCosmeticImage(bgCosmetic, isDark) ?? defaultBg;
 
   const handleGoHome = () => {
@@ -70,7 +70,7 @@ export default function NotFoundScreen() {
 
             {/* Description */}
             <Text style={[styles.subtitle, { color: isDark ? '#D4B8B4' : '#6B5755' }]}>
-              Il semble que vous vous soyez égarés en chemin... Cette page n'existe pas ou a été déplacée.
+              Il semble que vous vous soyez égarés en chemin... Cette page n’existe pas ou a été déplacée.
             </Text>
 
             {/* Return Button */}
@@ -85,7 +85,7 @@ export default function NotFoundScreen() {
               onPress={handleGoHome}
             >
               <Home color="#FFFFFF" size={20} />
-              <Text style={styles.buttonText}>Retourner à l'accueil</Text>
+              <Text style={styles.buttonText}>Retourner à l’accueil</Text>
             </Pressable>
 
             {/* Back Button */}

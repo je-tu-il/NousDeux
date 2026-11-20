@@ -14,7 +14,7 @@ export default function UnlimitedScreen() {
   const store = useOnboardingStore();
   const topInset = useTopInset();
   const { width: windowWidth } = useWindowDimensions();
-  const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));
+  const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/optimized/nousdeux_dark_background.jpg') : require('../../assets/images/optimized/nousdeux_warm_background.jpg'));
   
   return (
     <ImageBackground

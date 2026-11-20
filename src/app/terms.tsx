@@ -26,7 +26,7 @@ export default function TermsScreen() {
   const topInset = useTopInset();
   return (
     <ImageBackground
-      source={require('../../assets/images/settings_bg.png')}
+      source={require('../../assets/images/optimized/settings_bg.jpg')}
       style={styles.container}
       resizeMode="cover"
     >
@@ -37,21 +37,21 @@ export default function TermsScreen() {
             <ArrowLeft color="#2A1A1A" size={24} />
           </Pressable>
           <View style={styles.titleContainer}>
-            <Text style={styles.pageTitle}>Conditions Générales d'Utilisation</Text>
+            <Text style={styles.pageTitle}>Conditions Générales d’Utilisation</Text>
           </View>
         </View>
 
         <Animated.View entering={FadeInUp.duration(500)} style={styles.card}>
-          <Text style={styles.lastUpdated}>Dernière mise à jour : 6 août 2026</Text>
+          <Text style={styles.lastUpdated}>Dernière mise à jour : 9 novembre 2026</Text>
 
           <Section title="1. Présentation">
-            NousDeux est une application mobile et web (ci-après «&nbsp;l'Application&nbsp;») permettant à deux partenaires de se poser et répondre mutuellement à des questions quotidiennes dans le but de renforcer leur relation.{'\n\n'}
-            En utilisant NousDeux, vous acceptez les présentes Conditions Générales d'Utilisation (CGU) dans leur intégralité.
+            NousDeux est une application mobile et web (ci-après «&nbsp;l’Application&nbsp;») permettant à deux partenaires de se poser et répondre mutuellement à des questions quotidiennes dans le but de renforcer leur relation.{'\n\n'}
+            En utilisant NousDeux, vous acceptez les présentes Conditions Générales d’Utilisation (CGU) dans leur intégralité.
           </Section>
 
           <Section title="2. Accès et inscription">
-            L'accès à l'Application nécessite une connexion via un compte Google. En vous connectant, vous garantissez que les informations fournies sont exactes.{'\n\n'}
-            L'Application est destinée aux personnes âgées d'au moins <B>16 ans</B>. Toute personne de moins de 16 ans est invitée à ne pas utiliser le service.
+            L’accès à l’Application nécessite une connexion via un compte Google ou Apple. En vous connectant, vous garantissez que les informations fournies sont exactes.{'\n\n'}
+            L’Application est destinée aux personnes âgées d’au moins <B>16 ans</B>. Toute personne de moins de 16 ans est invitée à ne pas utiliser le service.
           </Section>
 
           <Section title="3. Fonctionnement du service">
@@ -59,37 +59,37 @@ export default function TermsScreen() {
             • Une question commune par jour{'\n'}
             • Un accès à des questions illimitées par catégorie{'\n'}
             • Un calendrier de leur série de jours actifs{'\n\n'}
-            Les réponses sont chiffrées de bout en bout et ne sont visibles que par les deux partenaires.
+            Les réponses sont destinées aux deux partenaires et les nouvelles réponses sont chiffrées avant leur stockage, selon les limites décrites dans la politique de confidentialité.
           </Section>
 
           <Section title="4. Obligations de l'utilisateur">
             En utilisant NousDeux, vous vous engagez à :{'\n\n'}
-            • Ne pas utiliser l'Application à des fins illicites ou contraires aux bonnes mœurs{'\n'}
+            • Ne pas utiliser l’Application à des fins illicites ou contraires aux bonnes mœurs{'\n'}
             • Ne pas tenter de contourner les mécanismes de sécurité{'\n'}
-            • Ne pas usurper l'identité d'une autre personne{'\n'}
+            • Ne pas usurper l’identité d’une autre personne{'\n'}
             • Ne pas partager votre code de synchronisation avec une personne autre que votre partenaire souhaité{'\n\n'}
             Tout manquement pourra entraîner la suppression du compte sans préavis.
           </Section>
 
           <Section title="5. Propriété intellectuelle">
-            L'Application, son interface et son contenu (questions, design, code) sont la propriété exclusive de NousDeux. Toute reproduction ou utilisation sans autorisation est interdite.{'\n\n'}
-            Les contenus générés par les utilisateurs (réponses aux questions) restent leur propriété. NousDeux n'y a pas accès grâce au chiffrement de bout en bout.
+            L’Application, son interface et son contenu (questions, design, code) sont la propriété exclusive de NousDeux. Toute reproduction ou utilisation sans autorisation est interdite.{'\n\n'}
+            Les contenus générés par les utilisateurs (réponses aux questions) restent leur propriété. Leur traitement est décrit dans la politique de confidentialité.
           </Section>
 
           <Section title="6. Disponibilité et modifications">
-            NousDeux est fourni «&nbsp;en l'état&nbsp;» et «&nbsp;tel que disponible&nbsp;». Aucune garantie de disponibilité continue n'est offerte.{'\n\n'}
+            NousDeux est fourni «&nbsp;en l’état&nbsp;» et «&nbsp;tel que disponible&nbsp;». Aucune garantie de disponibilité continue n’est offerte.{'\n\n'}
             NousDeux se réserve le droit de modifier, suspendre ou arrêter le service à tout moment, sans préavis.
           </Section>
 
           <Section title="7. Limitation de responsabilité">
             NousDeux ne saurait être tenu responsable :{'\n\n'}
-            • Des dommages résultant d'une interruption du service{'\n'}
+            • Des dommages résultant d’une interruption du service{'\n'}
             • De la perte de données liée à une suppression de compte{'\n'}
-            • Des conséquences de l'utilisation de l'Application sur votre vie personnelle ou relationnelle
+            • Des conséquences de l’utilisation de l’Application sur votre vie personnelle ou relationnelle
           </Section>
 
           <Section title="8. Suppression du compte">
-            Vous pouvez supprimer votre compte à tout moment depuis Paramètres → Zone Danger → Supprimer le compte. La suppression est définitive et entraîne l'effacement de toutes vos données personnelles.
+            Vous pouvez supprimer votre compte à tout moment depuis Paramètres → Zone Danger → Supprimer le compte. La suppression est définitive et entraîne l’effacement de toutes vos données personnelles.
           </Section>
 
           <Section title="9. Droit applicable">

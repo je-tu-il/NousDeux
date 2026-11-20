@@ -23,8 +23,8 @@ export default function PseudoScreen() {
 
   const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
   const defaultBg = store.isDarkMode
-    ? require('../../../assets/images/nousdeux_dark_background.png')
-    : require('../../../assets/images/nousdeux_warm_background.png');
+    ? require('../../../assets/images/optimized/nousdeux_dark_background.jpg')
+    : require('../../../assets/images/optimized/nousdeux_warm_background.jpg');
   const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
 
   const handleNext = () => {
@@ -78,7 +78,7 @@ export default function PseudoScreen() {
 
           <View style={styles.content}>
             <Animated.View entering={FadeInDown.duration(600)}>
-              <Text style={[styles.title, { color: theme.text }]}>Comment t'appelles-tu ?</Text>
+              <Text style={[styles.title, { color: theme.text }]}>Comment t’appelles-tu ?</Text>
               <Text style={[styles.subtitle, { color: theme.text }]}>Ton partenaire verra ce prénom.</Text>
             </Animated.View>
 

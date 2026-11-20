@@ -18,8 +18,6 @@ Ca ne s'actualise pas
 
 changer le theme n'actualise pas le widget
 
-Verif Secu
-
 Paramètres et Widget ecran d'acceuil Pas visible
 
 IPhone personnalisable retirer et le petit bouton shop en haut a droite
@@ -28,25 +26,13 @@ Je possede cœur passion en widget mais il le marque verouiller dans la categori
 
 
 
-Forcer les maj les anciennes versions affichent un pop up empêchant l'app de se lancer et un lien vers la maj ( play store apple store)
-
-Option quand on viens le lendemain d'une perte de streak on propose pour 2000 de Restaure la streak ?
-
-Enlever le bouton en base de synchro solo car il est en haut a droite
-
 Retirer le chat si je suis sur la page de connexion
 
 Si je clic sur retour quand je suis sur synchro ca me remet sur l'age au lieu d'image
 
-Affichage creation + mise en couple
-
 Haut de l'ecran apk bien ?
 
 Peut mettre une photo apk ?
-
-Tourner l'ecran pendant un changement donne unecran totalement dezomer en tout petit en haut a gauche
-
-Appuyer sur entré valide sur tout les appareilles
 
 Soucis le retour arriere sur telephone affiche toutes les infos de l'ancien couple avec en partenaire ca met le profil actuel connécté en couple avec le partenaire de l'ancien connecté avec les ressources le calendrier...
 
@@ -56,11 +42,39 @@ Toujours afifchage moche sur apk voir
 
 Parler de la version web
 
+Crash version web pdnt les chargements
 
 
-Categorie widget pas visible
 
 Si on clic plusieurs fois sur le widget ca nous met sur la question du jour plusieurs fois donc cliquer sur la fleche nous laisse sur le meme ecran ou alors il faut papuyer plusieurs fois
+
+
+
+
+
+Enlever le bouton lier un partenaire et l'option de copier directement sur le dashboard, Laisser juste mode solo et lier un partenaire en plus gros
+
+La zone de texte Synchronisation et ce qui est marqué en dessous est illisible avec certains fonts
+
+Appuyer ensuite sur la fleche retour me remet sur la selection de la photo de profil plutot que le dashboard
+
+La boutique a la premiere ouverture a mis 7s au moins a s'ouvrir
+
+Les cadres dans la boutiques sont devenu trop  petit ca prend a peine 1/4 de la place 
+
+On ne propose plus les pubs pour des petales ? Et au demarrage ?
+
+Quand on descend dans la boutique je veux que la zone de disparition sois parfaitement en desosus de la zone de selection fonds bordure,...
+
+Le truc personnaliser mes widgets en direct le faire descendre avec l'interface
+
+Info legal CGU Politique de confidentialité peu lisible sur certains fonds
+
+Quand je clic dans la zone de perosnnalisation de widget sur 1 que je ne possede pas, ca me remet dans la boutique mais quand je clic sur la fleche retour ca me remet dans la zone personalisation plutot que dans le dashboard
+
+Forcer les maj les anciennes versions affichent un pop up empêchant l'app de se lancer et un lien vers la maj ( play store apple store)
+
+
 
 
 
@@ -194,7 +208,7 @@ Trait plus epais logo ?
 
 ## 🌐 1. Référencement du site Web (SEO \& Indexation)
 
-* \[ ] **Acheter et lier un nom de domaine personnalisé** (ex: `nousdeux.app` ou `nousdeux-app.fr`) sur Vercel (évite les URLs temporaires `\\\\\\\*.vercel.app`).
+* \[ ] **Acheter et lier un nom de domaine personnalisé** (ex: `nousdeux.app` ou `nousdeux-app.fr`) sur Vercel (évite les URLs temporaires `\\\\\\\\\\\\\\\*.vercel.app`).
 * \[ ] **Google Search Console** :
 
   * \[ ] Ajouter la propriété de domaine sur [search.google.com/search-console](https://search.google.com/search-console).

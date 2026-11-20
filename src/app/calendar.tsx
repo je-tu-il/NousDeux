@@ -18,16 +18,13 @@ export default function CalendarScreen() {
   const myUid  = useOnboardingStore((s) => s.uid);
   const partnerUid = useOnboardingStore((s) => s.partnerUid);
   const initialCoupleId = myUid && partnerUid ? [myUid, partnerUid].sort().join('_') : null;
-  const [coupleId, setCoupleId] = useState<string | null>(initialCoupleId);
+  const [remoteCoupleId, setCoupleId] = useState<string | null>(initialCoupleId);
+  const coupleId = initialCoupleId || remoteCoupleId;
   const [loading, setLoading]   = useState(!initialCoupleId);
 
   useEffect(() => {
     if (!myUid) return;
-    if (initialCoupleId) {
-      setCoupleId(initialCoupleId);
-      setLoading(false);
-      return;
-    }
+    if (initialCoupleId) return;
     const init = async () => {
       try {
         const myDoc = await getDoc(doc(db, 'users', myUid));
@@ -45,7 +42,7 @@ export default function CalendarScreen() {
   }, [myUid, initialCoupleId]);
 
   const store = useOnboardingStore();
-  const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/nousdeux_dark_background.png') : require('../../assets/images/nousdeux_warm_background.png'));
+  const bgSource = getCosmeticImage(getCosmeticById(store.selectedBackground), store.isDarkMode) || (store.isDarkMode ? require('../../assets/images/optimized/nousdeux_dark_background.jpg') : require('../../assets/images/optimized/nousdeux_warm_background.jpg'));
 
   return (
     <ImageBackground

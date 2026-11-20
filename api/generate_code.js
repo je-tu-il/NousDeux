@@ -1,12 +1,16 @@
-const admin = require('firebase-admin');
+const { getApps, initializeApp, applicationDefault } = require('firebase-admin/app');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
+const admin = { auth: getAuth };
 const crypto = require('crypto');
+const verifyUser = require('./_verify-user');
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault()
+if (!getApps().length) {
+  initializeApp({
+    credential: applicationDefault()
   });
 }
-const db = admin.firestore();
+const db = getFirestore();
 
 // Generates a 6-character alphanumeric code
 function generateCode() {
@@ -18,10 +22,8 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { requesterUserId } = req.body;
-  if (!requesterUserId) {
-    return res.status(400).json({ error: 'Missing requesterUserId' });
-  }
+  const requesterUserId = await verifyUser(req, res, admin);
+  if (!requesterUserId) return;
 
   try {
     const code = generateCode();
@@ -31,7 +33,7 @@ module.exports = async (req, res) => {
     await db.collection('pairing_codes').doc(code).set({
       userId: requesterUserId,
       expiresAt: expiresAt,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+      createdAt: FieldValue.serverTimestamp()
     });
 
     return res.status(200).json({ success: true, code, expiresAt });
