@@ -95,7 +95,11 @@ export default function ShopScreen() {
 
   const params = useLocalSearchParams<{ tab?: string | string[]; from?: string | string[] }>();
   const rawTab = Array.isArray(params?.tab) ? params.tab[0] : params?.tab;
-  const initialTab: TabType = (rawTab && ['backgrounds', 'borders', 'tags', 'widgets'].includes(rawTab))
+  const from = Array.isArray(params.from) ? params.from[0] : params.from;
+  const tabs = (Object.keys(TAB_DATA) as TabType[]).filter(
+    tab => tab !== 'widgets' || Platform.OS !== 'web' || from === 'widgets',
+  );
+  const initialTab: TabType = (rawTab && tabs.includes(rawTab as TabType))
     ? (rawTab as TabType)
     : 'backgrounds';
 
@@ -398,8 +402,7 @@ export default function ShopScreen() {
 
   const handleBack = () => {
     sound.tap();
-    const fromParam = Array.isArray(params?.from) ? params.from[0] : params?.from;
-    if (fromParam === 'widgets') {
+    if (from === 'widgets') {
       router.replace('/dashboard');
       return;
     }
@@ -421,7 +424,7 @@ export default function ShopScreen() {
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           style={[styles.header, { paddingTop: topInset + 8 }]}
         >
-          <Pressable onPress={handleBack} style={styles.backBtn}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Retour" onPress={handleBack} style={styles.backBtn}>
             <ArrowLeft color="white" size={24} />
           </Pressable>
           <Text style={styles.headerTitle}>Boutique</Text>
@@ -432,12 +435,11 @@ export default function ShopScreen() {
       <View style={{ flex: 1, width: '100%', maxWidth: windowWidth >= 768 ? 860 : 520, alignSelf: 'center', overflow: 'hidden' }}>
         {/* Onglets (barre de choix) - Fixe en haut de la liste */}
         <View style={styles.tabs}>
-          {((Platform.OS === 'web'
-            ? ['backgrounds', 'borders', 'tags']
-            : ['backgrounds', 'borders', 'tags', 'widgets']
-          ) as TabType[]).map(tab => (
+          {tabs.map(tab => (
             <Pressable
               key={tab}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: activeTab === tab }}
               style={[styles.tab, activeTab === tab && styles.tabActive]}
               onPress={() => {
                 sound.tap();

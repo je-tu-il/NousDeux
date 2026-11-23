@@ -62,6 +62,22 @@ test('shop, settings and widgets open without runtime errors', async ({ page }) 
   expect(errors).toEqual([]);
 });
 
+test('the widget shop keeps its tab accessible and returns to the dashboard', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/shop?tab=widgets&from=widgets');
+
+  const widgets = page.getByRole('tab', { name: 'Widgets' });
+  await expect(widgets).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Fonds' }).click();
+  await expect(widgets).toHaveAttribute('aria-selected', 'false');
+  await widgets.click();
+  await expect(widgets).toHaveAttribute('aria-selected', 'true');
+
+  await page.getByRole('button', { name: 'Retour', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByText('Question du Jour', { exact: true })).toBeVisible();
+});
+
 test('a linked partner cannot overwrite private profile fields', async ({ request }) => {
   const owner = fixtures.people[1];
   const response = await request.patch(`http://127.0.0.1:8080/v1/projects/demo-nousdeux/databases/(default)/documents/users/${owner.localId}?updateMask.fieldPaths=pseudo`, {

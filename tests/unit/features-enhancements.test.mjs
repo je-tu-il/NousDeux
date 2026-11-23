@@ -79,5 +79,6 @@ test('Widgets have an accessible dedicated dashboard shortcut and a settings ent
   // Accessible via Réglages sur mobile mais masqué sur le web
   assert.match(settingsSrc, /Widgets Écran d’accueil/, 'settings.tsx must have dedicated Widgets section');
   assert.match(settingsSrc, /Platform\.OS !== 'web'/, 'settings.tsx must hide widgets proposal on web');
-  assert.match(shopSrc, /Platform\.OS === 'web'/, 'shop.tsx must exclude widgets tab on web');
+  assert.match(shopSrc, /tab !== 'widgets' \|\| Platform\.OS !== 'web' \|\| from === 'widgets'/,
+    'The web shop only exposes widget cosmetics when opened from widget settings');
 });
