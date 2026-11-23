@@ -27,3 +27,9 @@ Mettre un message d'erreur si mauvais code de synchro (code inexistant, son prop
 Verif nouveau com^te 0
 Unmatched rout custom
 Process de test
+- **Audit de `RetourUser.txt` et des notes produit**
+  - Vérifiés dans le code et couverts par des tests de régression ou des scénarios existants : redirection des profils incomplets, isolation du couple lors d’un changement de compte, accès au chat après synchronisation, déduplication des liens widget, reprise au démarrage web et mise à jour obligatoire via la configuration distante.
+  - Présents dans l’interface : action de synchronisation agrandie sur le dashboard, retour de Synchronisation vers Avatar ou Dashboard, retour Boutique depuis Widgets vers Dashboard, panneaux lisibles pour Synchronisation et les textes légaux, accès Paramètres et Widgets, récompense publicitaire à la demande.
+  - Vérifier sur appareils : connexion Apple avec un build signé, question et série du widget après minuit, rafraîchissement après changement de thème, lisibilité sur les fonds personnalisés, cadrage sur petit écran Android et temps de première ouverture de la boutique. Les appels et les styles sont présents dans le code, et ces essais doivent confirmer le résultat.
+  - À arbitrer : publicité automatique au lancement et publicité web. La récompense à la demande sur mobile suit un parcours distinct.
+  - Idées des notes encore à cadrer : quiz de connaissance du partenaire, jeu de curseurs, bilan mensuel et autres pistes de rétention. Leur présence dans les notes ne signifie pas qu’elles sont livrées.

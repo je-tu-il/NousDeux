@@ -48,7 +48,10 @@ jobs:
           cache-read-only: false
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci --legacy-peer-deps --include=dev
+
+      - name: Validate Expo prebuild configuration
+        run: npx --no-install expo config --type prebuild --json > /dev/null
 
       - name: Validate Android image assets
         run: |

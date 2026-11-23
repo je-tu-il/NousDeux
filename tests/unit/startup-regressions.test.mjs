@@ -137,7 +137,9 @@ test('the secure query decoder preserves navigation parameters and tolerates mal
 
 test('store builds cannot accidentally ship emulator accounts or sample AdMob app IDs', () => {
   const env = { EAS_BUILD_PROFILE: 'production', EXPO_PUBLIC_FIREBASE_EMULATORS: 'true' };
-  const config = moduleFromSource('app.config.ts', {}, { process: { env } }).default;
+  const module = { exports: {} };
+  vm.runInNewContext(readFileSync('app.config.js', 'utf8'), { module, process: { env } }, { filename: 'app.config.js' });
+  const config = module.exports;
   const base = JSON.parse(readFileSync('app.json', 'utf8')).expo;
   assert.throws(() => config({ config: base }), /comptes fictifs/);
   env.EXPO_PUBLIC_FIREBASE_EMULATORS = 'false';
@@ -146,6 +148,7 @@ test('store builds cannot accidentally ship emulator accounts or sample AdMob ap
   env.ADMOB_IOS_APP_ID = 'ca-app-pub-1234567890123456~9876543210';
   const mobileAdsPlugin = config({ config: base }).plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'react-native-google-mobile-ads');
   assert.equal(mobileAdsPlugin[1].androidAppId, env.ADMOB_ANDROID_APP_ID);
+  assert.equal(mobileAdsPlugin[1].iosAppId, env.ADMOB_IOS_APP_ID);
 });
 
 test('widget payloads expire at local midnight and never reuse another account’s data', async () => {

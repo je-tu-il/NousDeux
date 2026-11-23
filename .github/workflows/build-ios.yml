@@ -33,7 +33,10 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci --legacy-peer-deps --include=dev
+
+      - name: Validate Expo prebuild configuration
+        run: npx --no-install expo config --type prebuild --json > /dev/null
 
       - name: Patch expo-widgets for iOS 17 containerBackground & safe timelines (pre-prebuild)
         run: node scripts/patch-ios-widgets.js

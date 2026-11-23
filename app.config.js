@@ -1,6 +1,4 @@
-import type { ConfigContext, ExpoConfig } from 'expo/config';
-
-export default ({ config }: ConfigContext): ExpoConfig => {
+module.exports = ({ config }) => {
   const production = process.env.EAS_BUILD_PROFILE === 'production' || process.env.EXPO_PUBLIC_APP_ENV === 'production';
   const androidAppId = process.env.ADMOB_ANDROID_APP_ID;
   const iosAppId = process.env.ADMOB_IOS_APP_ID;

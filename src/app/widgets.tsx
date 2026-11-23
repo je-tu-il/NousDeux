@@ -48,8 +48,12 @@ export default function WidgetsScreen() {
   const bgImage = getCosmeticImage(bgCosmetic, store.isDarkMode) || defaultBg;
 
   useEffect(() => {
+    let active = true;
     async function loadData() {
+      const uid = store.uid;
+      let savedMaxStreak = 0;
       const data = await getWidgetData();
+      if (!active) return;
       // Hydrate avec le store actuel
       data.userPseudo = store.pseudo || 'Moi';
       data.partnerPseudo = store.partnerPseudo || 'Mon Amour';
@@ -59,12 +63,15 @@ export default function WidgetsScreen() {
       setWidgetData(data);
 
       try {
-        const maxStreakStr = (await AsyncStorage.getItem(`@nousdeux_max_streak:${store.uid}`)) || null;
-        if (maxStreakStr) {
-          const parsed = parseInt(maxStreakStr, 10);
-          if (parsed > 0) setMaxSeenStreak(parsed);
-        }
-        const savedUnlocked = await AsyncStorage.getItem(`@nousdeux_unlocked_widgets:${store.uid}`);
+        if (!uid) return;
+        const [widgetStreak, dashboardStreak, savedUnlocked] = await Promise.all([
+          AsyncStorage.getItem(`@nousdeux_max_streak:${uid}`),
+          AsyncStorage.getItem(`last_seen_streak:${uid}`),
+          AsyncStorage.getItem(`@nousdeux_unlocked_widgets:${uid}`),
+        ]);
+        if (!active) return;
+        savedMaxStreak = Math.max(0, parseInt(widgetStreak ?? '', 10) || 0, parseInt(dashboardStreak ?? '', 10) || 0);
+        setMaxSeenStreak(savedMaxStreak);
         if (savedUnlocked) {
           try {
             const list = JSON.parse(savedUnlocked);
@@ -77,6 +84,7 @@ export default function WidgetsScreen() {
 
       if (store.uid) {
         const profile = await getUserProfile(store.uid);
+        if (!active) return;
         setUserProfile(profile);
 
         let pUid = store.partnerUid;
@@ -92,19 +100,22 @@ export default function WidgetsScreen() {
             getWallet(effectiveCId).catch(() => null),
             computeStreakCached(effectiveCId).catch(() => 0),
           ]);
+          if (!active) return;
           setInventory(inv);
           const activeStreak = typeof w?.streak === 'number' && w.streak > 0 ? w.streak : (s || 0);
           setCurrentStreak(activeStreak);
           if (activeStreak > 0) {
             data.streak = activeStreak;
             setWidgetData({ ...data, streak: activeStreak });
-            void AsyncStorage.setItem(`@nousdeux_max_streak:${store.uid}`, String(Math.max(activeStreak, maxSeenStreak))).catch(() => {});
+            const highWatermark = Math.max(activeStreak, savedMaxStreak);
+            void AsyncStorage.setItem(`@nousdeux_max_streak:${store.uid}`, String(highWatermark)).catch(() => {});
             setMaxSeenStreak(prev => Math.max(prev, activeStreak));
           }
         }
       }
     }
-    loadData();
+    void loadData().catch(() => {});
+    return () => { active = false; };
   }, [store.uid, store.partnerUid, store.selectedWidget]);
 
   useEffect(() => {
