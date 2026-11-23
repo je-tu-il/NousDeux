@@ -1,5 +1,18 @@
 import { expect, test } from '@playwright/test';
 
+test('signed-out startup does not download the floating chat', async ({ page }) => {
+  const chatRequests: string[] = [];
+  page.on('request', (request) => {
+    if (/\/FloatingChat(?:-[\da-f]+)?\.js$/i.test(new URL(request.url()).pathname)) {
+      chatRequests.push(request.url());
+    }
+  });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Continuer avec Google' })).toBeVisible();
+  await page.getByRole('checkbox').click();
+  expect(chatRequests).toEqual([]);
+});
+
 for (const width of [320, 390, 768, 1440]) {
   test(`cold start and reload remain usable at ${width}px`, async ({ page }) => {
     const fatalErrors: string[] = [];

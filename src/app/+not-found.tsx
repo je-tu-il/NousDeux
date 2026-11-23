@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ImageBackground, Platform } from 're
 import { Stack, router } from 'expo-router';
 import { Compass, Home, ArrowLeft } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
+import { auth } from '../lib/firebase';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { getCosmeticById, getCosmeticImage } from '../data/cosmetics';
 
@@ -18,11 +19,11 @@ export default function NotFoundScreen() {
   const bgImage = getCosmeticImage(bgCosmetic, isDark) ?? defaultBg;
 
   const handleGoHome = () => {
-    if (store.pseudo && store.age) {
+    if (auth?.currentUser && store.uid === auth.currentUser.uid && store.pseudo && store.age) {
       router.replace('/dashboard');
-    } else {
-      router.replace('/onboarding/login');
+      return;
     }
+    router.replace('/onboarding/login');
   };
 
   return (
@@ -34,7 +35,7 @@ export default function NotFoundScreen() {
         resizeMode="cover"
       >
         <View style={styles.safeArea}>
-          <View style={styles.content}>
+          <View style={[styles.content, { backgroundColor: isDark ? '#251C23' : '#FFF9F7' }]}>
             {/* Compass / Lost icon with soft badge */}
             <View
               style={[
@@ -75,10 +76,11 @@ export default function NotFoundScreen() {
 
             {/* Return Button */}
             <Pressable
+              accessibilityRole="button"
               style={({ pressed }) => [
                 styles.button,
                 {
-                  backgroundColor: '#FF6A88',
+                  backgroundColor: '#943E58',
                   opacity: pressed ? 0.85 : 1,
                 },
               ]}
@@ -91,6 +93,7 @@ export default function NotFoundScreen() {
             {/* Back Button */}
             {router.canGoBack() && (
               <Pressable
+                accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.secondaryButton,
                   {
@@ -115,7 +118,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: '100%',
-    minHeight: '100vh' as any,
+    ...(Platform.OS === 'web' ? { minHeight: '100vh' as unknown as number } : {}),
   },
   safeArea: {
     flex: 1,
@@ -132,7 +135,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: 24,
     borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.35)',
     ...(Platform.OS === 'web' ? { backdropFilter: 'blur(16px)' } : {}),
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.4)',

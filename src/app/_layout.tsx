@@ -1,5 +1,5 @@
 import { getCosmeticById, getCosmeticImage, parseGradientColors } from '@/data/cosmetics';
-import { auth, db } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { useSessionBootstrap } from '@/hooks/use-session-bootstrap';
 import StartupScreen from '@/components/StartupScreen';
@@ -12,20 +12,23 @@ import { StatusBar } from 'expo-status-bar';
 import FloatingToast from '@/components/FloatingToast';
 import ForceUpdateModal from '@/components/ForceUpdateModal';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Image, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, Image, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const { width: windowWidth } = useWindowDimensions();
-  const [FloatingChat, setFloatingChat] = useState<React.ComponentType | null>(null);
   const { ready: authReady, error: startupError, user: firebaseUser, retry } = useSessionBootstrap();
   const segments = useSegments();
   const router = useRouter();
   const uid = useOnboardingStore((state) => state.uid);
   const pseudo = useOnboardingStore((state) => state.pseudo);
   const age = useOnboardingStore((state) => state.age);
+  const isSynced = useOnboardingStore((state) => state.isSynced);
+  const isDark = useOnboardingStore((state) => state.isDarkMode);
+  const selectedBackground = useOnboardingStore((state) => state.selectedBackground);
+  const shouldShowChat = Boolean(authReady && firebaseUser && uid === firebaseUser.uid && isSynced && segments[0] !== 'onboarding');
+  const [FloatingChat, setFloatingChat] = useState<React.ComponentType | null>(null);
   const pendingDeepLinkRef = useRef<string | null>(null);
   const initialUrlHandled = useRef(false);
 
@@ -142,8 +145,16 @@ export default function RootLayout() {
         }
       } catch {}
     }
-    import('../components/FloatingChat').then(({ default: Chat }) => setFloatingChat(() => Chat)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!shouldShowChat || FloatingChat) return;
+    let active = true;
+    import('../components/FloatingChat')
+      .then(({ default: Chat }) => { if (active) setFloatingChat(() => Chat); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [shouldShowChat, FloatingChat]);
 
   useEffect(() => {
     if (!authReady || !segments.length) return;
@@ -162,7 +173,7 @@ export default function RootLayout() {
 
     // Sans session Firebase, seul l'écran de connexion (et ses pages
     // d'information) est accessible. L'UID persistant du store ne suffit pas.
-    const publicRoutes = ['login', 'terms', 'privacy', 'contact'];
+    const publicRoutes = ['login', 'terms', 'privacy', 'contact', '+not-found'];
     if (!activeUser && !publicRoutes.includes(currentRoute)) {
       router.replace('/onboarding/login');
       return;
@@ -210,16 +221,14 @@ export default function RootLayout() {
         router.replace(next as any);
       }
     }
-  }, [authReady, firebaseUser, segments, uid, pseudo, age]);
+  }, [authReady, firebaseUser, segments, uid, pseudo, age, router]);
 
-  const store = useOnboardingStore();
-  const isDark = store.isDarkMode;
-  const bgCosmetic = store.selectedBackground ? getCosmeticById(store.selectedBackground) : null;
+  const bgCosmetic = selectedBackground ? getCosmeticById(selectedBackground) : null;
   const defaultBg = isDark ? require('../../assets/images/optimized/nousdeux_dark_background.jpg') : require('../../assets/images/optimized/nousdeux_warm_background.jpg');
-  const bgImage = getCosmeticImage(bgCosmetic, isDark) ?? defaultBg;
+  const cosmeticImage = getCosmeticImage(bgCosmetic, isDark);
+  const bgImage = cosmeticImage ?? defaultBg;
   const backgroundResizeMode = 'cover';
-  const isGradient = bgCosmetic && !getCosmeticImage(bgCosmetic, isDark);
-  const bgColors = isGradient ? parseGradientColors(bgCosmetic.preview) : null;
+  const bgColors = bgCosmetic && !cosmeticImage ? parseGradientColors(bgCosmetic.preview) : null;
 
   const webScaleStyle = { flex: 1, width: '100%', height: '100%' } as const;
 
@@ -228,7 +237,7 @@ export default function RootLayout() {
       <View style={[{ flex: 1, width: '100%', height: '100%', overflow: 'hidden', backgroundColor: isDark ? '#1A1514' : '#FFF5F2' }] as any}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <View style={webScaleStyle as any}>
-        {isGradient && bgColors ? (
+        {bgColors ? (
           <LinearGradient colors={bgColors as [string, string]} style={StyleSheet.absoluteFill} />
         ) : (
           <Image source={bgImage} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode={backgroundResizeMode} />
@@ -237,7 +246,7 @@ export default function RootLayout() {
           <Stack key={firebaseUser?.uid ?? 'signed-out'} screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
         ) : <StartupScreen error={startupError} onRetry={retry} />}
         </View>
-        {authReady && FloatingChat && store.uid && store.isSynced && segments[0] !== 'onboarding' ? <FloatingChat /> : null}
+        {shouldShowChat && FloatingChat ? <FloatingChat /> : null}
         <FloatingToast />
         <ForceUpdateModal />
       </View>

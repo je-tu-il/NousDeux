@@ -1,36 +1,27 @@
-import { Colors } from '@/constants/Colors';
-import { auth, db } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { Link, router } from 'expo-router';
-import { browserLocalPersistence, getRedirectResult, GoogleAuthProvider, OAuthProvider, setPersistence, signInWithCredential, signInWithPopup, signInWithRedirect } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Link } from 'expo-router';
+import { getRedirectResult, GoogleAuthProvider, OAuthProvider, signInWithCredential, signInWithPopup } from 'firebase/auth';
 import { CheckSquare, Square, Heart, ArrowRight, Sparkles, MessageCircle, ShieldCheck } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { getLoginFeedback } from '@/lib/login-feedback.mjs';
 import { BackHandler, Image, ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import UIModal, { UIModalType } from '@/components/UIModal';
-import { ensureUserPairingCode } from '@/lib/pairing';
 import { triggerHaptic } from '@/lib/haptics';
 import * as Crypto from 'expo-crypto';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
-  const theme = Colors.light;
   const { width } = useWindowDimensions();
   const wide = width >= 900;
+  const compact = width < 390;
   const insets = useSafeAreaInsets();
-  const setUid = useOnboardingStore((state) => state.setUid);
-  const setPseudo = useOnboardingStore((state) => state.setPseudo);
-  const setAge = useOnboardingStore((state) => state.setAge);
-  const setAvatar = useOnboardingStore((state) => state.setAvatar);
-  const setSynced = useOnboardingStore((state) => state.setSynced);
-  const setMyCode = useOnboardingStore((state) => state.setMyCode);
-  const hasAcceptedTerms = useOnboardingStore((state) => state.hasAcceptedTerms);
+  const accepted = useOnboardingStore((state) => state.hasAcceptedTerms);
   const setHasAcceptedTerms = useOnboardingStore((state) => state.setHasAcceptedTerms);
 
-  const [accepted, setAccepted] = useState(hasAcceptedTerms);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const signingIn = useRef(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [modalState, setModalState] = useState<{
     visible: boolean;
@@ -55,7 +46,7 @@ export default function LoginScreen() {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(() => {
-        const error = new Error('La fenêtre Google ne répond plus. Fermez-la puis réessayez.');
+        const error = new Error('OAuth popup timeout');
         error.name = 'auth-popup-timeout';
         reject(error);
       }, 120000);
@@ -79,7 +70,7 @@ export default function LoginScreen() {
     getRedirectResult(auth)
       .then((result) => {
         if (result?.user) {
-          void completeLogin(result.user);
+          setHasAcceptedTerms(true);
         }
       })
       .catch((error: any) => {
@@ -88,9 +79,10 @@ export default function LoginScreen() {
         }
         setIsSigningIn(false);
       });
-  }, []);
+  }, [setHasAcceptedTerms]);
 
-  const handleGoogleLogin = async () => {
+  const beginLogin = () => {
+    if (signingIn.current) return false;
     if (!accepted) {
       triggerHaptic('warning');
       setModalState({
@@ -99,11 +91,29 @@ export default function LoginScreen() {
         title: 'Conditions requises',
         message: 'Veuillez accepter les CGU et la Politique de confidentialité pour continuer.',
       });
-      return;
+      return false;
     }
+    signingIn.current = true;
     setLoginError(null);
     setIsSigningIn(true);
     triggerHaptic('light');
+    return true;
+  };
+
+  const finishLoginAttempt = () => {
+    signingIn.current = false;
+    setIsSigningIn(false);
+  };
+
+  const showProviderError = (provider: 'apple' | 'google', error: unknown) => {
+    const feedback = getLoginFeedback(provider, error);
+    if (!feedback) return;
+    triggerHaptic('warning');
+    setLoginError(feedback);
+  };
+
+  const handleGoogleLogin = async () => {
+    if (!beginLogin()) return;
     try {
       if (Platform.OS === 'web') {
         const provider = new GoogleAuthProvider();
@@ -146,46 +156,15 @@ export default function LoginScreen() {
         const userCredential = await signInWithCredential(auth, credential);
         await completeLogin(userCredential.user);
       }
-    } catch (error: any) {
-      // L'utilisateur a fermé ou annulé la fenêtre Google
-      if (
-        error?.code === 'auth/popup-closed-by-user' || 
-        error?.code === 'auth/cancelled-popup-request' ||
-        error?.code === 'SIGN_IN_CANCELLED' ||
-        error?.message?.includes('user cancelled') ||
-        error?.message?.includes('cancelled')
-      ) {
-        setIsSigningIn(false);
-        return;
-      }
-      triggerHaptic('warning');
-      if (error?.code === 'auth/popup-blocked') {
-        setLoginError("La fenêtre Google a été bloquée par le navigateur. Veuillez autoriser les fenêtres pop-up (ou désactiver le bloqueur de pop-up) puis réessayez.");
-      } else if (error?.name === 'auth-popup-timeout') {
-        setLoginError(error.message);
-      } else if (error?.message?.includes('DEVELOPER_ERROR') || error?.code === '10') {
-        setLoginError("Configuration Google manquante : l'empreinte SHA-1 de l'APK doit être ajoutée dans la console Firebase pour autoriser la connexion.");
-      } else {
-        setLoginError(`Erreur de connexion : ${error?.message ?? 'erreur inconnue'}`);
-      }
-      setIsSigningIn(false);
+    } catch (error) {
+      showProviderError('google', error);
+    } finally {
+      finishLoginAttempt();
     }
   };
 
   const handleAppleLogin = async () => {
-    if (!accepted) {
-      triggerHaptic('warning');
-      setModalState({
-        visible: true,
-        type: 'warning',
-        title: 'Conditions requises',
-        message: 'Veuillez accepter les CGU et la Politique de confidentialité pour continuer.',
-      });
-      return;
-    }
-    setLoginError(null);
-    setIsSigningIn(true);
-    triggerHaptic('light');
+    if (!beginLogin()) return;
 
     try {
       if (Platform.OS === 'ios') {
@@ -249,50 +228,29 @@ export default function LoginScreen() {
         });
         return;
       }
-    } catch (error: any) {
-      if (
-        error?.code === 'auth/popup-closed-by-user' ||
-        error?.code === 'auth/cancelled-popup-request' ||
-        error?.code === 'ERR_REQUEST_CANCELED' ||
-        error?.code === 'ERR_CANCELED' ||
-        error?.message?.includes('cancelled') ||
-        error?.message?.includes('canceled')
-      ) {
-        setIsSigningIn(false);
-        return;
-      }
-      triggerHaptic('warning');
-      if (error?.code === 'auth/popup-blocked') {
-        setLoginError("La fenêtre Apple a été bloquée par le navigateur. Veuillez autoriser les fenêtres pop-up.");
-      } else if (error?.name === 'auth-popup-timeout') {
-        setLoginError(error.message);
-      } else if (error?.code === '1000' || error?.message?.includes('1000') || error?.message?.includes('authorization')) {
-        setLoginError("Apple n’a pas pu autoriser cette connexion. Réessaie sur ton iPhone avec iCloud connecté. Si le problème persiste, contacte-nous.");
-      } else {
-        setLoginError(`Erreur de connexion Apple : ${error?.message ?? 'erreur inconnue'}`);
-      }
-      setIsSigningIn(false);
+    } catch (error) {
+      showProviderError('apple', error);
+    } finally {
+      finishLoginAttempt();
     }
   };
 
   const toggleAccepted = () => {
     triggerHaptic('selection');
-    const next = !accepted;
-    setAccepted(next);
-    setHasAcceptedTerms(next); // ← persister dans le store pour survivre à la navigation CGU
+    setHasAcceptedTerms(!accepted);
   };
 
   return (
     <ImageBackground source={require('../../../assets/images/optimized/nousdeux_warm_background.jpg')} style={styles.container} resizeMode="cover">
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) }]} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, compact && { paddingHorizontal: 16 }, { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) }]} showsVerticalScrollIndicator={false}>
         <View style={styles.page}>
-          <View style={styles.brandRow}>
+          <View style={[styles.brandRow, compact && { marginBottom: 22 }]}>
             <Image source={require('../../../assets/images/optimized/brand-icon.png')} style={styles.brandIcon} />
             <Text style={styles.brandName}>NousDeux<Text style={{ color: '#B65A6D' }}>.</Text></Text>
             {wide && <Text style={styles.brandNote}>LE RENDEZ-VOUS DES COMPLICES</Text>}
           </View>
           <View style={[styles.content, wide && styles.wideContent]}>
-            <View style={[styles.story, wide && { flex: 1, paddingRight: 72 }]}>
+            {!compact && <View style={[styles.story, wide && { flex: 1, paddingRight: 72 }]}>
               <View style={styles.eyebrow}><Heart size={13} color="#A5475F" /><Text style={styles.eyebrowText}>UN PEU DE VOUS, CHAQUE JOUR</Text></View>
               <Text style={[styles.title, wide && { fontSize: 66, lineHeight: 72 }]}>Les petits moments font les grandes histoires.</Text>
               <Text style={styles.subtitle}>Une question, un sourire, une nouvelle façon de se découvrir. Prenez le temps de vous retrouver.</Text>
@@ -301,8 +259,8 @@ export default function LoginScreen() {
                 <View style={styles.feature}><Sparkles size={20} color="#A5475F" /><View style={{ flex: 1 }}><Text style={styles.featureTitle}>À votre image</Text><Text style={styles.featureText}>Des souvenirs et un espace qui vous ressemblent.</Text></View></View>
                 <View style={styles.quote}><Text style={styles.quoteText}>« Et si on apprenait encore quelque chose sur nous aujourd’hui ? »</Text><Text style={styles.quoteCaption}>VOTRE PROCHAIN CHAPITRE COMMENCE ICI</Text></View>
               </View>}
-            </View>
-            <View style={[styles.card, wide && { width: 410 }]}>
+            </View>}
+            <View style={[styles.card, compact && { padding: 18 }, wide && { width: 410 }]}>
               <View style={styles.cardBadge}><Heart size={22} color="#A5475F" /></View>
               <Text style={styles.cardTitle}>Votre histoire continue ici</Text>
               <Text style={styles.cardSubtitle}>Crée ton compte ou retrouve ton espace.
@@ -320,7 +278,7 @@ Ton partenaire pourra te rejoindre ensuite.</Text>
               </View>
               {loginError && <Text accessibilityRole="alert" style={styles.errorText}>{loginError}</Text>}
               <View style={styles.buttonContainer}>
-                <Pressable accessibilityRole="button" style={({ pressed }) => [styles.googleButton, { opacity: pressed || isSigningIn ? 0.6 : 1 }]} onPress={handleGoogleLogin} disabled={isSigningIn}>
+                <Pressable accessibilityRole="button" accessibilityLabel={isSigningIn ? 'Connexion en cours' : 'Continuer avec Google'} accessibilityState={{ busy: isSigningIn, disabled: isSigningIn }} style={({ pressed }) => [styles.googleButton, { opacity: pressed || isSigningIn ? 0.6 : 1 }]} onPress={handleGoogleLogin} disabled={isSigningIn}>
                   <Text style={styles.googleMark}>G</Text><Text style={styles.googleButtonText}>{isSigningIn ? 'Connexion en cours…' : 'Continuer avec Google'}</Text><ArrowRight size={17} color="#665459" />
                 </Pressable>
                 {Platform.OS === 'ios' ? (
@@ -328,7 +286,7 @@ Ton partenaire pourra te rejoindre ensuite.</Text>
                     <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={14} style={{ height: 54, width: '100%' }} onPress={handleAppleLogin} />
                   </View>
                 ) : Platform.OS === 'web' ? (
-                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.appleButton, { opacity: pressed || isSigningIn ? 0.6 : 1 }]} onPress={handleAppleLogin} disabled={isSigningIn}>
+                  <Pressable accessibilityRole="button" accessibilityState={{ busy: isSigningIn, disabled: isSigningIn }} style={({ pressed }) => [styles.appleButton, { opacity: pressed || isSigningIn ? 0.6 : 1 }]} onPress={handleAppleLogin} disabled={isSigningIn}>
                     <Text style={styles.appleButtonText}>{isSigningIn ? 'Connexion en cours…' : 'Continuer avec Apple'}</Text>
                   </Pressable>
                 ) : null}
