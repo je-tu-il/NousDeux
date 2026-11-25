@@ -20,7 +20,8 @@ test('onboarding pseudo screen preserves local state before submit and has back 
 test('onboarding sync screen has back button leading to avatar and safe background color', async () => {
   const syncSrc = await read('src/app/onboarding/sync.tsx');
 
-  assert.match(syncSrc, /router\.replace\('\/onboarding\/avatar'\)/, 'sync.tsx back button must lead to /onboarding/avatar');
+  assert.match(syncSrc, /router\.dismissTo\('\/onboarding\/avatar'\)/, 'sync.tsx back button must lead to /onboarding/avatar during onboarding');
+  assert.match(syncSrc, /router\.dismissTo\('\/dashboard'\)/, 'sync.tsx back button must lead to the dashboard for an existing profile');
   assert.match(syncSrc, /ArrowLeft/, 'sync.tsx must render ArrowLeft back button');
   assert.match(syncSrc, /#FFF5F2/, 'sync.tsx must have warm background color fallback to prevent white borders on zoom');
 });

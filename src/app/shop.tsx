@@ -403,13 +403,13 @@ export default function ShopScreen() {
   const handleBack = () => {
     sound.tap();
     if (from === 'widgets') {
-      router.replace('/dashboard');
+      router.dismissTo('/dashboard');
       return;
     }
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/dashboard');
+      router.dismissTo('/dashboard');
     }
   };
 
@@ -417,7 +417,7 @@ export default function ShopScreen() {
 
   return (
     <ImageBackground source={backgroundSource} style={styles.root} resizeMode="cover" imageStyle={{ objectPosition: windowWidth < 600 ? 'center bottom' : 'center' } as any}>
-      <View style={{ flex: 1, backgroundColor: store.isDarkMode ? 'rgba(0,0,0,0.38)' : 'rgba(255,255,255,0.22)', width: '100%', maxWidth: 500, alignSelf: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: store.isDarkMode ? 'rgba(0,0,0,0.38)' : 'rgba(255,255,255,0.22)', width: '100%', maxWidth: windowWidth >= 768 ? 860 : 520, alignSelf: 'center' }}>
         {/* Header */}
         <LinearGradient
           colors={['#FF9A8B', '#FF6A88']}
@@ -685,7 +685,7 @@ export default function ShopScreen() {
 // ——— Styles —————————————————————————————————————————————————————————————————
 
 const getStyles = (theme: any) => StyleSheet.create({
-  root:    { flex: 1, width: '100%', height: '100%', minHeight: '100vh' as any, backgroundColor: 'transparent' },
+  root:    { flex: 1, width: '100%', height: '100%', backgroundColor: 'transparent' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
 
   header: {

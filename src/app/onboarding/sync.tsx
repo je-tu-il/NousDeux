@@ -451,14 +451,10 @@ export default function SyncScreen() {
           {/* Header */}
           <View style={styles.header}>
             <Pressable style={styles.backBtn} onPress={() => {
-                if (from === 'avatar') {
-                  router.replace('/onboarding/avatar');
-                } else if (store.uid && store.pseudo) {
-                router.replace('/dashboard');
-              } else if (router.canGoBack()) {
-                router.back();
+              if (from === 'avatar' || !store.uid || !store.pseudo) {
+                router.dismissTo('/onboarding/avatar');
               } else {
-                router.replace('/onboarding/avatar');
+                router.dismissTo('/dashboard');
               }
             }}>
               <ArrowLeft color={theme.text} size={28} />

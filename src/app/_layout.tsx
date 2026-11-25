@@ -79,7 +79,8 @@ export default function RootLayout() {
           if (currentPath === target || (target === '/daylink' && currentPath.includes('daylink'))) {
             return;
           }
-          router.replace(target as any);
+          if (target === '/daylink') router.navigate('/daylink');
+          else router.dismissTo('/dashboard');
         }
       } catch (e) {
         console.warn('[Linking] Error handling url:', e);
@@ -246,7 +247,7 @@ export default function RootLayout() {
           <Stack key={firebaseUser?.uid ?? 'signed-out'} screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
         ) : <StartupScreen error={startupError} onRetry={retry} />}
         </View>
-        {shouldShowChat && FloatingChat ? <FloatingChat /> : null}
+        {shouldShowChat && FloatingChat ? <FloatingChat key={uid} /> : null}
         <FloatingToast />
         <ForceUpdateModal />
       </View>
