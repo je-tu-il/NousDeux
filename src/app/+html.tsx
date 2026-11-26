@@ -21,6 +21,7 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:title" content="NousDeux — Le jeu complice pour les couples" />
         <meta name="twitter:description" content="Chaque jour, une question en amoureux, des anecdotes complices et une flamme à faire grandir ensemble." />
+        <script defer src="/portfolio-back.js" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: `
           html, body {
