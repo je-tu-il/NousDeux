@@ -32,7 +32,7 @@ export interface WidgetPayload {
 export const WIDGET_STORAGE_KEY = 'nousdeux_widget_payload_v1';
 
 /**
- * Thèmes de widgets avec dégradés et accents visuels adaptés
+ * Th�mes de widgets avec d�grad�s et accents visuels adapt�s
  */
 export const WIDGET_THEMES: Record<string, {
   name: string;
@@ -48,47 +48,47 @@ export const WIDGET_THEMES: Record<string, {
     textColor: '#FFFFFF',
     accentColor: '#FFE5E0',
     cardBg: 'rgba(255, 255, 255, 0.22)',
-    emoji: '🌸',
+    emoji: '??',
   },
   widget_streak_7: {
-    name: 'Cœur Passion',
+    name: 'Cour Passion',
     gradient: ['#FF416C', '#FF4B2B'],
     textColor: '#FFFFFF',
     accentColor: '#FFD2CC',
     cardBg: 'rgba(255, 255, 255, 0.2)',
-    emoji: '❤️',
+    emoji: '??',
   },
   widget_streak_14: {
-    name: 'Nuit Étoilée',
+    name: 'Nuit �toil�e',
     gradient: ['#0f2027', '#203a43'],
     textColor: '#FFFFFF',
     accentColor: '#64B5F6',
     cardBg: 'rgba(255, 255, 255, 0.12)',
-    emoji: '✨',
+    emoji: '?',
   },
   widget_streak_30: {
-    name: 'Forêt Dorée',
+    name: 'For�t Dor�e',
     gradient: ['#11998e', '#38ef7d'],
     textColor: '#FFFFFF',
     accentColor: '#D4EDDA',
     cardBg: 'rgba(0, 0, 0, 0.18)',
-    emoji: '🍃',
+    emoji: '??',
   },
   widget_shop_1: {
-    name: 'Néon Cyberpunk',
+    name: 'N�on Cyberpunk',
     gradient: ['#8A2387', '#E94057'],
     textColor: '#FFFFFF',
     accentColor: '#00F2FE',
     cardBg: 'rgba(0, 0, 0, 0.25)',
-    emoji: '⚡',
+    emoji: '?',
   },
   widget_shop_2: {
-    name: 'Aurore Boréale',
+    name: 'Aurore Bor�ale',
     gradient: ['#43e97b', '#38f9d7'],
     textColor: '#1A365D',
     accentColor: '#065F46',
     cardBg: 'rgba(255, 255, 255, 0.35)',
-    emoji: '🌌',
+    emoji: '??',
   },
   widget_shop_3: {
     name: 'Coucher de Soleil',
@@ -96,15 +96,15 @@ export const WIDGET_THEMES: Record<string, {
     textColor: '#FFFFFF',
     accentColor: '#FFF3B0',
     cardBg: 'rgba(0, 0, 0, 0.15)',
-    emoji: '🌅',
+    emoji: '??',
   },
   widget_shop_4: {
-    name: 'Or Impérial',
+    name: 'Or Imp�rial',
     gradient: ['#232526', '#414345'],
     textColor: '#FFD700',
     accentColor: '#FFE57F',
     cardBg: 'rgba(255, 215, 0, 0.15)',
-    emoji: '👑',
+    emoji: '??',
   },
   widget_shop_5: {
     name: 'Galaxie Pastel',
@@ -112,7 +112,7 @@ export const WIDGET_THEMES: Record<string, {
     textColor: '#FFFFFF',
     accentColor: '#F3E8FF',
     cardBg: 'rgba(255, 255, 255, 0.2)',
-    emoji: '🪐',
+    emoji: '??',
   },
 };
 
@@ -121,9 +121,20 @@ export function getWidgetTheme(themeId: string = 'widget_default') {
 }
 
 /**
- * Synchronise les données actuelles de l'application avec les widgets natifs (iOS / Android / Web)
+ * Synchronise les donn�es actuelles de l'application avec les widgets natifs (iOS / Android / Web)
  */
-export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<void> {
+let pendingWidgetSync: Promise<void> = Promise.resolve();
+
+export function syncWidgetData(payload: Partial<WidgetPayload>): Promise<void> {
+  const ownerUid = useOnboardingStore.getState().uid;
+  pendingWidgetSync = pendingWidgetSync.then(async () => {
+    if (useOnboardingStore.getState().uid !== ownerUid) return;
+    await persistWidgetData(payload, ownerUid);
+  });
+  return pendingWidgetSync;
+}
+
+async function persistWidgetData(payload: Partial<WidgetPayload>, ownerUid: WidgetPayload['ownerUid']): Promise<void> {
   try {
     const existingRaw = await AsyncStorage.getItem(WIDGET_STORAGE_KEY);
     const d = new Date();
@@ -134,7 +145,7 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
     const defaultCategory = todayQ.category;
 
     const previous = existingRaw ? JSON.parse(existingRaw) : null;
-    const existing: WidgetPayload = previous && previous.ownerUid === useOnboardingStore.getState().uid ? previous : {
+    const existing: WidgetPayload = previous && previous.ownerUid === ownerUid ? previous : {
       streak: 0,
       daysTogether: 0,
       todayQuestion: defaultQuestion,
@@ -151,19 +162,19 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
       gradientColors: ["#FF9A8B", "#FF6A88"],
       updatedAt: new Date().toISOString(),
       localDate: todayKey,
-      ownerUid: useOnboardingStore.getState().uid,
+      ownerUid,
     };
 
-    // Détection automatique du changement de jour ou question vide
+    // D�tection automatique du changement de jour ou question vide
     const isNewDay = Boolean(existing.updatedAt && (existing.localDate || new Date(existing.updatedAt).toLocaleDateString('en-CA')) !== todayKey);
-    if (!payload.todayQuestion && (isNewDay || !existing.todayQuestion || existing.todayQuestion.startsWith('Quelle est la plus belle') || existing.todayQuestion.startsWith('Ouvrez NousDeux'))) {
+    if (isNewDay) {
+      existing.userAnswered = false;
+      existing.partnerAnswered = false;
+      existing.bothAnswered = false;
+    }
+    if (!payload.todayQuestion && (isNewDay || !existing.todayQuestion || existing.todayQuestion.startsWith('Ouvrez NousDeux'))) {
       existing.todayQuestion = todayQ.text;
       existing.categoryName = todayQ.category;
-      if (isNewDay) {
-        existing.userAnswered = false;
-        existing.partnerAnswered = false;
-        existing.bothAnswered = false;
-      }
     }
 
     const merged: WidgetPayload = {
@@ -171,7 +182,7 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
       ...payload,
       updatedAt: new Date().toISOString(),
       localDate: todayKey,
-      ownerUid: useOnboardingStore.getState().uid,
+      ownerUid,
     };
 
     const theme = getWidgetTheme(merged.themeId);
@@ -179,7 +190,9 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
     merged.gradientColors = theme.gradient;
 
     // 1. Sauvegarde dans AsyncStorage
+    if (useOnboardingStore.getState().uid !== ownerUid) return;
     await AsyncStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(merged));
+    if (useOnboardingStore.getState().uid !== ownerUid) return;
 
     // 2. Synchronisation web localStorage
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
@@ -241,7 +254,7 @@ export async function syncWidgetData(payload: Partial<WidgetPayload>): Promise<v
 }
 
 /**
- * Vérifie si l'épinglage direct du widget à l'écran d'accueil est supporté (Android 8.0+)
+ * V�rifie si l'�pinglage direct du widget � l'�cran d'accueil est support� (Android 8.0+)
  */
 export async function isWidgetPinSupported(): Promise<boolean> {
   if (Platform.OS === 'android') {
@@ -262,7 +275,7 @@ export async function isWidgetPinSupported(): Promise<boolean> {
 }
 
 /**
- * Demande au système Android d'ajouter/épingler le widget directement à l'écran d'accueil
+ * Demande au syst�me Android d'ajouter/�pingler le widget directement � l'�cran d'accueil
  */
 export async function requestPinWidget(type: 'question' | 'streak' = 'streak'): Promise<boolean> {
   if (Platform.OS === 'android') {
@@ -285,7 +298,7 @@ export async function requestPinWidget(type: 'question' | 'streak' = 'streak'): 
 }
 
 /**
- * Récupère les données préparées pour le widget
+ * R�cup�re les donn�es pr�par�es pour le widget
  */
 export async function getWidgetData(): Promise<WidgetPayload> {
   const d = new Date();

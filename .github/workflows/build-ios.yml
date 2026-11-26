@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
@@ -114,7 +114,7 @@ jobs:
               echo "Codesigning widget: $WIDGET_PATH avec $WIDGET_ENT"
               codesign --force --sign - --entitlements "$WIDGET_ENT" "$WIDGET_PATH"
             else
-              echo "Avertissement: Aucun fichier d'entitlements trouvé pour le widget"
+              echo "Avertissement: Aucun fichier d'entitlements trouv� pour le widget"
             fi
           fi
           
@@ -127,10 +127,10 @@ jobs:
             codesign --force --sign - --entitlements "$APP_ENT" "$APP_PATH"
           fi
 
-          echo "=== Entitlements intégrés dans l'App principale ==="
+          echo "=== Entitlements int�gr�s dans l'App principale ==="
           codesign -d --entitlements :- "$APP_PATH" || true
           if [ -d "$WIDGET_PATH" ]; then
-            echo "=== Entitlements intégrés dans l'extension Widget ==="
+            echo "=== Entitlements int�gr�s dans l'extension Widget ==="
             codesign -d --entitlements :- "$WIDGET_PATH" || true
           fi
           
@@ -147,7 +147,7 @@ jobs:
           path: NousDeux.ipa
           retention-days: 14
 
-      - name: 🚀 Publish IPA to GitHub Release
+      - name: ?? Publish IPA to GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:

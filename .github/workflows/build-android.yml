@@ -32,7 +32,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
@@ -160,11 +160,11 @@ jobs:
       - name: Extract APK Fingerprints for Firebase
         run: |
           echo "=========================================================="
-          echo "👉 ADD THIS SHA-1 TO FIREBASE CONSOLE FOR GOOGLE SIGN-IN :"
+          echo "?? ADD THIS SHA-1 TO FIREBASE CONSOLE FOR GOOGLE SIGN-IN :"
           echo "=========================================================="
           keytool -printcert -jarfile build-output/NousDeux.apk | grep -E "SHA1:|SHA256:" | tee build-output/apk-fingerprints.txt || true
           echo "=========================================================="
-          echo "### 🔑 Empreinte SHA-1 pour Firebase (Connexion Google)" >> $GITHUB_STEP_SUMMARY
+          echo "### ?? Empreinte SHA-1 pour Firebase (Connexion Google)" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
           keytool -printcert -jarfile build-output/NousDeux.apk | grep -E "SHA1:|SHA256:" >> $GITHUB_STEP_SUMMARY || true
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -176,7 +176,7 @@ jobs:
           path: build-output/
           retention-days: 14
 
-      - name: 🚀 Publish APK to GitHub Release
+      - name: ?? Publish APK to GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:

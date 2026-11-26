@@ -47,7 +47,7 @@ async function configureAndroidChannel() {
     lightColor: '#FF9A8B',
   });
   await Notifications.setNotificationChannelAsync('partner-alerts', {
-    name: 'Réponses Partenaire',
+    name: 'R�ponses Partenaire',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#FF4B2B',
@@ -89,7 +89,7 @@ export async function registerPushTokenForUser(userId: string): Promise<string |
 }
 
 /**
- * Envoie une notification push au partenaire quand l'utilisateur répond à la question du jour
+ * Envoie une notification push au partenaire quand l'utilisateur r�pond � la question du jour
  */
 export async function sendPartnerAnswerPush(partnerUid: string, userPseudo: string): Promise<void> {
   if (!partnerUid) return;
@@ -99,7 +99,7 @@ export async function sendPartnerAnswerPush(partnerUid: string, userPseudo: stri
     const token = partnerDoc.data()?.expoPushToken as string | undefined;
     if (!token) return;
 
-    await fetch('https://exp.host/--/api/v2/push/send', {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -108,19 +108,24 @@ export async function sendPartnerAnswerPush(partnerUid: string, userPseudo: stri
       body: JSON.stringify({
         to: token,
         sound: 'default',
-        title: '💌 Ton amour a répondu !',
-        body: `${userPseudo || 'Ton partenaire'} vient de répondre à la question du jour ! Découvre sa réponse ✨`,
+        title: '?? Ton amour a r�pondu !',
+        body: `${userPseudo || 'Ton partenaire'} vient de r�pondre � la question du jour ! D�couvre sa r�ponse ?`,
         channelId: 'partner-alerts',
         data: { url: '/dashboard' },
       }),
     });
+    const result = await response.json();
+    if (!response.ok || result.data?.status !== 'ok') {
+      const code = result.data?.details?.error ?? result.errors?.[0]?.code ?? response.status;
+      console.warn('[Notifications] Partner push rejected:', code);
+    }
   } catch (err) {
     console.warn('[Notifications] sendPartnerAnswerPush error:', err);
   }
 }
 
 /**
- * Déclenche une notification locale immédiate quand la réponse du partenaire est détectée
+ * D�clenche une notification locale imm�diate quand la r�ponse du partenaire est d�tect�e
  */
 export async function triggerPartnerAnsweredNotification(partnerPseudo: string): Promise<void> {
   if (Platform.OS === 'web') return;
@@ -128,8 +133,8 @@ export async function triggerPartnerAnsweredNotification(partnerPseudo: string):
     await configureAndroidChannel();
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '💌 Ton amour a répondu !',
-        body: `${partnerPseudo || 'Ton partenaire'} vient de répondre à la question du jour ! Découvre sa réponse ✨`,
+        title: '?? Ton amour a r�pondu !',
+        body: `${partnerPseudo || 'Ton partenaire'} vient de r�pondre � la question du jour ! D�couvre sa r�ponse ?`,
         data: { url: '/dashboard' },
         sound: 'default',
         channelId: 'partner-alerts',
@@ -141,9 +146,9 @@ export async function triggerPartnerAnsweredNotification(partnerPseudo: string):
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// État dynamique du jour : roulette & question du jour
-// ─────────────────────────────────────────────────────────────────────────────
+// �����������������������������������������������������������������������������
+// �tat dynamique du jour : roulette & question du jour
+// �����������������������������������������������������������������������������
 
 export async function isRouletteClaimedToday(uid?: string): Promise<boolean> {
   try {
@@ -246,10 +251,10 @@ export async function cancelStreakReminder(): Promise<void> {
 
 /**
  * Planification intelligente et adaptative des rappels :
- * - Ne rappelle PAS la roulette si elle a déjà été tournée aujourd'hui.
- * - Ne rappelle PAS la question du jour si elle a déjà été répondue aujourd'hui.
- * - Ne rappelle PAS la flamme si les deux ont déjà validé la journée.
- * - Planifie les prochains jours pour garantir les rappels quotidiens sans doublon passé.
+ * - Ne rappelle PAS la roulette si elle a d�j� �t� tourn�e aujourd'hui.
+ * - Ne rappelle PAS la question du jour si elle a d�j� �t� r�pondue aujourd'hui.
+ * - Ne rappelle PAS la flamme si les deux ont d�j� valid� la journ�e.
+ * - Planifie les prochains jours pour garantir les rappels quotidiens sans doublon pass�.
  */
 export async function scheduleDailyReminders(): Promise<void> {
   if (Platform.OS === 'web') return;
@@ -262,7 +267,7 @@ export async function scheduleDailyReminders(): Promise<void> {
 
   await configureAndroidChannel();
 
-  // Annuler les notifications planifiées antérieures de NousDeux
+  // Annuler les notifications planifi�es ant�rieures de NousDeux
   try {
     const existing = await Notifications.getAllScheduledNotificationsAsync();
     for (const notif of existing) {
@@ -289,32 +294,32 @@ export async function scheduleDailyReminders(): Promise<void> {
           key: 'daily-question',
           hour: 19,
           minute: 0,
-          title: 'Question du jour 💖',
-          body: 'Votre question en amoureux vous attend. Répondez ensemble pour faire grandir votre flamme !',
+          title: 'Question du jour ??',
+          body: 'Votre question en amoureux vous attend. R�pondez ensemble pour faire grandir votre flamme !',
           alreadyDoneToday: questionDone,
         },
         {
           key: 'daily-wheel',
           hour: 20,
           minute: 0,
-          title: 'Roue de la complicité 🎡',
-          body: 'Faites tourner la roue pour remporter des pétales et des gages mignons ou coquins !',
+          title: 'Roue de la complicit� ??',
+          body: 'Faites tourner la roue pour remporter des p�tales et des gages mignons ou coquins !',
           alreadyDoneToday: wheelDone,
         },
         {
           key: 'daily-quest',
           hour: 21,
           minute: 0,
-          title: 'Quête en duo 🏆',
-          body: 'Une récompense vous attend peut-être dans vos défis de couple.',
+          title: 'Qu�te en duo ??',
+          body: 'Une r�compense vous attend peut-�tre dans vos d�fis de couple.',
           alreadyDoneToday: false,
         },
         {
           key: 'daily-streak',
           hour: 22,
           minute: 0,
-          title: 'Attention à votre flamme 🔥',
-          body: 'Pensez à répondre avant minuit pour conserver votre série de jours consécutifs !',
+          title: 'Attention � votre flamme ??',
+          body: 'Pensez � r�pondre avant minuit pour conserver votre s�rie de jours cons�cutifs !',
           alreadyDoneToday: bothDone,
         },
       ]
@@ -323,30 +328,30 @@ export async function scheduleDailyReminders(): Promise<void> {
           key: 'solo-invite',
           hour: 18,
           minute: 0,
-          title: 'Invitez votre moitié 💌',
-          body: 'Partagez votre code NousDeux pour débloquer les questions du jour et la roue de la complicité !',
+          title: 'Invitez votre moiti� ??',
+          body: 'Partagez votre code NousDeux pour d�bloquer les questions du jour et la roue de la complicit� !',
           alreadyDoneToday: false,
         },
         {
           key: 'solo-questions',
           hour: 20,
           minute: 0,
-          title: 'Questions à volonté 💭',
-          body: 'Explorez nos centaines de questions pour découvrir des thèmes profonds ou amusants.',
+          title: 'Questions � volont� ??',
+          body: 'Explorez nos centaines de questions pour d�couvrir des th�mes profonds ou amusants.',
           alreadyDoneToday: false,
         },
         {
           key: 'solo-profile',
           hour: 21,
           minute: 0,
-          title: 'Personnalisez votre profil 🌸',
-          body: 'Choisissez votre avatar et vos cosmétiques en attendant de synchroniser votre moitié !',
+          title: 'Personnalisez votre profil ??',
+          body: 'Choisissez votre avatar et vos cosm�tiques en attendant de synchroniser votre moiti� !',
           alreadyDoneToday: false,
         },
       ];
 
   for (const reminder of reminders) {
-    // 1. Aujourd'hui (Jour 0) : programmer UNIQUEMENT si non encore réalisé ET que l'heure n'est pas passée
+    // 1. Aujourd'hui (Jour 0) : programmer UNIQUEMENT si non encore r�alis� ET que l'heure n'est pas pass�e
     const isPastToday = currentHour > reminder.hour || (currentHour === reminder.hour && currentMinute >= reminder.minute);
     if (!reminder.alreadyDoneToday && !isPastToday) {
       const todayTarget = new Date();
@@ -368,7 +373,7 @@ export async function scheduleDailyReminders(): Promise<void> {
       }).catch(() => {});
     }
 
-    // 2. Jours futurs (J+1 à J+7) : planifier à l'avance pour assurer les notifications même sans ouverture quotidienne
+    // 2. Jours futurs (J+1 � J+7) : planifier � l'avance pour assurer les notifications m�me sans ouverture quotidienne
     for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
       const futureDate = new Date();
       futureDate.setDate(now.getDate() + dayOffset);
@@ -392,9 +397,9 @@ export async function scheduleDailyReminders(): Promise<void> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Vérification active et tâche en arrière-plan pour le partenaire
-// ─────────────────────────────────────────────────────────────────────────────
+// �����������������������������������������������������������������������������
+// V�rification active et t�che en arri�re-plan pour le partenaire
+// �����������������������������������������������������������������������������
 
 export async function checkPartnerAnswerAndSync(): Promise<boolean> {
   const store = useOnboardingStore.getState();
@@ -429,7 +434,7 @@ export async function checkPartnerAnswerAndSync(): Promise<boolean> {
   return false;
 }
 
-// Enregistrement de la tâche en arrière-plan (Background Fetch)
+// Enregistrement de la t�che en arri�re-plan (Background Fetch)
 if (Platform.OS !== 'web') {
   try {
     TaskManager.defineTask(BACKGROUND_PARTNER_SYNC_TASK, async () => {
