@@ -2,7 +2,7 @@
   "expo": {
     "name": "NousDeux",
     "slug": "nousdeux",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "platforms": [
       "ios",
       "android",
@@ -84,15 +84,15 @@
         {
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",
           "iosAppId": "ca-app-pub-3940256099942544~1458783268",
-          "userTrackingUsageDescription": "Cette autorisation permet d'afficher des annonces personnalisées."
+          "userTrackingUsageDescription": "Cette autorisation permet d'afficher des annonces personnalis�es."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "NousDeux a besoin d'accéder à vos photos pour vous permettre de choisir une photo de profil.",
+          "photosPermission": "NousDeux a besoin d'acc�der � vos photos pour vous permettre de choisir une photo de profil.",
           "microphonePermission": false,
-          "cameraPermission": "NousDeux a besoin d'accéder à votre appareil photo pour vous prendre en photo pour votre profil."
+          "cameraPermission": "NousDeux a besoin d'acc�der � votre appareil photo pour vous prendre en photo pour votre profil."
         }
       ],
       [
@@ -103,7 +103,7 @@
             {
               "name": "QuestionWidget",
               "displayName": "NousDeux - Question du Jour",
-              "description": "Affiche la question du jour de votre couple sur votre écran d'accueil",
+              "description": "Affiche la question du jour de votre couple sur votre �cran d'accueil",
               "ios": {
                 "supportedFamilies": [
                   "systemSmall",
@@ -116,8 +116,8 @@
             },
             {
               "name": "StreakWidget",
-              "displayName": "NousDeux - Flamme & Série",
-              "description": "Affiche votre série de jours ensemble et votre flamme",
+              "displayName": "NousDeux - Flamme & S�rie",
+              "description": "Affiche votre s�rie de jours ensemble et votre flamme",
               "ios": {
                 "supportedFamilies": [
                   "systemSmall",
