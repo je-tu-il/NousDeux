@@ -30,7 +30,7 @@ export default function RootHtml({ children }: PropsWithChildren) {
             max-width: 100%;
             min-height: 100vh;
             min-height: 100dvh;
-            background-color: #EFEADD;
+            background-color: #FFF5F2;
             margin: 0;
             padding: 0;
             overflow-x: hidden;
@@ -44,12 +44,12 @@ export default function RootHtml({ children }: PropsWithChildren) {
             min-height: 100vh;
             min-height: 100dvh;
             flex: 1;
-            background-color: #EFEADD;
+            background-color: #FFF5F2;
             overflow: hidden;
           }
           @media (prefers-color-scheme: dark) {
             html, body, #root {
-              background-color: #212723;
+              background-color: #1A1514;
             }
           }
         `}} />
