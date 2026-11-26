@@ -1,34 +1,38 @@
 (() => {
+  const existing = document.querySelector?.('[data-portfolio-back]');
   const source = new URLSearchParams(window.location.search).get('utm_source');
-  const portfolio = new URL('https://je-tu-il.github.io/#catalogue');
+  const portfolio = new URL('https://je-tu-il.github.io/index.html#catalogue');
   const script = document.currentScript;
   const bundled = script && new URL(script.src).pathname.endsWith('/assets/portfolio-back.js');
   const destination = bundled ? new URL('../index.html#catalogue', script.src) : portfolio;
   const scope = bundled ? window.location.pathname.match(/\/projects\/[^/]+/)?.[0] : '';
   const key = 'je-tu-il:portfolio-entry' + (scope || '');
-  const fromPortfolio = source === 'portfolio';
 
-  let showBack = fromPortfolio;
-  try {
-    if (source) {
-      if (fromPortfolio) sessionStorage.setItem(key, '1');
-      else sessionStorage.removeItem(key);
+  let showBack = source === 'portfolio';
+  if (!existing) {
+    try {
+      if (source === 'portfolio') sessionStorage.setItem(key, '1');
+      else if (source) sessionStorage.removeItem(key);
+      showBack = showBack || sessionStorage.getItem(key) === '1';
+    } catch {
+      // The source parameter works without session storage.
     }
-    showBack = showBack || sessionStorage.getItem(key) === '1';
-  } catch {
-    // The URL marker also works when storage is disabled.
+    if (!showBack) return;
   }
-  if (!showBack) return;
 
-  const back = document.createElement('a');
   if (document.referrer) {
     const previous = new URL(document.referrer);
-    const index = new URL('index.html', destination);
     const home = new URL('./', destination);
-    if (previous.origin === index.origin && [index.pathname, home.pathname].includes(previous.pathname)) {
+    if (previous.origin === destination.origin && [destination.pathname, home.pathname].includes(previous.pathname)) {
       destination.search = previous.search;
     }
   }
+  if (existing) {
+    existing.href = destination.href;
+    return;
+  }
+
+  const back = document.createElement('a');
   back.href = destination.href;
   back.className = 'portfolio-back';
   back.setAttribute('aria-label', 'Retour au portfolio');
@@ -41,20 +45,20 @@
       box-sizing: border-box;
       position: fixed;
       z-index: 2147483647;
-      top: max(0.5rem, env(safe-area-inset-top));
-      left: max(0.5rem, env(safe-area-inset-left));
+      top: max(.65rem, env(safe-area-inset-top));
+      left: max(.65rem, env(safe-area-inset-left));
       display: grid;
       place-items: center;
       width: 44px;
       height: 44px;
-      border: 1px solid #756b5c;
-      border-radius: 50%;
-      background: #f8f3e8;
-      color: #24241f;
-      font: 700 22px/1 system-ui, sans-serif;
+      background: #212723;
+      color: #fffaf0;
+      box-shadow: 3px 3px 0 #a9b986;
+      font: 700 1.3rem system-ui, sans-serif;
       cursor: pointer;
     }
-    .portfolio-back:focus-visible { outline: 2px solid #315e79; outline-offset: 3px; }
+    .portfolio-back:hover { background: #315e79; }
+    .portfolio-back:focus-visible { outline: 3px solid #315e79; outline-offset: 4px; }
   `;
   document.head.append(style);
   document.body.append(back);
