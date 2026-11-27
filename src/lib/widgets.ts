@@ -32,7 +32,7 @@ export interface WidgetPayload {
 export const WIDGET_STORAGE_KEY = 'nousdeux_widget_payload_v1';
 
 /**
- * Th�mes de widgets avec d�grad�s et accents visuels adapt�s
+ * Thèmes de widgets avec dégradés et accents visuels adaptés
  */
 export const WIDGET_THEMES: Record<string, {
   name: string;
@@ -48,47 +48,47 @@ export const WIDGET_THEMES: Record<string, {
     textColor: '#FFFFFF',
     accentColor: '#FFE5E0',
     cardBg: 'rgba(255, 255, 255, 0.22)',
-    emoji: '??',
+    emoji: '🌸',
   },
   widget_streak_7: {
-    name: 'Cour Passion',
+    name: 'Cœur Passion',
     gradient: ['#FF416C', '#FF4B2B'],
     textColor: '#FFFFFF',
     accentColor: '#FFD2CC',
     cardBg: 'rgba(255, 255, 255, 0.2)',
-    emoji: '??',
+    emoji: '❤️',
   },
   widget_streak_14: {
-    name: 'Nuit �toil�e',
+    name: 'Nuit Étoilée',
     gradient: ['#0f2027', '#203a43'],
     textColor: '#FFFFFF',
     accentColor: '#64B5F6',
     cardBg: 'rgba(255, 255, 255, 0.12)',
-    emoji: '?',
+    emoji: '✨',
   },
   widget_streak_30: {
-    name: 'For�t Dor�e',
+    name: 'Forêt Dorée',
     gradient: ['#11998e', '#38ef7d'],
     textColor: '#FFFFFF',
     accentColor: '#D4EDDA',
     cardBg: 'rgba(0, 0, 0, 0.18)',
-    emoji: '??',
+    emoji: '🍃',
   },
   widget_shop_1: {
-    name: 'N�on Cyberpunk',
+    name: 'Néon Cyberpunk',
     gradient: ['#8A2387', '#E94057'],
     textColor: '#FFFFFF',
     accentColor: '#00F2FE',
     cardBg: 'rgba(0, 0, 0, 0.25)',
-    emoji: '?',
+    emoji: '⚡',
   },
   widget_shop_2: {
-    name: 'Aurore Bor�ale',
+    name: 'Aurore Boréale',
     gradient: ['#43e97b', '#38f9d7'],
     textColor: '#1A365D',
     accentColor: '#065F46',
     cardBg: 'rgba(255, 255, 255, 0.35)',
-    emoji: '??',
+    emoji: '🌌',
   },
   widget_shop_3: {
     name: 'Coucher de Soleil',
@@ -96,15 +96,15 @@ export const WIDGET_THEMES: Record<string, {
     textColor: '#FFFFFF',
     accentColor: '#FFF3B0',
     cardBg: 'rgba(0, 0, 0, 0.15)',
-    emoji: '??',
+    emoji: '🌅',
   },
   widget_shop_4: {
-    name: 'Or Imp�rial',
+    name: 'Or Impérial',
     gradient: ['#232526', '#414345'],
     textColor: '#FFD700',
     accentColor: '#FFE57F',
     cardBg: 'rgba(255, 215, 0, 0.15)',
-    emoji: '??',
+    emoji: '👑',
   },
   widget_shop_5: {
     name: 'Galaxie Pastel',
@@ -112,7 +112,7 @@ export const WIDGET_THEMES: Record<string, {
     textColor: '#FFFFFF',
     accentColor: '#F3E8FF',
     cardBg: 'rgba(255, 255, 255, 0.2)',
-    emoji: '??',
+    emoji: '🪐',
   },
 };
 
@@ -121,7 +121,7 @@ export function getWidgetTheme(themeId: string = 'widget_default') {
 }
 
 /**
- * Synchronise les donn�es actuelles de l'application avec les widgets natifs (iOS / Android / Web)
+ * Synchronise les données actuelles de l'application avec les widgets natifs (iOS / Android / Web)
  */
 let pendingWidgetSync: Promise<void> = Promise.resolve();
 
@@ -165,7 +165,7 @@ async function persistWidgetData(payload: Partial<WidgetPayload>, ownerUid: Widg
       ownerUid,
     };
 
-    // D�tection automatique du changement de jour ou question vide
+    // Détection automatique du changement de jour ou question vide
     const isNewDay = Boolean(existing.updatedAt && (existing.localDate || new Date(existing.updatedAt).toLocaleDateString('en-CA')) !== todayKey);
     if (isNewDay) {
       existing.userAnswered = false;
@@ -254,7 +254,7 @@ async function persistWidgetData(payload: Partial<WidgetPayload>, ownerUid: Widg
 }
 
 /**
- * V�rifie si l'�pinglage direct du widget � l'�cran d'accueil est support� (Android 8.0+)
+ * Vérifie si l'épinglage direct du widget à l'écran d'accueil est supporté (Android 8.0+)
  */
 export async function isWidgetPinSupported(): Promise<boolean> {
   if (Platform.OS === 'android') {
@@ -275,7 +275,7 @@ export async function isWidgetPinSupported(): Promise<boolean> {
 }
 
 /**
- * Demande au syst�me Android d'ajouter/�pingler le widget directement � l'�cran d'accueil
+ * Demande au système Android d'ajouter/épingler le widget directement à l'écran d'accueil
  */
 export async function requestPinWidget(type: 'question' | 'streak' = 'streak'): Promise<boolean> {
   if (Platform.OS === 'android') {
@@ -298,7 +298,7 @@ export async function requestPinWidget(type: 'question' | 'streak' = 'streak'): 
 }
 
 /**
- * R�cup�re les donn�es pr�par�es pour le widget
+ * Récupère les données préparées pour le widget
  */
 export async function getWidgetData(): Promise<WidgetPayload> {
   const d = new Date();
